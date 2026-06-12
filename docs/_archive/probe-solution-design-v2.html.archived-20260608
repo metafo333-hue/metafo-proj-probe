@@ -1,0 +1,785 @@
+<!-- ⚠️ 已归档:旧 v2 HTML 方案(v3.6期)·被 probe-master-solution-v2.md 取代·勿编辑 -->
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>probe · 完整方案设计 v2 · MetaFoclaw 工作台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="light"]{
+  --blue:#1E3A8A;--blue-50:#EEF2FB;--orange:#FF7A1A;--orange-600:#E0670D;--orange-soft:#FFF1E6;
+  --matte:#243049;--ink:#1E3A8A;--ink-2:#475569;--ink-3:#94A3B8;
+  --hairline:rgba(30,58,138,.10);--surface:#FFFFFF;--surface-2:#F8FAFC;--surface-3:#FAFBFC;
+  --green:#15803D;--green-soft:#E7F3EA;--amber:#CA8A04;--amber-soft:#FBEFE2;
+  --red:#D93025;--red-soft:#FCE8E6;--purple:#7C5CE6;--teal:#0D9488;--teal-soft:#CCFBF1;
+  --aurora:linear-gradient(115deg,#0A0E1A 0%,#16205A 28%,#1E3A8A 44%,#7A3A6B 60%,#C2410C 74%,#FF7A1A 86%,#FFE9D2 100%);
+  --glow-o:0 8px 24px rgba(255,122,26,.45);
+  --sh-sm:0 1px 2px rgba(30,58,138,.06),0 0 0 .5px rgba(30,58,138,.05);
+  --sh-md:0 6px 20px rgba(30,58,138,.10);--sh-lg:0 16px 40px rgba(30,58,138,.16);
+  --font-d:"Fredoka","Poppins",sans-serif;--font-m:"JetBrains Mono",monospace;
+  --nav-w:224px;--top-h:58px;
+}
+[data-theme="dark"]{--ink:#F8FAFC;--ink-2:#AEBBD0;--ink-3:#6B7C9E;--hairline:rgba(255,255,255,.12);
+  --surface:#0F2557;--surface-2:#16306B;--surface-3:rgba(255,255,255,.04);--blue-50:rgba(255,255,255,.06);
+  --orange-soft:rgba(255,122,26,.14);--green-soft:rgba(21,128,61,.18);--amber-soft:rgba(202,138,4,.18);--red-soft:rgba(217,48,37,.2);
+  --sh-sm:0 1px 2px rgba(0,0,0,.3);--sh-md:0 6px 20px rgba(0,0,0,.35);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Sans SC",-apple-system,sans-serif;color:var(--ink-2);background:var(--surface-2);font-size:14px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+h1,h2,h3,h4,.fd{font-family:var(--font-d)}
+/* top */
+.top{position:fixed;top:0;left:0;right:0;height:var(--top-h);z-index:1100;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--matte);box-shadow:0 2px 16px rgba(10,14,26,.28);color:#fff;overflow:hidden}
+.top::before{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--aurora);opacity:.9}
+.top::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.10);backdrop-filter:blur(14px) saturate(1.5);pointer-events:none}
+.top>*{position:relative;z-index:2}
+.m{width:34px;height:34px;border-radius:10px;background:var(--orange);display:grid;place-items:center;font-family:var(--font-d);font-weight:700;font-size:21px;color:#fff;box-shadow:var(--glow-o)}
+.bt{font-family:var(--font-d);font-weight:600;font-size:16px;letter-spacing:.4px}
+.bt small{font-weight:400;font-size:11px;opacity:.72;margin-left:7px;font-family:"Noto Sans SC"}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.ic-btn{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;cursor:pointer;font-size:15px;display:grid;place-items:center}
+/* side */
+.side{position:fixed;top:var(--top-h);left:0;bottom:0;width:var(--nav-w);background:var(--surface);border-right:1px solid var(--hairline);padding:14px 12px;overflow-y:auto;z-index:1000}
+.grp{font-size:10.5px;font-weight:700;letter-spacing:1.5px;color:var(--ink-3);margin:14px 10px 6px;text-transform:uppercase}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:10px;color:var(--ink);font-size:13px;margin-bottom:2px;border:1px solid transparent;cursor:pointer;transition:.15s}
+.nav .ni{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.nav:hover{background:var(--surface-2)}
+.nav.on{background:var(--orange-soft);color:var(--orange-600);border-color:rgba(255,122,26,.25);font-weight:600}
+/* main */
+.main{margin-left:var(--nav-w);margin-top:var(--top-h);padding:24px 28px 80px;max-width:1120px}
+.crumb{font-size:12px;color:var(--ink-3);margin-bottom:14px}
+/* hero */
+.hero{border-radius:18px;padding:28px 30px;margin-bottom:20px;background:var(--aurora);color:#fff;box-shadow:var(--sh-md);position:relative;overflow:hidden}
+.hero .tag{display:inline-block;background:rgba(255,255,255,.18);padding:3px 12px;border-radius:999px;font-size:11px;letter-spacing:.6px;margin-bottom:10px}
+.hero h1{font-size:28px;font-weight:700;margin-bottom:8px}
+.hero .subtitle{font-size:13.5px;opacity:.92;max-width:640px}
+.hero .meta{margin-top:14px;display:flex;gap:20px;flex-wrap:wrap;font-size:12px;opacity:.88}
+.hero .meta b{color:#FFE9D2}
+/* sections */
+section{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:24px 26px;margin-top:20px;box-shadow:var(--sh-sm)}
+.sec-h{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.num{width:34px;height:34px;border-radius:9px;background:var(--blue-50);color:var(--blue);font-family:var(--font-d);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+[data-theme="dark"] .num{color:#8BA5DE}
+h2{font-size:20px;color:var(--ink);font-weight:600}
+.ssub{color:var(--ink-3);font-size:12.5px;margin:2px 0 18px 46px}
+h3.sub{font-size:14px;font-weight:700;color:var(--ink);margin:22px 0 8px}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top;color:var(--ink-2)}
+th{background:var(--surface-3);color:var(--ink);font-weight:700;font-size:11.5px;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface-2)}
+/* pills */
+code,.mono{background:var(--blue-50);padding:1px 6px;border-radius:5px;font-size:11.5px;color:var(--blue);font-family:var(--font-m)}
+[data-theme="dark"] code{color:#9DB2EA}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:700;line-height:1.8;white-space:nowrap}
+.pg{background:var(--green-soft);color:var(--green)}
+.pr{background:var(--red-soft);color:var(--red)}
+.pa{background:var(--amber-soft);color:var(--amber)}
+.pb{background:var(--blue-50);color:var(--blue)}
+.pp{background:rgba(124,92,230,.12);color:var(--purple)}
+.pt{background:var(--teal-soft);color:var(--teal)}
+/* alert boxes */
+.kbox{border-radius:11px;padding:14px 18px;font-size:13px;margin:14px 0;border-left:4px solid}
+.kbox.r{background:var(--red-soft);border-color:var(--red);color:#7F1D1D}
+.kbox.g{background:var(--green-soft);border-color:var(--green);color:#14532D}
+.kbox.a{background:var(--amber-soft);border-color:var(--amber);color:#78350F}
+.kbox.b{background:var(--blue-50);border-color:var(--blue)}
+.kbox.au{background:linear-gradient(135deg,rgba(30,58,138,.05),rgba(255,122,26,.06));border-color:var(--orange)}
+/* topology */
+.topo{background:var(--surface-3);border:1px solid var(--hairline);border-radius:12px;padding:20px;font-family:var(--font-m);font-size:12.5px;line-height:2;color:var(--ink-2);overflow-x:auto;margin:14px 0;position:relative}
+.topo .layer-label{display:inline-block;background:var(--blue-50);color:var(--blue);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.8px;font-family:"Noto Sans SC";margin-bottom:4px}
+.topo .issue{color:var(--red);font-size:11px}
+.topo .ok{color:var(--green);font-size:11px}
+/* phase timeline */
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:14px 0}
+.phase{border:1.5px solid var(--hairline);border-radius:12px;padding:16px;background:var(--surface)}
+.phase.p0{border-color:var(--orange);background:var(--orange-soft)}
+.phase.p1{border-color:var(--blue);background:var(--blue-50)}
+.phase.p2{border-color:var(--purple);background:rgba(124,92,230,.08)}
+.phase .ph{font-family:var(--font-d);font-size:16px;font-weight:700;margin-bottom:6px}
+.phase.p0 .ph{color:var(--orange-600)}
+.phase.p1 .ph{color:var(--blue)}
+.phase.p2 .ph{color:var(--purple)}
+.phase ul{padding-left:14px;font-size:12.5px;color:var(--ink-2)}
+.phase ul li{margin-bottom:4px}
+/* value cards */
+.vcards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
+.vcard{border:1.5px solid var(--hairline);border-radius:12px;padding:16px;background:var(--surface)}
+.vcard .vi{font-size:26px;margin-bottom:8px}
+.vcard .vt{font-family:var(--font-d);font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.vcard .vd{font-size:12.5px;color:var(--ink-2)}
+.vcard .ve{font-size:11.5px;color:var(--ink-3);margin-top:8px;padding-top:8px;border-top:1px solid var(--hairline)}
+/* capability cards */
+.capgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.capcard{border:1px solid var(--hairline);border-radius:11px;padding:14px 16px;background:var(--surface)}
+.capcard .ct{font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--ink-3);text-transform:uppercase;margin-bottom:5px}
+.capcard .cn{font-family:var(--font-d);font-size:14px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.capcard .cd{font-size:12px;color:var(--ink-2)}
+.capcard .cw{font-size:11.5px;color:var(--amber);margin-top:8px}
+/* issue list */
+.issue-list{font-size:12.5px}
+.issue-list li{padding:6px 0;border-bottom:1px solid var(--hairline);display:flex;gap:10px;align-items:flex-start}
+.issue-list li:last-child{border:none}
+.issue-list .ei{width:20px;flex-shrink:0;text-align:center}
+/* competitive table */
+.ctable th:first-child{width:130px}
+.ctable td:first-child{font-weight:600;color:var(--ink)}
+.score{display:inline-flex;gap:2px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--hairline);display:inline-block}
+.dot.on{background:var(--orange)}
+/* arch flow */
+.arch-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0;position:relative}
+.arch-flow::before{content:"→ → →";position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);text-align:center;color:var(--ink-3);font-size:20px;pointer-events:none;letter-spacing:40px;padding:0 60px}
+.arch-box{background:var(--surface);border:1.5px solid var(--hairline);border-radius:12px;padding:14px;z-index:1;position:relative}
+.arch-box .at{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px}
+.arch-box .an{font-family:var(--font-d);font-size:14px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.arch-box ul{font-size:11.5px;color:var(--ink-2);padding-left:12px}
+.arch-box ul li{margin-bottom:3px}
+.arch-box .aissue{font-size:11px;color:var(--red);margin-top:8px;padding-top:8px;border-top:1px solid var(--hairline)}
+/* footer */
+footer{color:var(--ink-3);font-size:11.5px;margin-top:24px;padding-top:16px;border-top:1px solid var(--hairline)}
+nav.hub-tabs{display:none}
+@media(max-width:768px){
+  .side{display:none}.main{margin-left:0}
+  .vcards,.phases,.capgrid,.arch-flow{grid-template-columns:1fr}
+  nav.hub-tabs{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--hairline);z-index:1000}
+  nav.hub-tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;font-size:11px;color:var(--ink-3)}
+  nav.hub-tabs a.on{color:var(--orange-600)}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <a href="/" class="m">M</a>
+  <div class="bt">MetaFoclaw 工作台<small>probe 完整方案</small></div>
+  <div class="right">
+    <button class="ic-btn" onclick="theme()">🌙</button>
+    <a class="ic-btn" href="/">🏠</a>
+  </div>
+</div>
+
+<nav class="side">
+  <div class="grp">导航</div>
+  <a class="nav" href="/"><span class="ni">🏠</span><span>工作台首页</span></a>
+  <a class="nav" href="/research/"><span class="ni">🔬</span><span>竞调情报</span></a>
+  <div class="grp">本方案</div>
+  <a class="nav on" href="#market"><span class="ni">🎯</span><span>市场定位</span></a>
+  <a class="nav" href="#matrix"><span class="ni">⚔️</span><span>竞品 10 维矩阵</span></a>
+  <a class="nav" href="#value"><span class="ni">💎</span><span>核心价值三层</span></a>
+  <a class="nav" href="#topo"><span class="ni">🗺️</span><span>系统拓扑图</span></a>
+  <a class="nav" href="#issues"><span class="ni">⚠️</span><span>各环节问题清单</span></a>
+  <a class="nav" href="#capability"><span class="ni">🧩</span><span>能力补充设计</span></a>
+  <a class="nav" href="#phases"><span class="ni">🗓️</span><span>三阶段实现</span></a>
+  <a class="nav" href="#business"><span class="ni">💰</span><span>商业设计</span></a>
+  <a class="nav" href="#metrics"><span class="ni">📊</span><span>度量北极星</span></a>
+  <div class="grp">关联</div>
+  <a class="nav" href="/research/probe-upgrade-plan.html"><span class="ni">🚀</span><span>升级规划 v1</span></a>
+  <a class="nav" href="/research/probe-datasource-selection.html"><span class="ni">🔗</span><span>数据源选型</span></a>
+  <a class="nav" href="/research/tikhub-combined.html"><span class="ni">📱</span><span>TikHub 完整分析</span></a>
+</nav>
+
+<div class="main">
+<div class="crumb"><a href="/">🏠 工作台</a> › <a href="/research/">🔬 竞调情报</a> › probe 完整方案设计 v2</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="tag">🎯 完整方案设计 v2 · 五路竞调综合</div>
+  <h1>probe · 链接情报决策室</h1>
+  <p class="subtitle">粘贴一条竞品链接，30 秒拿到「能不能做、为什么、怎么切角、哪个平台推、BGM 能不能用」——飞瓜卖数据（你自己判断），剪映卖执行（你已决定要做），probe 卖「判断」本身。这个环节在现有市场所有工具中空缺。</p>
+  <p class="subtitle" style="margin-top:8px;opacity:.82">选题前的迷茫，是创作者的「夜」。probe 把判断直接递到手上，让你不必空等天亮——这正是 MetaFoclaw「从黑暗到黎明」的内核落点：<b>所问，即所得。</b><span style="opacity:.72">（上方渐变即破晓：星空蓝 → 朝阳橙，名即是形）</span></p>
+  <div class="meta">
+    <span><b>调研基础</b> 5路并行竞品调研 + 多源对抗验证</span>
+    <span><b>竞品覆盖</b> 12个工具 × 10维度</span>
+    <span><b>北极星对齐</b> 所问即所得 · 让 AI 去折腾把时间还给生活</span>
+    <span><b>日期</b> 2026-06-04</span>
+  </div>
+</div>
+
+<!-- 1. 市场定位 -->
+<section id="market">
+  <div class="sec-h"><div class="num">1</div><h2>市场定位 · 空白已被多源确认</h2></div>
+  <p class="ssub">五路调研 + 对抗验证，共同指向同一个空位</p>
+
+  <div class="kbox au">🎯 <b>probe 的一句话定位（有调研支撑）</b><br>
+  probe 是中国自媒体创作者的「链接情报决策室」：粘贴一条竞品视频链接，30 秒内拿到能不能做、为什么能/不能、怎么切角、哪个平台推、BGM 能不能用——飞瓜卖数据看板（你自己判断），剪映/GhostCut 卖剪辑执行（你已决定要做），probe 卖的是「判断」本身，这个环节在现有市场所有工具中空缺。</div>
+
+  <h3 class="sub">三个痛点量化数据（多源验证）</h3>
+  <table>
+    <thead><tr><th>痛点</th><th>量化数据</th><th>来源</th></tr></thead>
+    <tbody>
+      <tr><td>选题/竞品分析耗时</td><td>78% 个人博主每周遭遇 2 次以上选题瓶颈；一次系统竞品扒耗时 <b>2-4 小时</b>，结构化产出极低</td><td>多源交叉验证</td></tr>
+      <tr><td>版权风险普遍被忽视</td><td>抖音 2024 年受理侵权投诉 <b>51.8 万次</b>（日均 1420 次）；日均因 BGM 版权被下架视频超 20 万条；85% 违规者存在认知错误</td><td>抖音官方 + Whale IP 律师事务所 2025 报告</td></tr>
+      <tr><td>从「看懂爆款」到「转化为自己角度的脚本」存在认知断层</td><td>蝉妈妈 AI「视频拆解」最接近但只分析「为什么爆」，不回答「你值不值得做」；adworkly 对 12 个主流工具评测明确指出：<b>没有任何工具提供粘贴链接→给出二创决策报告的功能</b></td><td>adworkly 评测 + 蝉妈妈产品页</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">市场站位图</h3>
+  <div style="background:var(--surface-3);border:1px solid var(--hairline);border-radius:12px;padding:20px;margin:12px 0;text-align:center">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-size:13px">
+      <div style="background:var(--surface-2);border:1px solid var(--hairline);border-radius:9px;padding:10px 14px;color:var(--ink-3)">
+        <div style="font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:4px">卖原料/数据</div>
+        <div>TikHub · 飞瓜</div><div>蝉妈妈 · 新榜</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">你自己判断</div>
+      </div>
+      <div style="font-size:24px;color:var(--ink-3)">←───</div>
+      <div style="background:var(--aurora);border-radius:12px;padding:14px 20px;color:#fff;box-shadow:var(--sh-md)">
+        <div style="font-family:var(--font-d);font-size:18px;font-weight:700">probe</div>
+        <div style="font-size:12px;opacity:.9;margin-top:4px">「判断」本身</div>
+        <div style="font-size:11px;opacity:.8">能不能做 · 怎么做 · 有没有风险</div>
+      </div>
+      <div style="font-size:24px;color:var(--ink-3)">───→</div>
+      <div style="background:var(--surface-2);border:1px solid var(--hairline);border-radius:9px;padding:10px 14px;color:var(--ink-3)">
+        <div style="font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:4px">卖执行/生成</div>
+        <div>剪映AI · 即梦</div><div>可灵 · GhostCut</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">你已决定要做</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--ink-3)">通用 AI（豆包/元宝/Kimi）覆盖对话问答，但缺乏平台实时数据接入，给印象不给事实</div>
+  </div>
+</section>
+
+<!-- 2. 竞品矩阵 -->
+<section id="matrix">
+  <div class="sec-h"><div class="num">2</div><h2>竞品 10 维度矩阵（12 个工具）</h2></div>
+  <p class="ssub">紧扣 metafoclaw 北极星「所问即所得」与支撑价值（高效·便宜·有用）的评估维度 · 五路调研综合</p>
+
+  <div style="overflow-x:auto">
+  <table class="ctable" style="min-width:900px">
+    <thead>
+      <tr>
+        <th>工具</th>
+        <th>数据获取</th>
+        <th>分析深度</th>
+        <th>交付形态</th>
+        <th>自动化</th>
+        <th>自媒体专项</th>
+        <th>给拍板结论</th>
+        <th>BGM版权</th>
+        <th>个人价格</th>
+        <th>合规</th>
+        <th>「时间归生活」</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="background:rgba(255,122,26,.06)">
+        <td><b>probe 目标</b></td>
+        <td><span class="pill pg">五平台+网页</span></td>
+        <td><span class="pill pg">D1-D7 全链路</span></td>
+        <td><span class="pill pg">A-D评级+行动计划</span></td>
+        <td><span class="pill pg">全自动</span></td>
+        <td><span class="pill pg">自媒体专项</span></td>
+        <td><span class="pill pg">✅ 核心能力</span></td>
+        <td><span class="pill pg">✅ BGM核查</span></td>
+        <td><span class="pill pg">按次·低门槛</span></td>
+        <td><span class="pill pg">合规架构</span></td>
+        <td><span class="pill pg">2-4h→30s</span></td>
+      </tr>
+      <tr>
+        <td>飞瓜数据</td>
+        <td>抖音/快手/B站</td>
+        <td><span class="pill pa">数字看板</span></td>
+        <td>图表/排行榜</td>
+        <td><span class="pill pr">人工整合</span></td>
+        <td>偏电商带货</td>
+        <td><span class="pill pr">❌</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td>¥399/月起</td>
+        <td>代爬灰色</td>
+        <td><span class="pill pr">仍需人工</span></td>
+      </tr>
+      <tr>
+        <td>蝉妈妈AI</td>
+        <td>抖音/小红书(受限)</td>
+        <td><span class="pill pa">视频拆解(结构)</span></td>
+        <td>结构分析报告</td>
+        <td><span class="pill pa">半自动</span></td>
+        <td>B端电商定位</td>
+        <td><span class="pill pr">❌(无账号匹配)</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td>个人¥133/月(阉割)</td>
+        <td>2025判违法</td>
+        <td><span class="pill pr">缺竞争判断</span></td>
+      </tr>
+      <tr>
+        <td>新榜有数</td>
+        <td>公众号/抖音</td>
+        <td><span class="pill pa">碎片化工具集</span></td>
+        <td>各工具分别输出</td>
+        <td><span class="pill pr">需多工具跳转</span></td>
+        <td>偏公众号生态</td>
+        <td><span class="pill pr">❌</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td>商务对接·不透明</td>
+        <td>双轨(官方+代爬)</td>
+        <td><span class="pill pr">整合成本高</span></td>
+      </tr>
+      <tr>
+        <td>TikHub API</td>
+        <td>16+平台最广</td>
+        <td><span class="pill pr">原始数据·无分析</span></td>
+        <td>JSON/CSV 原料</td>
+        <td><span class="pill pa">需自己写代码</span></td>
+        <td><span class="pill pr">需二次开发</span></td>
+        <td><span class="pill pr">❌ 声明不做成品</span></td>
+        <td><span class="pill pa">字段含BGM</span></td>
+        <td>$0.001/次·按量</td>
+        <td>商业API·供应商担责</td>
+        <td><span class="pill pr">开发门槛高</span></td>
+      </tr>
+      <tr>
+        <td>AnySearch</td>
+        <td>公开 web</td>
+        <td><span class="pill pr">搜索结果·无分析</span></td>
+        <td>搜索结果列表</td>
+        <td><span class="pill pa">搜索自动化</span></td>
+        <td><span class="pill pr">通用搜索</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td>免费1000次/天</td>
+        <td>合规</td>
+        <td><span class="pill pr">只给原料</span></td>
+      </tr>
+      <tr>
+        <td>剪映AI/Pippit</td>
+        <td>链接→生成视频</td>
+        <td><span class="pill pr">无情报分析</span></td>
+        <td>生成视频成品</td>
+        <td><span class="pill pg">生产高度自动化</span></td>
+        <td>短视频生产</td>
+        <td><span class="pill pr">❌(不回答该不该做)</span></td>
+        <td>内向版权检测</td>
+        <td>基础免费</td>
+        <td>合规</td>
+        <td>执行端省时</td>
+      </tr>
+      <tr>
+        <td>豆包/元宝</td>
+        <td><span class="pill pr">无平台数据接入</span></td>
+        <td>语言推理(无数据)</td>
+        <td>对话回复</td>
+        <td><span class="pill pr">需用户持续驱动</span></td>
+        <td><span class="pill pr">通用AI·不专项</span></td>
+        <td><span class="pill pr">❌(印象非事实)</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td>基础免费/订阅</td>
+        <td>合规</td>
+        <td><span class="pill pr">仍需自己组织</span></td>
+      </tr>
+      <tr>
+        <td>Manus/Agent</td>
+        <td>有限(反爬阻断)</td>
+        <td>尝试但失败率高</td>
+        <td>不稳定成品</td>
+        <td>尝试全自动</td>
+        <td><span class="pill pr">通用Agent</span></td>
+        <td><span class="pill pr">❌(结论可信度低)</span></td>
+        <td><span class="pill pr">❌</span></td>
+        <td>$39-199/月</td>
+        <td>反爬风险</td>
+        <td><span class="pill pr">70%被paywall/CAPTCHA阻断</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="kbox b" style="margin-top:12px">📊 <b>矩阵核心发现</b>：「给拍板结论」这一列，12 个工具全部为 ❌ 或 ❌ 变体——这是调研确认的真空位，不是估计。BGM 版权列：只有 TikHub 的元数据字段含 BGM 信息，但 TikHub 不做分析；probe 在接入 TikHub 后是唯一能把「该 BGM 能不能用」作为结论输出的工具。</div>
+</section>
+
+<!-- 3. 核心价值 -->
+<section id="value">
+  <div class="sec-h"><div class="num">3</div><h2>核心价值三层 · 紧扣 metafoclaw 北极星（v3.3）</h2></div>
+  <p class="ssub">主口号「所问即所得」· 使命「让 AI 去折腾把时间还给生活」· 价值观五词（希望/笃定/实干/利他/克制）· 每层有竞品调研支撑</p>
+
+  <div class="vcards">
+    <div class="vcard">
+      <div class="vi">⚡</div>
+      <div class="vt">V3 · 一句话交付成品</div>
+      <div class="vd">粘贴链接 → 30 秒出完整决策报告（评级 + 结构公式 + 借换串方案 + 版权风险）。创作者不需要学会用多个工具、不需要自己组织分析框架——链路被自动编排。</div>
+      <div class="ve">↔ 主口号「所问，即所得」：提问即拿结论，不止参考<br>↔ 支撑价值「高效」：2-4 小时人工 → 30 秒；技术归编排</div>
+    </div>
+    <div class="vcard">
+      <div class="vi">🔄</div>
+      <div class="vt">V4 · 原料进结论出</div>
+      <div class="vd">TikHub/trafilatura/AnySearch 给的是原料（数据/正文/搜索结果）。probe 的价值是加工层：D2 结构公式 + D7 借换串方案 + D1 真相核查 + BGM 版权结论 = 不可替代的「独有结论」。竞品卖数据，probe 卖判断。</div>
+      <div class="ve">↔ 价值金句「不止步于参考，终结于交付成品」：拍板级结论非原始数据<br>↔ 支撑价值「有用」；五归「创意归用户」：结论给用户决策，probe 不替他创作</div>
+    </div>
+    <div class="vcard">
+      <div class="vi">🕐</div>
+      <div class="vt">V2 · 把时间还给生活</div>
+      <div class="vd">78% 创作者每周 2 次选题瓶颈；竞品扒每次 2-4 小时；版权风险事前评估几乎为 0（事后申诉消耗 2-4 小时）。probe 把这三个「时间黑洞」压缩到秒级，创作者可以把时间花在真正的创作上。</div>
+      <div class="ve">↔ 使命「让 AI 去折腾，把时间还给生活」：直接对应<br>↔ 价值观「利他·克制」：把时间让渡给创作者；五归「流量归个人」：个人也用得起</div>
+    </div>
+  </div>
+
+  <div class="kbox g">✅ <b>metafoclaw 北极星一致性校验</b>：主口号「所问，即所得」= 粘贴即出结论 · 使命「让 AI 去折腾，把时间还给生活」= 三个时间黑洞压到秒级 · 支撑价值「高效」(30秒替2-4h)·「便宜」(按次付费不强迫¥399+/月)·「有用」(拍板结论非原料)。品牌内核「从黑暗到黎明」= 帮创作者在选题的夜里等到天亮。逐项对应，无需牵强。</div>
+</section>
+
+<!-- 4. 系统拓扑图 -->
+<section id="topo">
+  <div class="sec-h"><div class="num">4</div><h2>系统拓扑图 · 完整数据流与组件关系</h2></div>
+  <p class="ssub">各层组件 + 数据流向 + 已知问题标注（⚠️ 红色）</p>
+
+  <div class="topo">
+<span class="layer-label">用户输入层</span>
+┌─────────────────────────────────────────────────────────────────────┐
+│  用户  ──POST /invoke──►  probe.metafoclaw.com  (nginx 443·四禁规则) │
+│        instruction="深探这个" + url + context.ip_profile(可选)       │
+│  ⚠️ 问题1: URL 合法性校验(黑名单·SSRF防护)未做到位                    │
+│  ⚠️ 问题2: 频率限制(redis 滑窗)·匿名层无 IP 硬上限                    │
+└──────────────────────────────────┬──────────────────────────────────┘
+                                   │ 异步 task_id 立即返回
+<span class="layer-label">L1 契约层 (FastAPI · probe)</span>
+┌──────────────────────────────────▼──────────────────────────────────┐
+│  /invoke → SSO(母体 user_token 校验) → 配额检查 → 任务入队(进程内)   │
+│  /manifest → 三维标签(自媒体×链接分析×免费+付费)                      │
+│  /selftest → C2 评分卡(11项·当前全过)                                │
+│  /task/{id} → 状态轮询(pending/running/done/failed)                  │
+│  ⚠️ 问题3: SSO 当前信任客户端传来的 tier(可伪造·母体identity未就绪)    │
+│  ⚠️ 问题4: 任务状态机进程内字典(重启丢失·生产须切 Redis)               │
+│  ⚠️ 问题5: 存储层写 /tmp(重启丢失·须改 /var/probe/storage)            │
+└──────────────────────────────────┬──────────────────────────────────┘
+                                   │
+<span class="layer-label">L0 路由层 (app/l0/__init__.py)</span>
+┌──────────────────────────────────▼──────────────────────────────────┐
+│  classify(url) → article/doc/video/social                           │
+│       ├─ article/doc ──► extractors/ (技术合规·直接嵌入)             │
+│       └─ video/social ──► datasources/ (商业API·供应商担责)          │
+│  deep_probe() → D1+D2+D7 LLM管线(DeepSeek→Qwen fallback)            │
+│  ⚠️ 问题6: video/social 路径依赖 TikHub key(未配置·当前合规占位)      │
+│  ⚠️ 问题7: LLM 管线无缓存(相同 URL 重复调用·成本叠加)                 │
+└──────┬──────────────────────────────────────┬──────────────────────┘
+       │                                      │
+<span class="layer-label">数据采集层</span>                           <span class="layer-label">分析/LLM层</span>
+┌──────▼──────────┐  ┌──────────────┐   ┌────▼────────────────────┐
+│ extractors/      │  │ datasources/ │   │  app/services/llm.py    │
+│ article.py       │  │ tikhub.py    │   │                         │
+│  trafilatura     │  │  hybrid_     │   │  D1 fact_check()        │
+│  F≈0.95·已出数据 │  │  parsing     │   │   └─ AnySearch联网核查  │
+│  newspaper4k(降) │  │  video_data  │   │  D2 analyze_structure() │
+│                  │  │  (五平台)    │   │   └─ 结构公式·钩子·CTA  │
+│ document.py      │  │  待TikHub key│   │  D7 generate_            │
+│  markitdown(MIT) │  │              │   │    recreation_paths()   │
+│  github-raw      │  │ anysearch.py │   │   └─ 借/换/串三路方案    │
+│                  │  │  search/     │   │                         │
+│ ⚠️ 问题8: 降级链  │  │  batch/      │   │  ⚠️ 问题11: LLM无本地   │
+│ 只有一级(无      │  │  extract     │   │  key(部署后服务器读取)  │
+│ newspaper4k      │  │  免费1000/天 │   │  ⚠️ 问题12: 输出无schema │
+│ fallback)        │  │              │   │  校验(结构拆解可能乱格式)│
+│                  │  │ ⚠️ 问题9:    │   └────────────────────────┘
+│                  │  │ TikHub 服务商│
+│                  │  │ 稳定性未验证 │   ┌─────────────────────────┐
+│                  │  │ (Proxycurl   │   │  待补能力(P1)            │
+│                  │  │ 案:说没就没) │   │  D5 竞品横评             │
+│                  │  │              │   │   AnySearch batch+LLM   │
+└──────────────────┘  │ ⚠️ 问题10:   │   │  D6 发布者画像           │
+                      │ 无 fallback  │   │   TikHub账号接口+LLM    │
+                      │ 供应商切换   │   │  D8 BGM版权核查          │
+                      └──────────────┘   │   TikHub BGM字段+ACRCloud│
+                                         │  选题差异化建议          │
+                                         │   D2+D5综合→3个方向      │
+                                         └─────────────────────────┘
+<span class="layer-label">结论层 (guards + pipeline)</span>
+┌─────────────────────────────────────────────────────────────────────┐
+│  guards.check_response() → aigc_flag校验 + C4禁直吐                 │
+│  guards.apply_depth_line() → 三层裁剪:                              │
+│    public   → 评级(A/B/C/D) + 一句话结论 + 15秒速判                 │
+│    preview  → + 结构公式 + D7简版二创方向(注册)                      │
+│    paid     → + 完整7段报告(D1-D8全维度·付费)                        │
+│  billing    → 免费(public) / base(preview) / premium(paid)          │
+│  ⚠️ 问题13: paid 层 B线目前仍为 MVP 桩(LLM真实调用激活后才完整)     │
+│  ⚠️ 问题14: 成本熔断未实现(无每日 LLM 调用量上限防止过载)            │
+└──────────────────────────────────┬──────────────────────────────────┘
+                                   │
+<span class="layer-label">母体接入层 (L1契约·registry)</span>
+┌──────────────────────────────────▼──────────────────────────────────┐
+│  registry-snippet.yaml → metafoclaw-platform/adapter/registry.yaml │
+│  transport: http (远程镶嵌·probe.metafoclaw.com)                     │
+│  ⚠️ 问题15: 母体 HttpToolClient 未实现(client.py 仅 inprocess)       │
+│  ⚠️ 问题16: 母体 /api/v1/identity/verify 未实现(SSO完整链路断)        │
+└─────────────────────────────────────────────────────────────────────┘
+</div>
+
+  <div class="kbox r">🔴 <b>拓扑关键约束（上线前必修）</b>：问题 3 (SSO伪造)·问题 4 (状态丢失)·问题 5 (存储丢失)·问题 13 (paid层是桩)·问题 14 (无成本熔断)·问题 15/16 (母体接入断路)——这 7 个问题中任一存在，probe 都不能对外开放付费档。</div>
+</section>
+
+<!-- 5. 各环节问题清单 -->
+<section id="issues">
+  <div class="sec-h"><div class="num">5</div><h2>各环节问题清单 · 优先级分类</h2></div>
+  <p class="ssub">P0 = 上线前必修 · P1 = 付费开放前 · P2 = 规模化前</p>
+
+  <h3 class="sub">P0 · 上线前必修（阻塞性）</h3>
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>风险</th><th>修复方案</th></tr></thead>
+    <tbody>
+      <tr><td>3</td><td>SSO tier 可被客户端伪造</td><td>任何人传 paid tier 可绕过付费</td><td>母体 identity 就绪后立即切 _verify_remote()</td></tr>
+      <tr><td>4</td><td>任务状态机进程内字典</td><td>重启后任务状态全丢，轮询方永久 4004</td><td>生产前切 Redis（已有路线图）</td></tr>
+      <tr><td>5</td><td>存储写 /tmp</td><td>系统重启后结果文件丢失</td><td>配置 PROBE_STORAGE_DIR=/var/probe/storage</td></tr>
+      <tr><td>14</td><td>无成本熔断</td><td>LLM 被无限调用，成本失控</td><td>Redis 日计数 + 超限降级返桩</td></tr>
+      <tr><td>1</td><td>URL 校验不完整</td><td>SSRF 风险（内网 IP/元数据地址）</td><td>黑名单已有骨架，补充元数据 IP 段</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">P1 · 付费档开放前必修</h3>
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>影响</th><th>修复方案</th></tr></thead>
+    <tbody>
+      <tr><td>13</td><td>paid 层 B线是 MVP 桩</td><td>收费但给桩报告 = 商业诚信问题</td><td>LLM 管线部署激活（已代码就绪，部署 tencent-sh 后自动激活）</td></tr>
+      <tr><td>6</td><td>五平台路径依赖 TikHub key</td><td>视频/社交链接全返占位，D5/D6 无数据</td><td>TikHub 注册（R8+R1）→ 配 PROBE_TIKHUB_KEY</td></tr>
+      <tr><td>7</td><td>LLM 管线无结果缓存</td><td>同 URL 重复请求重复收费</td><td>url_hash+mode → Redis TTL 缓存</td></tr>
+      <tr><td>12</td><td>LLM 输出无 schema 校验</td><td>D2/D7 结构可能乱格式，前端崩溃</td><td>JSON schema 验证 + 重试一次 + 降级</td></tr>
+      <tr><td>2</td><td>匿名 IP 无硬上限</td><td>单 IP 刷爆公开档（免费白嫖）</td><td>nginx limit_req + Redis 每 IP 日计数</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">P2 · 规模化前</h3>
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>影响</th><th>修复方案</th></tr></thead>
+    <tbody>
+      <tr><td>8</td><td>文章降级链只有 trafilatura</td><td>JS渲染/微信页面提取率低</td><td>newspaper4k → Jina Reader fallback</td></tr>
+      <tr><td>9</td><td>TikHub 服务商稳定性未验证</td><td>Proxycurl 式突然关停风险</td><td>Phase 0 冒烟 + 供应商抽象层 + Evil0ctal fallback</td></tr>
+      <tr><td>10</td><td>无 TikHub fallback</td><td>TikHub 挂掉时视频数据全断</td><td>TikHub → Evil0ctal/Douyin_TikTok_API（抖音/TikTok）</td></tr>
+      <tr><td>11</td><td>LLM key 仅服务器读取</td><td>本地开发/测试无法测 LLM 路径</td><td>开发环境可配本地 key 变量（已在 .env.example）</td></tr>
+      <tr><td>15</td><td>母体 HttpToolClient 未实现</td><td>probe 无法被母体大厅调用</td><td>母体 api-core 实现 HttpToolClient（已在 HANDOFF.md）</td></tr>
+      <tr><td>16</td><td>母体 identity/verify 未实现</td><td>SSO 完整链路断路</td><td>母体 identity.py TODO 完成</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 6. 能力补充设计 -->
+<section id="capability">
+  <div class="sec-h"><div class="num">6</div><h2>能力补充设计 · 基于调研证据</h2></div>
+  <p class="ssub">每项能力有竞品调研支撑·按「对齐宗旨 × 实现代价」排序</p>
+
+  <h3 class="sub">🔴 P0 · 立即接入（代码已有骨架，部署即激活）</h3>
+  <div class="capgrid">
+    <div class="capcard">
+      <div class="ct">P0 · D2 完整实现</div>
+      <div class="cn">结构公式 + 钩子拆解 + 节奏地图</div>
+      <div class="cd">钩子类型（悬念/痛点/数字/反常识）+ 正文节奏节点 + CTA 设计 + 可复用爆款标签。这是创作者「看懂爆款逻辑」的核心。llm.py 已有 analyze_structure()，部署 tencent-sh 即激活。</div>
+      <div class="cw">⚠️ 需 DeepSeek key（服务器已有）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P0 · D7 完整实现</div>
+      <div class="cn">借换串三路二创方案 + 推荐优先级</div>
+      <div class="cd">「借路（换主题保结构）」「换路（保观点换形式）」「串路（混剪重组）」各自的投入/版权风险评估 + 明确推荐哪条。这是「能不能做、怎么做」的直接回答。llm.py 已有 generate_recreation_paths()。</div>
+      <div class="cw">⚠️ 需 DeepSeek key（服务器已有）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P0 · D1 联网真相核查</div>
+      <div class="cn">AnySearch 联网 + LLM 判定声称真实性</div>
+      <div class="cd">内容里的数字/统计/引用 → AnySearch 搜权威来源 → LLM 逐条判定（✅属实/⚠️部分属实/❌失实）。「抄了一条失实内容」是创作者最不知道的风险。anysearch.py 已实现，服务器实测 HTTP 200。</div>
+      <div class="cw">⚠️ 需 DeepSeek key（服务器已有）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P0 · 首屏速判升级</div>
+      <div class="cn">A/B/C/D 评级 + 15 秒拍板 + 三步行动</div>
+      <div class="cd">不再是字数判评级，而是 D1 真相核查结论 + D2 结构清晰度 + D8 合规风险综合给出 A-D。24h/7d/30d 三步行动。「15 秒拍板」是 link-intel 报告骨架的核心设计，这是 paid 层的最高价值。</div>
+      <div class="cw">⚠️ 随 D1/D2 激活，_rate() 已升级</div>
+    </div>
+  </div>
+
+  <h3 class="sub">🟡 P1 · 接入 TikHub key 后激活（高优先级新能力）</h3>
+  <div class="capgrid">
+    <div class="capcard">
+      <div class="ct">P1 · 新增 · BGM 版权快速核查</div>
+      <div class="cn">🎵 BGM 能不能用？</div>
+      <div class="cd">日均下架 20 万条视频因 BGM 版权，85% 违规者存在认知错误。TikHub 元数据已含 BGM 字段（曲名/艺人），接入后：① 识别 BGM → ② ACRCloud/音乐授权数据库核查商用状态 → ③ 给出「可用/需版权/推荐替代」结论。<b>边际成本接近零</b>（TikHub P1 接入后即有字段）。</div>
+      <div class="cw">⚠️ 依赖 TikHub key + ACRCloud API（或 AudD）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P1 · 新增 · 选题差异化建议</div>
+      <div class="cn">💡 3 个差异化切角，比竞品更有机会</div>
+      <div class="cd">不是「能不能做」的是/否回答，而是「和竞品有什么不同、你的护城河在哪」。基于 D2 结构公式 + D5 竞品横评（AnySearch 搜同类内容 + 真实数据指标） → LLM 综合出 3 个差异化角度，每个有「竞品空白证据」支撑。</div>
+      <div class="cw">⚠️ 依赖 D5 竞品横评完整跑通（需 AnySearch + LLM）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P1 · D5 真正实现</div>
+      <div class="cn">⚔️ 竞品横评（≥3 个真实竞品）</div>
+      <div class="cd">AnySearch batch_search（「{主题词} 短视频 2025」多路并行）→ 收集竞品标题/平台/数据指标 → LLM 三轴对比（内容角度/数据表现/差异化维度）→ 「本内容在赛道的位置」。缺 D5 的报告评级自动降一档（报告骨架规则）。</div>
+      <div class="cw">⚠️ 依赖 AnySearch batch_search + LLM</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P1 · D6 发布者画像</div>
+      <div class="cn">👤 账号类型 / 调性 / 商业背景</div>
+      <div class="cd">「他是谁」决定了「我要不要跟、跟了会不会踩坑」。TikHub 账号接口 → 粉丝数/历史内容/标签 → LLM 判断：个人创作者/品牌号/MCN/官方机构 + 内容调性 + 历史变现方式。出处溯源（D4）的关键辅助。</div>
+      <div class="cw">⚠️ 依赖 TikHub 账号类接口（视频详情含作者字段）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P1 · 分析结论自动归档</div>
+      <div class="cn">📚 分析即入库，第 3 次起产生数据复利</div>
+      <div class="cd">创作者有积累意愿但主动维护率极低（调研确认）。probe 解法：每次 paid 分析完，结构公式/评级/二创方案<b>自动写入母体 assets（成品仓）</b>，不需要用户任何操作。第 3-5 次同类分析开始产生复利（「你之前分析过 3 条类似内容，平均评级 B，这次 A 的信号值得注意」）。</div>
+      <div class="cw">⚠️ 依赖母体 assets.py 接口（母体侧实现后接入）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P1 · 批量对比（最多 3 条）</div>
+      <div class="cn">🔀 哪条最值得做？</div>
+      <div class="cd">创作者在多条竞品中选一条做，现在是人工比较。probe 接 /invoke 支持 urls:[] 最多 3 条 → 并行提取分析 → 对比评级+差异化机会 → 给出「优先做 #1，理由：…」的明确结论。AnySearch batch_search 已支持。</div>
+      <div class="cw">⚠️ 依赖 AnySearch batch + LLM 并行调用</div>
+    </div>
+  </div>
+
+  <h3 class="sub">🔵 P2 · 规模化后（价值高但不阻塞核心链路）</h3>
+  <div class="capgrid">
+    <div class="capcard">
+      <div class="ct">P2 · D8 版权综合评分</div>
+      <div class="cn">⚖️ 视频内容 + BGM + AIGC 三层风险</div>
+      <div class="cd">不只是 BGM，还有：封面图版权、字幕内容版权、AIGC 标识义务（2025-09-01《标识办法》强制）。三层风险综合给「可用/谨慎/不可直接用」。这是 D8 的完整实现，目前 paid 层仅有骨架。</div>
+      <div class="cw">⚠️ 需 LLM + 外部版权数据库 API</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P2 · D9 IP 画像适配</div>
+      <div class="cn">🎯 这条内容和你的账号有多匹配？</div>
+      <div class="cd">用户传入 context.ip_profile（年龄层/兴趣标签/内容偏好）→ LLM 逐项比对受众特征 → 适配评分（0-10）+ 匹配强项/差距。没有 IP 画像时降级为通用受众描述。这是 D9 的设计，需用户画像数据支持。</div>
+      <div class="cw">⚠️ 需用户提供 IP 画像数据（母体 L3 统一用户层接入后）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P2 · 公众号/微信专项</div>
+      <div class="cn">📱 微信生态链接完整覆盖</div>
+      <div class="cd">trafilatura 已可抓微信公众号正文，但缺账号维度（粉丝/历史/商业背景）。接入新榜 API（商务对接，R1）→ 补 D6 发布者画像的公众号版本。腾讯元宝打通 2.1 亿公众号是竞品优势，probe 接新榜可在自媒体分析场景超越。</div>
+      <div class="cw">⚠️ 需新榜 API 商务对接（R1 付费授权）</div>
+    </div>
+    <div class="capcard">
+      <div class="ct">P2 · ASR 字幕提取</div>
+      <div class="cn">🎙️ 视频→文案，B线分析的前提</div>
+      <div class="cd">视频类链接的 B线分析（D2/D7）需要文案文本。ASR（faster-whisper，MIT）在 tencent-sh 可部署，但需视频音轨（视频下载+ffmpeg提取）。这条链路在 _deprecated/scripts/media.py 原有设计中，需在合规框架下重建（视频来自 TikHub 授权接口，不自建爬取）。</div>
+      <div class="cw">⚠️ 需 TikHub 视频下载接口 + heavy worker（ufo/ufo2）</div>
+    </div>
+  </div>
+
+  <div class="kbox a">🚫 <b>不建议现在做（调研证据）</b><br>
+  ① <b>完全自托管数据采集</b>：MediaCrawler 禁商用，Douyin_TikTok_API 缺小红书/IG，自建意味着签名逆向+代理池+Cookie维护，是持续重资产。调研结论：买 TikHub TCO 更优，抽象层保证可切换即可。<br>
+  ② <b>视频内容生成</b>（剪映/即梦的事）：probe 定位是「判断」而非「生产」，跨界做生成会稀释核心定位，且剪映/可灵已建立成本优势。与 meta-publish-matrix 联动（推送二创建议到发布层）是正确的边界。</div>
+</section>
+
+<!-- 7. 三阶段实现 -->
+<section id="phases">
+  <div class="sec-h"><div class="num">7</div><h2>三阶段实现路线图</h2></div>
+  <p class="ssub">每阶段有明确交付标准 · P0 最快 1 周可验证</p>
+
+  <div class="phases">
+    <div class="phase p0">
+      <div class="ph">P0 · 部署激活（~1周）</div>
+      <ul>
+        <li>部署 probe 到 tencent-sh（读取 DeepSeek key）</li>
+        <li>D1/D2/D7 LLM 管线激活（从桩→真实分析）</li>
+        <li>AnySearch 联网核查真实跑通</li>
+        <li>存储/任务状态切生产配置（/var/probe + Redis）</li>
+        <li>成本熔断：日 LLM 调用上限</li>
+        <li>nginx 部署（probe.metafoclaw.com 子域名）</li>
+      </ul>
+      <div style="margin-top:10px;font-size:11.5px;color:var(--orange-600);font-weight:600">交付标准：粘贴一篇公开文章 → 出 D2 结构公式+D7 三路二创方案+评级，无桩占位</div>
+    </div>
+    <div class="phase p1">
+      <div class="ph">P1 · 五平台+核心补充（~2-3周）</div>
+      <ul>
+        <li>TikHub key 配置（R8 注册 + R1 授权）</li>
+        <li>五平台视频/笔记元数据真出数据</li>
+        <li>BGM 版权核查（TikHub BGM字段 + ACRCloud）</li>
+        <li>D5 竞品横评（AnySearch batch + LLM）</li>
+        <li>D6 发布者画像（TikHub 账号接口）</li>
+        <li>选题差异化建议（3个差异角度）</li>
+        <li>LLM 结果缓存（url_hash + Redis TTL）</li>
+        <li>批量对比（3条链接并行）</li>
+      </ul>
+      <div style="margin-top:10px;font-size:11.5px;color:var(--blue);font-weight:600">交付标准：粘贴一条抖音链接 → 出含 BGM 版权状态+竞品横评+发布者画像的完整 7 段报告</div>
+    </div>
+    <div class="phase p2">
+      <div class="ph">P2 · 规模化（~4-8周）</div>
+      <ul>
+        <li>母体 HttpToolClient + identity/verify（SSO 闭环）</li>
+        <li>分析结论自动归档（母体 assets 接入）</li>
+        <li>D9 IP 画像适配（母体 L3 用户层接入）</li>
+        <li>D8 版权综合评分（AIGC 标识义务）</li>
+        <li>ASR 字幕（视频 B线 分析前提）</li>
+        <li>公众号专项（新榜 API 商务对接）</li>
+        <li>多平台格式适配建议（→ meta-publish-matrix）</li>
+        <li>TikHub fallback（Evil0ctal 抖音备用）</li>
+      </ul>
+      <div style="margin-top:10px;font-size:11.5px;color:var(--purple);font-weight:600">交付标准：probe 完整接入母体大厅；D1-D9 全维度覆盖；分析结论自动归档</div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. 商业设计 -->
+<section id="business">
+  <div class="sec-h"><div class="num">8</div><h2>商业设计 · 三层深度线 × 定价锚</h2></div>
+  <p class="ssub">对齐宗旨「便宜」·个人创作者低门槛 · 付费只卖独有结论</p>
+
+  <h3 class="sub">三层深度线（已在 guards 实现）</h3>
+  <table>
+    <thead><tr><th>层</th><th>给什么</th><th>商业逻辑</th><th>成本</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill pg">public · 免费</span></td><td>A/B/C/D 评级 + 一句话结论（「值得，借路优先」）</td><td>引流钩子：让创作者在 30 秒内体验到「这工具真有用」</td><td>trafilatura 提取成本极低</td></tr>
+      <tr><td><span class="pill pb">preview · 注册</span></td><td>+ 结构公式（钩子类型 + 节奏地图）+ D7 简版二创方向（1条）</td><td>注册转化抓手：结构公式已能帮创作者节省 1-2 小时</td><td>LLM 1次调用 ≈ $0.01</td></tr>
+      <tr><td><span class="pill pa">paid · 付费</span></td><td>完整 7 段报告：D1真相核查 + D2完整结构 + D5竞品横评(≥3) + D6发布者画像 + D7三路方案 + D8合规风险 + BGM版权（P1后）+ 评级 + 三步行动</td><td>核心付费价值：「能不能做、为什么、怎么做、有没有风险」一步到位，替代 2-4 小时人工</td><td>LLM 4-6 次 + TikHub ≈ $0.05-0.10/次</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">定价参考（对齐宗旨「便宜」）</h3>
+  <table>
+    <thead><tr><th>维度</th><th>参考值</th><th>probe 设计方向</th></tr></thead>
+    <tbody>
+      <tr><td>豆包价格锚（3-0 确认）</td><td>68/200/500 元/月</td><td>probe 付费要明显低于此锚；付费只卖「成品/独有结论」，否则用户没理由不用豆包</td></tr>
+      <tr><td>飞瓜最低档</td><td>¥399/月（偏电商）</td><td>probe 按次付费，不强迫订阅；轻度用户零门槛入场</td></tr>
+      <tr><td>蝉妈妈个人版</td><td>¥133/月（阉割严重）</td><td>probe 付费版功能不阉割，小于 ¥99/月等效</td></tr>
+      <tr><td>RevenueCat 数据</td><td>年付留存 44.1% ≫ 月付 17%</td><td>主推年付/会员；首月体验是留存关键（前 30 天出价值）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="kbox au">💡 <b>建议定价方向</b>（需元东方拍板）：免费（公开评级，无需注册）→ 注册免费（结构公式+简版二创，每天 N 次限额）→ 付费按次（完整7段报告，¥1-3/次）→ 月度会员（¥49-99/月，不限次）→ 年付优惠（主推，留存 44.1%）。<b>不做「为B端定价，功能给C端」的陷阱。</b></div>
+</section>
+
+<!-- 9. 度量北极星 -->
+<section id="metrics">
+  <div class="sec-h"><div class="num">9</div><h2>度量北极星 · 验证「真有用」</h2></div>
+  <p class="ssub">宗旨「有用」= 创作者真的用 probe 的结论去做了内容，不是「看看就走」</p>
+
+  <h3 class="sub">三层度量</h3>
+  <table>
+    <thead><tr><th>层</th><th>指标</th><th>目标（P0 上线后 4 周）</th><th>意义</th></tr></thead>
+    <tbody>
+      <tr><td>产品质量</td><td>C2 零追问交付率（用户不需要再问第二次）</td><td>≥ 70%（paid 层）</td><td>宗旨「有用」的直接验证；Manus 死因是交付错误成品</td></tr>
+      <tr><td>用户行为</td><td>paid 报告完读率（打开到读完7段）</td><td>≥ 50%</td><td>报告被读完 = 用户觉得有价值</td></tr>
+      <tr><td>转化</td><td>匿名→注册→付费漏斗转化率</td><td>注册转化≥30% · 付费转化≥5%</td><td>付费转化验证「便宜有用」定价策略</td></tr>
+      <tr><td>时间替代</td><td>用户反馈「用 probe 替代了几小时手工分析」比例</td><td>≥ 60% paid 用户反馈替代了 1h+</td><td>「时间归生活」的核心 KPI</td></tr>
+      <tr><td>母体贡献</td><td>probe 带来的母体新注册用户数</td><td>首月 ≥ 100（作为首挂工具验证引流）</td><td>母体是铁轨·工具是列车：probe 的流量归入母体</td></tr>
+    </tbody>
+  </table>
+
+  <div class="kbox r" style="margin-top:14px">🛑 <b>成品质量是生死命门（调研已确认）</b>：Manus 失败案例中，交付错误成品（财务模型 β 值偏差 >15%）是核心死因。probe 在开放 paid 档前，D1 真相核查和 D2 结构拆解必须人工抽样验收，不能靠 pytest 就宣告完成。首批 10-20 次真实链接全程人工复核，确保「LLM 分析结论 vs 人工判断」一致性 ≥ 80% 再开放。</div>
+</section>
+
+<footer>
+  <b>调研基础</b>：5路并行竞品调研（飞瓜/蝉妈妈/新榜/卡思/有米云·剪映AI/豆包/即梦/可灵/元宝/Kimi/Manus·创作者经济痛点·probe定位研究·能力缺口分析）·多源对抗验证·
+  adworkly 12工具评测 · Whale IP律师事务所 2025报告 · 抖音官方数据 · 蝉妈妈判决(2025厦门中院) · RevenueCat 2025 留存报告 · 字节跳动2024 ESG报告<br>
+  probe 完整方案设计 v2 · 2026-06-04 · 绵阳零元电子商务有限公司 · 蜀ICP备2026010386号-1
+</footer>
+</div>
+
+<div style="background:#243049;color:rgba(255,255,255,.72);text-align:center;padding:14px;font:400 11.5px/1.8 'Noto Sans SC',sans-serif">MetaFoclaw 工作台 · 🔒 内部专用 · 绵阳零元电子商务有限公司 · 蜀ICP备2026010386号-1</div>
+
+<nav class="hub-tabs">
+  <a href="/"><span>🏠</span><span>工作台</span></a>
+  <a href="/research/" class="on"><span>🔬</span><span>竞调</span></a>
+  <a href="/progress/"><span>📊</span><span>进度</span></a>
+  <a href="/plan.html"><span>📖</span><span>方案</span></a>
+  <a href="/account/"><span>👤</span><span>我</span></a>
+</nav>
+
+<script>
+function theme(){document.documentElement.setAttribute('data-theme',document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')}
+(function(){
+  var ids=['market','matrix','value','topo','issues','capability','phases','business','metrics'];
+  var navs=document.querySelectorAll('.side .nav');
+  window.addEventListener('scroll',function(){
+    var cur='';
+    ids.forEach(function(id){var el=document.getElementById(id);if(el&&window.scrollY>=el.offsetTop-90)cur=id;});
+    navs.forEach(function(n){var h=n.getAttribute('href');n.classList.toggle('on',h==='#'+cur);});
+  });
+})();
+</script>
+</body>
+</html>

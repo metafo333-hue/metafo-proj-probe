@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mfc:manifest",
+  "title": "画像契约",
+  "type": "object",
+  "required": [
+    "name",
+    "industry",
+    "angle",
+    "solves",
+    "pricing_tier"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "subdomain": {
+      "type": "string",
+      "description": "引擎子域名标识符，如 \"probe\""
+    },
+    "industry": {
+      "type": "array",
+      "description": "对外声明行业：自媒体 + 金融（2026-06-08 元东方定调·金融+自媒体并列前期主攻）",
+      "items": {
+        "type": "string",
+        "enum": ["自媒体", "金融"]
+      }
+    },
+    "angle": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "solves": {
+      "type": "string"
+    },
+    "pricing_tier": {
+      "enum": [
+        "free",
+        "premium",
+        "oss"
+      ]
+    },
+    "sample_input": {
+      "type": "string"
+    },
+    "sample_output": {
+      "type": "string"
+    }
+  }
+}

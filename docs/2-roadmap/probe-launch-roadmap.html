@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>probe · 上线作战图 · 分层级步骤 · MetaFoclaw 工作台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="light"]{
+  --blue:#1E3A8A;--blue-50:#EEF2FB;--orange:#FF7A1A;--orange-600:#E0670D;--orange-soft:#FFF1E6;
+  --matte:#243049;--ink:#1E3A8A;--ink-2:#475569;--ink-3:#94A3B8;
+  --hairline:rgba(30,58,138,.10);--surface:#FFFFFF;--surface-2:#F8FAFC;--surface-3:#FAFBFC;
+  --green:#15803D;--green-soft:#E7F3EA;--amber:#CA8A04;--amber-soft:#FBEFE2;
+  --red:#D93025;--red-soft:#FCE8E6;--purple:#7C5CE6;--teal:#0D9488;--teal-soft:#CCFBF1;
+  --aurora:linear-gradient(115deg,#0A0E1A 0%,#16205A 28%,#1E3A8A 44%,#7A3A6B 60%,#C2410C 74%,#FF7A1A 86%,#FFE9D2 100%);
+  --glow-o:0 8px 24px rgba(255,122,26,.45);
+  --sh-sm:0 1px 2px rgba(30,58,138,.06),0 0 0 .5px rgba(30,58,138,.05);
+  --sh-md:0 6px 20px rgba(30,58,138,.10);
+  --font-d:"Fredoka","Poppins",sans-serif;--font-m:"JetBrains Mono",monospace;
+  --nav-w:224px;--top-h:58px;
+}
+[data-theme="dark"]{--ink:#F8FAFC;--ink-2:#AEBBD0;--ink-3:#6B7C9E;--hairline:rgba(255,255,255,.12);
+  --surface:#0F2557;--surface-2:#16306B;--surface-3:rgba(255,255,255,.04);--blue-50:rgba(255,255,255,.06);
+  --orange-soft:rgba(255,122,26,.14);--green-soft:rgba(21,128,61,.18);--amber-soft:rgba(202,138,4,.18);--red-soft:rgba(217,48,37,.2);
+  --sh-sm:0 1px 2px rgba(0,0,0,.3);--sh-md:0 6px 20px rgba(0,0,0,.35);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Sans SC",-apple-system,sans-serif;color:var(--ink-2);background:var(--surface-2);font-size:14px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+h1,h2,h3,.fd{font-family:var(--font-d)}
+.top{position:fixed;top:0;left:0;right:0;height:var(--top-h);z-index:1100;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--matte);box-shadow:0 2px 16px rgba(10,14,26,.28);color:#fff;overflow:hidden}
+.top::before{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--aurora);opacity:.9}
+.top::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.10);backdrop-filter:blur(14px) saturate(1.5);pointer-events:none}
+.top>*{position:relative;z-index:2}
+.m{width:34px;height:34px;border-radius:10px;background:var(--orange);display:grid;place-items:center;font-family:var(--font-d);font-weight:700;font-size:21px;color:#fff;box-shadow:var(--glow-o)}
+.bt{font-family:var(--font-d);font-weight:600;font-size:16px;letter-spacing:.4px}
+.bt small{font-weight:400;font-size:11px;opacity:.72;margin-left:7px;font-family:"Noto Sans SC"}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.ic-btn{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;cursor:pointer;font-size:15px;display:grid;place-items:center}
+.side{position:fixed;top:var(--top-h);left:0;bottom:0;width:var(--nav-w);background:var(--surface);border-right:1px solid var(--hairline);padding:14px 12px;overflow-y:auto;z-index:1000}
+.grp{font-size:10.5px;font-weight:700;letter-spacing:1.5px;color:var(--ink-3);margin:14px 10px 6px;text-transform:uppercase}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:10px;color:var(--ink);font-size:13px;margin-bottom:2px;border:1px solid transparent;cursor:pointer;transition:.15s}
+.nav .ni{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.nav:hover{background:var(--surface-2)}
+.nav.on{background:var(--orange-soft);color:var(--orange-600);border-color:rgba(255,122,26,.25);font-weight:600}
+.main{margin-left:var(--nav-w);margin-top:var(--top-h);padding:24px 28px 80px;max-width:1120px}
+.crumb{font-size:12px;color:var(--ink-3);margin-bottom:14px}
+.hero{border-radius:18px;padding:28px 30px;margin-bottom:20px;background:var(--aurora);color:#fff;box-shadow:var(--sh-md);position:relative;overflow:hidden}
+.hero .tag{display:inline-block;background:rgba(255,255,255,.18);padding:3px 12px;border-radius:999px;font-size:11px;letter-spacing:.6px;margin-bottom:10px}
+.hero h1{font-size:28px;font-weight:700;margin-bottom:8px}
+.hero .subtitle{font-size:13.5px;opacity:.92;max-width:680px}
+.hero .meta{margin-top:14px;display:flex;gap:20px;flex-wrap:wrap;font-size:12px;opacity:.88}
+.hero .meta b{color:#FFE9D2}
+section{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:24px 26px;margin-top:20px;box-shadow:var(--sh-sm)}
+.sec-h{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.num{width:34px;height:34px;border-radius:9px;background:var(--blue-50);color:var(--blue);font-family:var(--font-d);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+[data-theme="dark"] .num{color:#8BA5DE}
+h2{font-size:20px;color:var(--ink);font-weight:600}
+h3.sub{font-size:14px;font-weight:700;color:var(--ink);margin:22px 0 8px}
+.ssub{color:var(--ink-3);font-size:12.5px;margin:2px 0 18px 46px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top;color:var(--ink-2)}
+th{background:var(--surface-3);color:var(--ink);font-weight:700;font-size:11.5px;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+code,.mono{background:var(--blue-50);padding:1px 6px;border-radius:5px;font-size:11.5px;color:var(--blue);font-family:var(--font-m)}
+[data-theme="dark"] code{color:#9DB2EA}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:700;line-height:1.8;white-space:nowrap}
+.pg{background:var(--green-soft);color:var(--green)}.pr{background:var(--red-soft);color:var(--red)}
+.pa{background:var(--amber-soft);color:var(--amber)}.pb{background:var(--blue-50);color:var(--blue)}
+.pp{background:rgba(124,92,230,.12);color:var(--purple)}.pt{background:var(--teal-soft);color:var(--teal)}
+.kbox{border-radius:11px;padding:14px 18px;font-size:13px;margin:14px 0;border-left:4px solid}
+.kbox.r{background:var(--red-soft);border-color:var(--red);color:#7F1D1D}
+.kbox.g{background:var(--green-soft);border-color:var(--green);color:#14532D}
+.kbox.a{background:var(--amber-soft);border-color:var(--amber);color:#78350F}
+.kbox.au{background:linear-gradient(135deg,rgba(30,58,138,.05),rgba(255,122,26,.06));border-color:var(--orange)}
+/* 层级金字塔 */
+.layers{margin:14px 0}
+.layer{display:flex;align-items:center;gap:14px;border:1.5px solid var(--hairline);border-radius:12px;padding:14px 18px;margin-bottom:10px;background:var(--surface)}
+.layer .ln{font-family:var(--font-d);font-weight:700;font-size:14px;width:130px;flex-shrink:0}
+.layer .ld{font-size:12.5px;color:var(--ink-2);flex:1}
+.layer .lo{flex-shrink:0}
+.layer.gate{border-color:var(--red);border-left-width:5px;background:var(--red-soft)}
+.layer.gate .ln{color:var(--red)}
+.layer.l1{border-left:5px solid var(--orange)}.layer.l1 .ln{color:var(--orange-600)}
+.layer.l2{border-left:5px solid var(--blue)}.layer.l2 .ln{color:var(--blue)}
+.layer.l3{border-left:5px solid var(--teal)}.layer.l3 .ln{color:var(--teal)}
+.layer.l4{border-left:5px solid var(--purple)}.layer.l4 .ln{color:var(--purple)}
+.layer.l5{border-left:5px solid var(--green)}.layer.l5 .ln{color:var(--green)}
+/* 时序拓扑 */
+.topo{background:var(--surface-3);border:1px solid var(--hairline);border-radius:12px;padding:18px;font-family:var(--font-m);font-size:12px;line-height:2;color:var(--ink-2);overflow-x:auto;margin:14px 0}
+.topo .ok{color:var(--green)}.topo .blk{color:var(--red)}.topo .lbl{color:var(--blue);font-weight:600}
+/* 里程碑 */
+.miles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
+.mile{border:1.5px solid var(--hairline);border-radius:12px;padding:16px;background:var(--surface)}
+.mile.m1{border-color:var(--green);background:var(--green-soft)}
+.mile.m2{border-color:var(--blue);background:var(--blue-50)}
+.mile.m3{border-color:var(--purple);background:rgba(124,92,230,.08)}
+.mile .mt{font-family:var(--font-d);font-size:15px;font-weight:700;margin-bottom:6px}
+.mile.m1 .mt{color:var(--green)}.mile.m2 .mt{color:var(--blue)}.mile.m3 .mt{color:var(--purple)}
+.mile ul{padding-left:14px;font-size:12px;color:var(--ink-2)}.mile ul li{margin-bottom:4px}
+.who{display:inline-block;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;margin-right:4px}
+.who.probe{background:var(--orange-soft);color:var(--orange-600)}
+.who.mother{background:rgba(124,92,230,.12);color:var(--purple)}
+.who.ext{background:var(--amber-soft);color:var(--amber)}
+footer{color:var(--ink-3);font-size:11.5px;margin-top:24px;padding-top:16px;border-top:1px solid var(--hairline)}
+nav.hub-tabs{display:none}
+@media(max-width:768px){.side{display:none}.main{margin-left:0}.miles{grid-template-columns:1fr}.layer{flex-direction:column;align-items:flex-start;gap:6px}.layer .ln{width:auto}
+  nav.hub-tabs{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--hairline);z-index:1000}
+  nav.hub-tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;font-size:11px;color:var(--ink-3)}}
+</style>
+</head>
+<body>
+<div style="background:#7F1D1D;color:#FEF2F2;padding:10px 18px;font-size:12.5px;font-family:'Noto Sans SC',sans-serif;line-height:1.6;position:sticky;top:0;z-index:9999">
+  ⚠️ 术语升级中：本图部分旧术语（链接情报参谋/D1-D9）以 records/probe-ssot-master-reconciliation-v1.0.md §1-§3 为准（验证=双审8闸·赛道=9·命名=元探）
+</div>
+
+<div class="top">
+  <a href="/" class="m">M</a>
+  <div class="bt">MetaFoclaw 工作台<small>probe 上线作战图</small></div>
+  <div class="right"><button class="ic-btn" onclick="theme()">🌙</button><a class="ic-btn" href="/">🏠</a></div>
+</div>
+
+<nav class="side">
+  <div class="grp">导航</div>
+  <a class="nav" href="/"><span class="ni">🏠</span><span>工作台首页</span></a>
+  <a class="nav" href="/research/"><span class="ni">🔬</span><span>竞调情报</span></a>
+  <div class="grp">本作战图</div>
+  <a class="nav on" href="#overview"><span class="ni">🗂️</span><span>五层级总览</span></a>
+  <a class="nav" href="#sequence"><span class="ni">🔀</span><span>依赖时序图</span></a>
+  <a class="nav" href="#gate"><span class="ni">🚦</span><span>L0 准入门</span></a>
+  <a class="nav" href="#code"><span class="ni">⚙️</span><span>L1 代码就绪</span></a>
+  <a class="nav" href="#infra"><span class="ni">🏗️</span><span>L2 基础设施</span></a>
+  <a class="nav" href="#data"><span class="ni">🔌</span><span>L3 数据源</span></a>
+  <a class="nav" href="#mother"><span class="ni">🚄</span><span>L4 母体接入</span></a>
+  <a class="nav" href="#launch"><span class="ni">🚀</span><span>L5 灰度上线</span></a>
+  <a class="nav" href="#miles"><span class="ni">🏁</span><span>三里程碑</span></a>
+  <a class="nav" href="#risk"><span class="ni">🛟</span><span>风险与回退</span></a>
+  <div class="grp">关联</div>
+  <a class="nav" href="probe-launch-roadmap.html"><span class="ni">🎯</span><span>上线作战图</span></a><!-- 原死链已修 -->
+</nav>
+
+<div class="main">
+<div class="crumb"><a href="/">🏠 工作台</a> › <a href="/research/">🔬 竞调情报</a> › probe 上线作战图</div>
+
+<div class="hero">
+  <div class="tag">🚀 上线作战图 · 分层级步骤 · 已过母体对齐门</div>
+  <h1>probe · 产品上线作战图</h1>
+  <p class="subtitle">从代码就绪到母体大厅上架的完整路径，分 5 层级 + 1 准入门。每层标清「谁做、前置、阻塞、验收」。母体是铁轨、probe 是列车——首挂工具，验证「远程项目镶嵌」铁轨打通。<b>所问，即所得</b> 的承诺，靠这张图一步步兑现。</p>
+  <div class="meta">
+    <span><b>定位</b> 链接情报决策室（首挂工具）</span>
+    <span><b>准入门</b> 母体对齐 ✅ · 双螺旋 🟢🟢 · C2 待实评</span>
+    <span><b>最快路径</b> M1 公开档 ~1 周</span>
+    <span><b>日期</b> 2026-06-04</span>
+  </div>
+</div>
+
+<!-- 1. 五层级总览 -->
+<section id="overview">
+  <div class="sec-h"><div class="num">1</div><h2>上线五层级总览（自底向上 · 依赖递进）</h2></div>
+  <p class="ssub">L0 准入门贯穿全程；L1→L5 按依赖顺序推进，部分可并行</p>
+
+  <div class="layers">
+    <div class="layer gate">
+      <div class="ln">🚦 L0 准入门</div>
+      <div class="ld">贯穿全程的「不过不上线」闸：母体对齐自检 · 双螺旋门 🟢🟢 · C2 质量门 · 成品人工复核（Manus 教训）</div>
+      <div class="lo"><span class="pill pg">对齐✅</span> <span class="pill pa">C2待实评</span></div>
+    </div>
+    <div class="layer l1">
+      <div class="ln">⚙️ L1 代码就绪</div>
+      <div class="ld">probe 侧 P0 必修：LLM 管线激活 · SSO 真校验 · 任务/存储持久化 · 成本熔断 · URL 校验 · pytest 8/8 + selftest 准入</div>
+      <div class="lo"><span class="who probe">probe</span></div>
+    </div>
+    <div class="layer l2">
+      <div class="ln">🏗️ L2 基础设施</div>
+      <div class="ld">tencent-sh：DNS A 记录 · 通配证书 · nginx 四禁路由 · systemd 服务 · Redis · 对象存储 · 代理（TikHub 境内被墙）</div>
+      <div class="lo"><span class="who probe">probe</span><span class="who ext">运维</span></div>
+    </div>
+    <div class="layer l3">
+      <div class="ln">🔌 L3 数据源</div>
+      <div class="ld">DeepSeek/Qwen（key 已在服务器）· AnySearch（免费已通）→ 公开档够用 ｜ TikHub key（R8+R1）· BGM 版权（ACRCloud）→ 付费档</div>
+      <div class="lo"><span class="who probe">probe</span><span class="who ext">R1付费</span></div>
+    </div>
+    <div class="layer l4">
+      <div class="ln">🚄 L4 母体接入</div>
+      <div class="ld">母体侧补 HttpToolClient + /api/v1/identity/verify（SSO）· registry 注册三维标签 · cookie domain=.metafoclaw.com · 大厅导流</div>
+      <div class="lo"><span class="who mother">母体</span><span class="who probe">probe</span></div>
+    </div>
+    <div class="layer l5">
+      <div class="ln">🚀 L5 灰度上线</div>
+      <div class="ld">公开档（零风险零成本）→ 注册档 → 付费档（需 C2 过 + TikHub 通 + 人工复核）→ 大厅上架 · 全程监控北极星指标</div>
+      <div class="lo"><span class="who probe">probe</span><span class="who mother">母体</span></div>
+    </div>
+  </div>
+  <div style="text-align:center;font-size:11px;color:var(--ink-3)">
+    <span class="who probe">probe</span>probe 侧自主 &nbsp; <span class="who mother">母体</span>需母体配合 &nbsp; <span class="who ext">外部</span>外部依赖（运维/付费）
+  </div>
+</section>
+
+<!-- 2. 依赖时序图 -->
+<section id="sequence">
+  <div class="sec-h"><div class="num">2</div><h2>依赖时序图（哪些并行 · 哪些串行卡点）</h2></div>
+  <p class="ssub">最快路径 = 抓住关键链；🟢可立即做 · 🔴卡点阻塞</p>
+  <div class="topo">
+<span class="lbl">【关键链 · M1 公开档最快上线】</span>
+L0 母体对齐 <span class="ok">✅已过</span> ──┐
+L1 LLM激活+P0修 ───┼──► L2 部署(DNS🔴+证书+nginx+Redis) ──► L5 公开档灰度 ──► <span class="ok">M1 上线</span>
+L3 DeepSeek+AnySearch <span class="ok">✅已通</span> ─┘                  (文章/文档·零成本零风险)
+
+<span class="lbl">【并行链 · 不阻塞 M1】</span>
+L3 TikHub key (R8注册🔴 + R1付费🔴) ──────────┐
+L3 BGM版权 ACRCloud ───────────────────────┼──► L5 付费档 ──► <span class="ok">M2 付费上线</span>
+L1 paid层LLM管线完整 + C2质量门🔴 + 人工复核 ─┘    (五平台深探报告)
+
+<span class="lbl">【母体链 · M3 大厅上架】</span>
+L4 母体 HttpToolClient🔴 + identity/verify🔴 ──► registry注册 ──► L5 大厅导流 ──► <span class="ok">M3 镶嵌验收</span>
+   (母体侧待补·当前 client.py 仅 inprocess)
+
+<span class="lbl">【当前卡点 🔴 清单】</span>
+  🔴 DNS: probe.metafoclaw.com 现返 198.18.1.188(占位) → 须配真实公网 IP
+  🔴 TikHub key: 需 R8 邮箱注册 + R1 付费授权(超50次免费)
+  🔴 母体 HttpToolClient + identity/verify: 母体侧 TODO
+  🔴 C2 质量门: 需真实链接抽样实评(不可自过)
+  </div>
+</section>
+
+<!-- 3. L0 准入门 -->
+<section id="gate">
+  <div class="sec-h"><div class="num">3</div><h2>L0 · 准入门（贯穿全程 · 不过不上线）</h2></div>
+  <p class="ssub">双门齐过（C2 质量 + 双螺旋）+ 母体对齐 + 成品人工复核</p>
+  <table>
+    <thead><tr><th>门</th><th>检什么</th><th>状态</th><th>开档要求</th></tr></thead>
+    <tbody>
+      <tr><td>母体对齐自检</td><td>价值观/破晓视觉/名即是形/四暗号/禁用语/命名一致（v3.3）</td><td><span class="pill pg">✅ 已过</span></td><td>设计/新功能前必过</td></tr>
+      <tr><td>双螺旋门（标准18）</td><td>🌀规模递增 + 🤝信任复利 两轴 verdict 真实派生 · 短板决定</td><td><span class="pill pg">✅ 🟢🟢</span></td><td>selftest 已实现并通过</td></tr>
+      <tr><td>C2 质量门</td><td>完成度≥80% / 准确性高≥20pct / 省力≥3× / 盲评胜率≥70%</td><td><span class="pill pa">⚠️ 母体侧待实评</span></td><td><b>开付费档前必过</b>（不可自过）</td></tr>
+      <tr><td>成品人工复核</td><td>首批 10-20 次真实链接，LLM 分析结论 vs 人工判断一致性 ≥80%</td><td><span class="pill pr">❌ 待部署后跑</span></td><td><b>开付费档前必做</b>（Manus 死于交付错成品）</td></tr>
+    </tbody>
+  </table>
+  <div class="kbox r">🛑 <b>门的铁律</b>：公开档（仅评级+提取）可在 L0 母体对齐+双螺旋过后即开；但<b>付费档（收钱给完整报告）必须 C2 质量门 + 人工复核双过</b>——收费却交错报告 = 砸信任轴，违背双螺旋门信任复利。</div>
+</section>
+
+<!-- 4. L1 代码就绪 -->
+<section id="code">
+  <div class="sec-h"><div class="num">4</div><h2>L1 · 代码就绪（probe 侧自主 · P0 必修）</h2></div>
+  <p class="ssub">对应方案 v2 拓扑的 P0 问题清单 · probe 窗口独立完成</p>
+  <table>
+    <thead><tr><th>步骤</th><th>动作</th><th>前置</th><th>验收</th></tr></thead>
+    <tbody>
+      <tr><td>1.1 LLM 管线激活</td><td>部署读 <code>DEEPSEEK_API_KEY</code> → D1/D2/D7 从桩变真实分析</td><td>L2 部署到 tencent-sh</td><td>deep_probe 出真实结构公式+借换串，非桩</td></tr>
+      <tr><td>1.2 SSO 真校验</td><td>切 <code>_verify_remote()</code>，不信任客户端 tier</td><td>L4 母体 identity/verify 就绪</td><td>伪造 paid tier 被拒</td></tr>
+      <tr><td>1.3 任务持久化</td><td>进程内字典 → Redis（任务状态/进度）</td><td>L2 Redis 就绪</td><td>重启后任务状态不丢</td></tr>
+      <tr><td>1.4 存储持久化</td><td>配 <code>PROBE_STORAGE_DIR=/var/probe/storage</code> + TTL</td><td>L2 目录就绪</td><td>成品文件重启不丢 · 24h 自动清</td></tr>
+      <tr><td>1.5 成本熔断</td><td>Redis 日计数：LLM/TikHub 调用超限降级返桩</td><td>L2 Redis</td><td>超限不再真实调用，返「稍后再试」</td></tr>
+      <tr><td>1.6 URL 校验</td><td>黑名单补元数据 IP 段（SSRF 防护）</td><td>—</td><td>内网/元数据 URL 被拒</td></tr>
+      <tr><td>1.7 LLM 结果缓存</td><td>url_hash+mode → Redis TTL（防重复收费）</td><td>L2 Redis</td><td>同 URL 重复请求命中缓存</td></tr>
+      <tr><td>1.8 验收</td><td>pytest 全过 + selftest 准入（契约+双螺旋）</td><td>1.1-1.7</td><td><code>/selftest</code> ok=true · gate=🟢🟢</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 5. L2 基础设施 -->
+<section id="infra">
+  <div class="sec-h"><div class="num">5</div><h2>L2 · 基础设施（tencent-sh 部署）</h2></div>
+  <p class="ssub">部署产物已就绪（DEPLOY.md / nginx-probe.conf / probe.service / registry-snippet.yaml）</p>
+  <table>
+    <thead><tr><th>步骤</th><th>动作</th><th>状态/卡点</th><th>验收</th></tr></thead>
+    <tbody>
+      <tr><td>2.1 DNS</td><td>probe.metafoclaw.com A 记录 → tencent-sh 公网 IP</td><td><span class="pill pr">🔴 现返 198.18.1.188 占位</span></td><td>dig 返真实公网 IP</td></tr>
+      <tr><td>2.2 证书</td><td>通配证书 *.metafoclaw.com（certbot DNS-01 阿里云）</td><td>复用现有通配证书</td><td>https 握手成功</td></tr>
+      <tr><td>2.3 nginx</td><td>部署 nginx-probe.conf（四禁：无 trailing slash / health 显式放行 / /api 前缀 / 80→443）</td><td><span class="pill pg">配置已就绪</span></td><td>nginx -t 过 · 路由通</td></tr>
+      <tr><td>2.4 systemd</td><td>probe.service（uvicorn · workers 按 Redis 后调）</td><td><span class="pill pg">配置已就绪</span></td><td>systemctl 起 · health 200</td></tr>
+      <tr><td>2.5 Redis</td><td>任务状态 + 配额 + 缓存 + 成本计数</td><td>tencent-sh 装 Redis</td><td>任务/配额/缓存读写正常</td></tr>
+      <tr><td>2.6 对象存储</td><td>/var/probe/storage + cron TTL 清理（MVP 本地，后 MinIO/OSS）</td><td>建目录 + cron</td><td>成品落盘 + 24h 清</td></tr>
+      <tr><td>2.7 代理</td><td>TikHub 境内被墙 → 经服务器代理（每机已有代理）</td><td><span class="pill pa">付费档才需</span></td><td>api.tikhub.io 可达</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 6. L3 数据源 -->
+<section id="data">
+  <div class="sec-h"><div class="num">6</div><h2>L3 · 数据源接通（分档激活）</h2></div>
+  <p class="ssub">公开档数据源已全通（零成本）；付费档数据源待 R1 授权</p>
+  <table>
+    <thead><tr><th>数据源</th><th>用途</th><th>状态</th><th>档位</th></tr></thead>
+    <tbody>
+      <tr><td>DeepSeek / Qwen</td><td>D1/D2/D7 LLM 分析</td><td><span class="pill pg">✅ key 在 /root/.model-keys.env</span></td><td>公开+付费</td></tr>
+      <tr><td>AnySearch</td><td>D1 联网核查 · D5 竞品搜索</td><td><span class="pill pg">✅ 免费1000/天·实测200</span></td><td>公开+付费</td></tr>
+      <tr><td>trafilatura / markitdown</td><td>文章/文档提取</td><td><span class="pill pg">✅ 已出数据</span></td><td>公开</td></tr>
+      <tr><td>TikHub</td><td>五平台视频/笔记/账号元数据 + BGM 字段</td><td><span class="pill pr">🔴 待 R8 注册 + R1 付费</span></td><td>付费</td></tr>
+      <tr><td>ACRCloud / AudD</td><td>BGM 版权商用状态核查</td><td><span class="pill pa">⚠️ P1 选型</span></td><td>付费（BGM 能力）</td></tr>
+    </tbody>
+  </table>
+  <div class="kbox g">✅ <b>关键洞察</b>：公开档（文章/文档提取 + 评级）所需数据源<b>全部已通且零成本</b>（DeepSeek key 在服务器 + AnySearch 免费）。这意味着 <b>M1 公开档上线不依赖任何付费授权</b>，是最快、最干净的首发。</div>
+</section>
+
+<!-- 7. L4 母体接入 -->
+<section id="mother">
+  <div class="sec-h"><div class="num">7</div><h2>L4 · 母体接入（铁轨对接 · 需母体侧配合）</h2></div>
+  <p class="ssub">probe 侧契约已就绪；卡点在母体侧待补的两个接口</p>
+  <table>
+    <thead><tr><th>步骤</th><th>动作</th><th>责任方</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>4.1 HttpToolClient</td><td>母体 api-core 实现 http transport（当前仅 inprocess）</td><td><span class="who mother">母体</span></td><td><span class="pill pr">🔴 client.py TODO</span></td></tr>
+      <tr><td>4.2 identity/verify</td><td>母体 <code>/api/v1/identity/verify</code>（下发/校验 short-lived user_token）</td><td><span class="who mother">母体</span></td><td><span class="pill pr">🔴 identity.py TODO</span></td></tr>
+      <tr><td>4.3 registry 注册</td><td>registry.yaml 填 probe 三维标签（自媒体×链接分析×免费+付费）+ http 端点</td><td><span class="who mother">母体</span></td><td><span class="pill pa">snippet 已备</span></td></tr>
+      <tr><td>4.4 SSO cookie</td><td>cookie domain=.metafoclaw.com · 跨子域登录互通</td><td><span class="who mother">母体</span><span class="who probe">probe</span></td><td>母体 hub 已有 SSO</td></tr>
+      <tr><td>4.5 大厅导流</td><td>probe 卡片进大厅矩阵 · 从 metafoclaw.com 导流</td><td><span class="who mother">母体</span></td><td>registry 注册后自动</td></tr>
+    </tbody>
+  </table>
+  <div class="kbox a">⚠️ <b>解耦策略</b>：L4 母体接入是 M3 大厅上架的前提，但<b>不阻塞 M1/M2</b>——probe 可先以独立子域名 probe.metafoclaw.com 对外（公开档+付费档），母体铁轨补好后再注册进大厅。这正是「远程镶嵌」的价值：probe 先独立跑通，验证铁轨。</div>
+</section>
+
+<!-- 8. L5 灰度上线 -->
+<section id="launch">
+  <div class="sec-h"><div class="num">8</div><h2>L5 · 灰度上线（分档放量）</h2></div>
+  <p class="ssub">三档逐级开放 · 每档过对应准入门 · 全程监控</p>
+  <table>
+    <thead><tr><th>档</th><th>给什么</th><th>开档门</th><th>风险/成本</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill pg">公开档</span></td><td>文章/文档提取 + A/B/C/D 评级 + 一句话结论</td><td>L0 对齐✅ + 双螺旋🟢🟢 + L1代码 + L2部署</td><td>零法律风险 · 零数据成本</td></tr>
+      <tr><td><span class="pill pb">注册档</span></td><td>+ 结构公式 + D7 简版二创方向（限次）</td><td>+ 配额限流（防白嫖）</td><td>LLM 成本（配额控）</td></tr>
+      <tr><td><span class="pill pa">付费档</span></td><td>完整 7 段报告（D1-D8 + BGM 版权 + 竞品横评 + 发布者画像）</td><td><b>+ C2 质量门 + 人工复核 + TikHub 通</b></td><td>LLM+TikHub 成本（成本熔断兜底）</td></tr>
+    </tbody>
+  </table>
+  <h3 class="sub">上线后监控（北极星指标 · 对应「所问即所得」是否兑现）</h3>
+  <table>
+    <thead><tr><th>指标</th><th>目标（4周）</th><th>意义</th></tr></thead>
+    <tbody>
+      <tr><td>C2 零追问交付率（付费档）</td><td>≥ 70%</td><td>「所问即所得」直接验证</td></tr>
+      <tr><td>付费报告完读率</td><td>≥ 50%</td><td>读完=有价值</td></tr>
+      <tr><td>注册转化 / 付费转化</td><td>≥30% / ≥5%</td><td>验证「便宜有用」定价</td></tr>
+      <tr><td>用户反馈替代手工 1h+ 比例</td><td>≥ 60%（付费）</td><td>「把时间还给生活」KPI</td></tr>
+      <tr><td>probe 带来母体新注册</td><td>首月 ≥ 100</td><td>首挂工具引流验证（流量归母体）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 9. 三里程碑 -->
+<section id="miles">
+  <div class="sec-h"><div class="num">9</div><h2>三里程碑路线</h2></div>
+  <p class="ssub">M1 最快 ~1 周 · M2 待 TikHub+质量门 · M3 待母体铁轨</p>
+  <div class="miles">
+    <div class="mile m1">
+      <div class="mt">🏁 M1 · 公开档上线</div>
+      <ul>
+        <li><span class="who probe">probe</span>L1 LLM激活+P0修</li>
+        <li><span class="who probe">probe</span>L2 部署(DNS+nginx+Redis)</li>
+        <li>L3 公开档数据源✅已通</li>
+        <li>L5 公开档灰度</li>
+      </ul>
+      <div style="margin-top:8px;font-size:11px;color:var(--green);font-weight:600">交付：粘贴文章链接→出 D2 结构+D7 二创+评级，probe.metafoclaw.com 公网可访问。~1 周</div>
+    </div>
+    <div class="mile m2">
+      <div class="mt">🏁 M2 · 付费档上线</div>
+      <ul>
+        <li><span class="who ext">R1</span>TikHub key（注册+付费）</li>
+        <li>L3 五平台数据 + BGM 版权</li>
+        <li><span class="who mother">母体</span>C2 质量门实评</li>
+        <li>成品人工复核 ≥80%</li>
+        <li>L5 付费档放量</li>
+      </ul>
+      <div style="margin-top:8px;font-size:11px;color:var(--blue);font-weight:600">交付：抖音链接→含 BGM 版权+竞品横评的完整 7 段报告。~2-3 周</div>
+    </div>
+    <div class="mile m3">
+      <div class="mt">🏁 M3 · 母体大厅上架</div>
+      <ul>
+        <li><span class="who mother">母体</span>HttpToolClient</li>
+        <li><span class="who mother">母体</span>identity/verify</li>
+        <li>registry 注册三维标签</li>
+        <li>SSO + 大厅导流</li>
+        <li>首挂铁轨验收</li>
+      </ul>
+      <div style="margin-top:8px;font-size:11px;color:var(--purple);font-weight:600">交付：probe 进大厅矩阵，验证「远程项目镶嵌」铁轨打通。待母体波次</div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. 风险与回退 -->
+<section id="risk">
+  <div class="sec-h"><div class="num">10</div><h2>风险与回退</h2></div>
+  <table>
+    <thead><tr><th>风险</th><th>触发</th><th>回退/兜底</th></tr></thead>
+    <tbody>
+      <tr><td>付费档交付错报告（砸信任）</td><td>LLM 分析质量不稳</td><td>C2+人工复核双门拦在开档前；上线后 C2 跌破线立即降回注册档</td></tr>
+      <tr><td>TikHub 突然关停（Proxycurl 式）</td><td>供应商不稳</td><td>datasources 抽象层可一键切换；抖音/TikTok 切 Evil0ctal fallback；公开档不受影响</td></tr>
+      <tr><td>成本失控（被刷）</td><td>匿名白嫖 LLM/TikHub</td><td>成本熔断（日计数超限降级）+ 配额限流 + 验证码</td></tr>
+      <tr><td>母体铁轨延期</td><td>HttpToolClient/identity 未就绪</td><td>probe 先独立子域名运营（M1/M2 不依赖 L4），M3 解耦推迟不影响营收</td></tr>
+      <tr><td>DNS/证书故障</td><td>占位 IP / 证书过期</td><td>配真实公网 IP；通配证书 certbot 自动续期</td></tr>
+    </tbody>
+  </table>
+  <div class="kbox au">🧭 <b>上线第一性原理</b>：M1 公开档是「干净首发」——零成本、零法律风险、不依赖任何外部授权或母体配合，最快验证「probe 真有用」。先把 M1 跑通建立信心和真实用户反馈，再用 M2/M3 逐级加深。<b>不必等所有层级齐备才上线</b>，按里程碑分批放量，每批都过对应准入门。</div>
+</section>
+
+<footer>
+  probe 上线作战图 · 2026-06-04 · 已过母体对齐门（v3.3：所问即所得 / 让 AI 去折腾把时间还给生活 / 破晓视觉 / 双螺旋门）<br>
+  关联：probe 完整方案 v2 · 升级规划 · 数据源选型 · TikHub 完整分析 · 绵阳零元电子商务有限公司 · 蜀ICP备2026010386号-1
+</footer>
+</div>
+
+<div style="background:#243049;color:rgba(255,255,255,.72);text-align:center;padding:14px;font:400 11.5px/1.8 'Noto Sans SC',sans-serif">MetaFoclaw 工作台 · 🔒 内部专用 · 绵阳零元电子商务有限公司 · 蜀ICP备2026010386号-1</div>
+
+<nav class="hub-tabs">
+  <a href="/"><span>🏠</span><span>工作台</span></a>
+  <a href="/research/" class="on"><span>🔬</span><span>竞调</span></a>
+  <a href="/progress/"><span>📊</span><span>进度</span></a>
+  <a href="/plan.html"><span>📖</span><span>方案</span></a>
+</nav>
+
+<script>
+function theme(){document.documentElement.setAttribute('data-theme',document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')}
+(function(){
+  var ids=['overview','sequence','gate','code','infra','data','mother','launch','miles','risk'];
+  var navs=document.querySelectorAll('.side .nav');
+  window.addEventListener('scroll',function(){
+    var cur='';
+    ids.forEach(function(id){var el=document.getElementById(id);if(el&&window.scrollY>=el.offsetTop-90)cur=id;});
+    navs.forEach(function(n){var h=n.getAttribute('href');n.classList.toggle('on',h==='#'+cur);});
+  });
+})();
+</script>
+</body>
+</html>

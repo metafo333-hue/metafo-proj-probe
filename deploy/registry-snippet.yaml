@@ -1,0 +1,18 @@
+# ⬇️ 交给母体团队：把 probe 注册为「远程工具」（http transport · 首个远程镶嵌验证）
+# 加入 metafo-proj-metafoclaw-platform/apps/api-core/app/adapter/registry.yaml 的 tools: 下
+tools:
+  probe:
+    transport: http                                   # 远程独立项目（≠ inprocess）
+    endpoint: https://probe.metafoclaw.com/api/v1     # invoke/manifest/selftest/task 基址
+    manifest_url: https://probe.metafoclaw.com/api/v1/manifest
+    # 三维标签由 /manifest 拉取：自媒体 × 链接分析 × 免费+付费
+
+# ── 准入（上架前过双门）──
+#   双螺旋门（标准 18）：/selftest data.double_helix.gate = 🟢🟢 准入（卡1 上架工具二维判据·verdict 真实派生）
+#   C2 评分卡：母体侧实评（完成度≥80%/准确≥20pct/省力≥3×/盲评≥70%）
+#
+# ── 母体侧待实现（probe 已就绪，等母体补这两块即闭环）──
+# 1. HttpToolClient：client.py 已预留 transport==http 分支（loader.py L39），需实现
+#    invoke()=POST {endpoint}/invoke、manifest()=GET {endpoint}/manifest，签名带项目 API key
+# 2. /api/v1/identity/verify：母体 SSO 下发/校验 short-lived user_token
+#    （identity.py 当前为 TODO；probe sso.py 已留 _verify_remote() 对接点）

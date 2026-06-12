@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mfc:profile",
+  "title": "用户画像契约",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "preferences": {
+      "type": "object"
+    },
+    "industry_focus": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

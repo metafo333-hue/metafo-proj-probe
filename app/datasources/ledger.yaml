@@ -1,0 +1,937 @@
+# 数据源台账 · 多域 catalog v2
+# probe 数据来源铁律 第2条 + 标准19:每个源上线前逐项过 gate19,status=active 才被 registry 放行。
+# schema 每源必填字段:
+#   domain       - 信息域 D1-D14
+#   access_type  - free | paid | free_with_key | paid_with_key
+#   method       - L(本地库) / S(搜索) / W(网络请求) / O(官方API) / D(数据库)
+#   authority_score - 1-10 权威度
+#   freshness    - realtime / daily / weekly / static
+#   cost         - "免费" 或价格说明
+#   license      - 数据使用许可
+#   status       - live | pending | cataloged | rejected
+#     live      = 模块已写、可调用、无需 key 或 key 已配
+#     pending   = 可用但待 key（如 TikHub 待 PROBE_TIKHUB_KEY）
+#     cataloged = 已登记占位、模块待实现
+#     rejected  = 明确拒用
+
+version: 8   # v8: Wave5 +32 P0源(25 live/7 cataloged·多域)
+updated: "2026-06-12"
+
+# ── 17 信息域定义 ──────────────────────────────────────────────────────────
+# D1  真相核查 / 事实核验
+# D2  内容结构拆解
+# D3  视觉 / 多模态分析
+# D4  出处溯源 / 归因
+# D5  竞品横评 / 同题对比
+# D6  发布者 / 账号画像
+# D7  二创路径（借换串）
+# D8  法规 / 合规 / 安全
+# D9  地域 / 受众适配
+# D10 学术 / 科研基础
+# D11 企业 / 财务情报
+# D12 开源 / 技术情报
+# D13 金融行情 / 市场数据（行情/K线/汇率/利率/链上/衍生品/基金净值）
+# D14 宏观 / 政策 / 监管（宏观指标/央行/政策法规/监管处罚/经济日历）
+# D15 促销与优惠 / 价格情报（商品价格/历史价/券/折扣/返利/大促日历）   ← v5 · G 元惠
+# D16 任务与激励 / 任务系统（平台任务/签到/悬赏/众包/激励规则）        ← v5 · H 任务
+# D17 AI 优惠与扶持（免费额度/credits/创业扶持/算力/黑客松·GitHub-First）  ← v5 · I AI优惠
+
+domains:
+  D1: "真相核查 / 事实核验"
+  D2: "内容结构拆解"
+  D3: "视觉 / 多模态分析"
+  D4: "出处溯源 / 归因"
+  D5: "竞品横评 / 同题对比"
+  D6: "发布者 / 账号画像"
+  D7: "二创路径（借换串）"
+  D8: "法规 / 合规 / 安全"
+  D9: "地域 / 受众适配"
+  D10: "学术 / 科研基础"
+  D11: "企业 / 财务情报"
+  D12: "开源 / 技术情报"
+  D13: "金融行情 / 市场数据"
+  D14: "宏观 / 政策 / 监管"
+  D15: "促销与优惠 / 价格情报（商品价格/历史价/券/折扣/返利/大促日历）"      # v5 新增 · 喂 G 元惠
+  D16: "任务与激励 / 任务系统（平台任务/签到/悬赏/众包/激励规则）"            # v5 新增 · 喂 H 任务
+  D17: "AI 优惠与扶持（免费额度/credits/创业扶持/算力/黑客松）"               # v5 新增 · 喂 I AI优惠
+
+# ── 9 赛道注册表 (track registry v1.1 · 详见 docs/3-build/probe-track-registry-architecture) ──
+# type: horizontal(通用业务域) | vertical(垂直旗舰道) · tier: standard | flagship
+# verify_profile: 该赛道的合规门 profile(见 docs/3-build/probe-compliance-gates)
+tracks:
+  A-selfmedia: { type: horizontal, tier: standard, weight: 50, status: active,    intent: 内容情报, domains: [D6, D7, D8] }
+  B-business:  { type: horizontal, tier: standard, weight: 50, status: building,   intent: 商业情报, domains: [D5, D9, D3] }
+  C-diligence: { type: horizontal, tier: standard, weight: 55, status: building,   intent: 风控情报, domains: [D4, D6] }
+  D-research:  { type: horizontal, tier: standard, weight: 50, status: building,   intent: 调研情报, domains: [D1, D5, D2] }
+  E-verify:    { type: horizontal, tier: standard, weight: 50, status: building,   intent: 核查情报, domains: [D1, D3, D6] }
+  F-finance:   { type: vertical,   tier: flagship, weight: 90, status: incubating, intent: 投资,    owned: [D11, D13, D14], shared: [D1, D5], verify_profile: finance-8gate }
+  G-deal:      { type: vertical,   tier: flagship, weight: 85, status: incubating, intent: 省钱,    owned: [D15], shared: [D9], verify_profile: deal-compliance-gate }
+  H-task:      { type: vertical,   tier: flagship, weight: 80, status: incubating, intent: 搞钱,    owned: [D16], shared: [D6], verify_profile: task-compliance-gate }
+  I-aideal:    { type: vertical,   tier: flagship, weight: 82, status: incubating, intent: AI资源,  owned: [D17], shared: [D12], verify_profile: ai-deal-gate }
+
+# ── 数据源条目 ──────────────────────────────────────────────────────────────
+sources:
+
+  # ── 第三方商业 API ──────────────────────────────────────────────────────
+  tikhub:
+    vendor: TikHub.io
+    api_base: https://api.tikhub.io
+    sdk: "pip install tikhub（官方 SDK V1/V2）"
+    supported_kinds: [video, social]
+    methods: "hybrid_parsing.video_data(url=) 通用解析 + xiaohongshu_web.get_note_info_v2(share_text=)"
+    domain: [D5, D6]
+    access_type: paid_with_key
+    method: [O]
+    authority_score: 7
+    freshness: realtime
+    cost: "$0.001/req 起 · 注册送约 50 次免费额度（超出 R1 付费）"
+    license: "TikHub 商业授权 · probe 只调接口不背供应商技术责任"
+    boundary: "新边界 2026-06-04：probe 只调接口·不背供应商技术责任·自身不爬不调其绕过工具"
+    caveat: "海外主体 + 境内被墙（部署需代理）· SDK 含 Captcha Solver（probe 不调用）"
+    status: pending                       # 可用·待 PROBE_TIKHUB_KEY（R8 注册 + R1 付费）
+    compliance_debt: true                 # v4 元东方知情接受:图文(小红书/知乎/公众号)+B站覆盖本质逆向web封装·无官方替代下暂留·海外平台已转官方源
+    gate19_note: "官方数据授权维度不适用（商业采购模式）；非已判违法 · 有公司主体 · 有公开 SDK"
+
+  # ── Wave 1 · 免费官方源（live） ────────────────────────────────────────
+  wikipedia:
+    vendor: Wikimedia Foundation
+    api_base: https://en.wikipedia.org/api/rest_v1
+    module: app.datasources.public.wikipedia
+    supported_kinds: [article, search]
+    domain: [D1, D4, D10]
+    access_type: free
+    method: [O, W]
+    authority_score: 8
+    freshness: daily
+    cost: "免费"
+    license: "CC BY-SA 4.0"
+    status: live
+
+  github_src:
+    vendor: GitHub (Microsoft)
+    api_base: https://api.github.com
+    module: app.datasources.public.github_src
+    supported_kinds: [repo, search]
+    domain: [D12, D5]
+    access_type: free_with_key
+    method: [O]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（匿名 60req/h · GITHUB_TOKEN 5000req/h）"
+    license: "GitHub ToS"
+    status: live
+
+  osv:
+    vendor: Google OSV (Open Source Vulnerabilities)
+    api_base: https://api.osv.dev/v1
+    module: app.datasources.public.osv
+    supported_kinds: [vuln, search]
+    domain: [D8, D12]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "Apache-2.0"
+    status: live
+
+  webarchive:
+    vendor: Internet Archive (Wayback Machine)
+    api_base: https://archive.org/wayback/available
+    module: app.datasources.public.webarchive
+    supported_kinds: [archive, availability]
+    domain: [D4, D1]
+    access_type: free
+    method: [O, W]
+    authority_score: 8
+    freshness: static
+    cost: "免费"
+    license: "CC 0 / 公有领域存档"
+    status: live
+
+  searxng:
+    vendor: SearXNG (self-hosted)
+    api_base: "${PROBE_SEARXNG_BASE}"
+    module: app.datasources.public.searxng
+    supported_kinds: [search]
+    domain: [D1, D5, D7]
+    access_type: free
+    method: [S]
+    authority_score: 6
+    freshness: realtime
+    cost: "免费（需自托管实例 PROBE_SEARXNG_BASE）"
+    license: "AGPL-3.0"
+    status: live                          # 未配置 PROBE_SEARXNG_BASE 时返回空
+
+  # ── Wave 2 · 免费官方源（live） ────────────────────────────────────────
+  arxiv:
+    vendor: arXiv (Cornell University)
+    api_base: http://export.arxiv.org/api/query
+    module: app.datasources.public.arxiv
+    supported_kinds: [paper, search]
+    domain: [D5]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "arXiv 许可证（作者版权）"
+    status: live                          # 无需 key
+
+  gdelt:
+    vendor: GDELT Project
+    api_base: https://api.gdeltproject.org/api/v2/doc/doc
+    module: app.datasources.public.gdelt
+    supported_kinds: [news, search]
+    domain: [D6]
+    access_type: free
+    method: [O]
+    authority_score: 7
+    freshness: realtime
+    cost: "免费"
+    license: "公开数据集（GDELT Project）"
+    status: live                          # 无需 key
+
+  edgar:
+    vendor: SEC EDGAR (U.S. Securities and Exchange Commission)
+    api_base: https://data.sec.gov/submissions
+    module: app.datasources.public.edgar
+    supported_kinds: [filing, company]
+    domain: [D11, D4]                     # v4 归类修正:主域企业财务D11(原误标D4·D4保留次标签)
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: daily
+    cost: "免费"
+    license: "美国公共记录（公有领域）"
+    caveat: "须带 User-Agent 含机构名+邮件（SEC 要求）"
+    status: live                          # 无需 key
+
+  opencorporates:
+    vendor: OpenCorporates
+    api_base: https://api.opencorporates.com/v0.4
+    module: app.datasources.public.opencorporates
+    supported_kinds: [company, search]
+    domain: [D11]                         # v4 归类修正:企业工商归D11(原误标D4)
+    access_type: free_with_key
+    method: [O]
+    authority_score: 8
+    freshness: weekly
+    cost: "免费（有限额度）· 有 OPENCORPORATES_TOKEN 提升限额"
+    license: "ODbl (Open Database License)"
+    needs_key: true
+    key_env: OPENCORPORATES_TOKEN
+    status: live                          # 无 token 低限额可用；有 token 更高配额
+
+  virustotal:
+    vendor: VirusTotal (Google)
+    api_base: https://www.virustotal.com/api/v3
+    module: app.datasources.public.virustotal
+    supported_kinds: [url_report, domain_report, security]
+    domain: [D3]
+    access_type: free_with_key
+    method: [O]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费层 500 req/day（注册即得）"
+    license: "VirusTotal API ToS（个人/研究用免费）"
+    needs_key: true
+    key_env: VIRUSTOTAL_KEY
+    status: live                          # 未配置 VIRUSTOTAL_KEY 时返回空不报错
+
+  # ── Wave 3 · 免费官方源（live · 无需 key） ──────────────────────────────
+  worldbank:
+    vendor: World Bank Open Data
+    api_base: https://api.worldbank.org/v2
+    module: app.datasources.public.worldbank
+    supported_kinds: [macro, indicator]
+    domain: [D14, D13]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "CC BY 4.0（World Bank Open License）"
+    caveat: "须带合理 User-Agent（实测已加）"
+    status: live                          # 无需 key
+
+  frankfurter:
+    vendor: Frankfurter (ECB Exchange Rates)
+    api_base: https://api.frankfurter.app
+    module: app.datasources.public.frankfurter
+    supported_kinds: [fx, rate]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: daily
+    cost: "免费（明示 free to use for any purpose）"
+    license: "公开数据 · 数据来源 ECB（欧洲中央银行）"
+    status: live                          # 无需 key
+
+  defillama:
+    vendor: DeFi Llama
+    api_base: https://api.llama.fi
+    module: app.datasources.public.defillama
+    supported_kinds: [defi, tvl, chain]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: realtime
+    cost: "免费（无速率限制文档）"
+    license: "公开数据（DeFi Llama 开源项目）"
+    status: live                          # 无需 key
+
+  us_treasury:
+    vendor: U.S. Treasury Fiscal Data API
+    api_base: https://api.fiscaldata.treasury.gov/services/api/fiscal_service
+    module: app.datasources.public.us_treasury
+    supported_kinds: [rate, yield, debt]
+    domain: [D13, D14]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: daily
+    cost: "免费"
+    license: "U.S. Government Works（公有领域）"
+    caveat: "须带合理 User-Agent（实测已加）"
+    status: live                          # 无需 key
+
+  coingecko:
+    vendor: CoinGecko
+    api_base: https://api.coingecko.com/api/v3
+    module: app.datasources.public.coingecko
+    supported_kinds: [crypto, price, market]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: realtime
+    cost: "免费层无需注册（约 10-30 req/min）"
+    license: "CoinGecko API ToS（免费层允许非商业及小规模商业读取）"
+    caveat: "速率约 10-30 req/min（免费层）· 超速限流会返回 429"
+    status: live                          # 无需 key
+
+  tiktok_oembed:
+    vendor: TikTok oEmbed (Official)
+    api_base: https://www.tiktok.com/oembed
+    module: app.datasources.public.tiktok_oembed
+    supported_kinds: [social, video]
+    domain: [D6]
+    access_type: free
+    method: [O, W]
+    authority_score: 7
+    freshness: realtime
+    cost: "免费（官方 oEmbed 标准接口）"
+    license: "TikTok oEmbed ToS · 仅返回公开元数据（标题/作者/缩略图）"
+    caveat: "仅支持公开视频链接 · 不返回视频内容 · 私密视频返回空"
+    status: live                          # 无需 key
+
+  mastodon:
+    vendor: Mastodon (mastodon.social)
+    api_base: https://mastodon.social/api/v1
+    module: app.datasources.public.mastodon
+    supported_kinds: [social, search]
+    domain: [D6]
+    access_type: free
+    method: [O, W]
+    authority_score: 6
+    freshness: realtime
+    cost: "免费（联邦开放 API）"
+    license: "AGPLv3（Mastodon 开源协议）· 公开时间线无认证要求"
+    caveat: "公开时间线无需认证 · 搜索 API v2 部分实例限制未认证访问（安静降级为空）"
+    status: live                          # 无需 key
+
+  yc_oss:
+    vendor: YC OSS (yc-oss GitHub Pages)
+    api_base: https://yc-oss.github.io/api
+    module: app.datasources.public.yc_oss
+    supported_kinds: [company, startup]
+    domain: [D17, D11]
+    access_type: free
+    method: [O, W]
+    authority_score: 7
+    freshness: weekly
+    cost: "免费（MIT License）"
+    license: "MIT · 数据来源 YC 官方公开目录"
+    caveat: "全量文件约 1MB · 模块内存缓存避免重复下载"
+    status: live                          # 无需 key
+
+  ossinsight:
+    vendor: OSSInsight (PingCAP)
+    api_base: https://api.ossinsight.io/v1
+    module: app.datasources.public.ossinsight
+    supported_kinds: [repo, developer, trending]
+    domain: [D12]
+    access_type: free
+    method: [O]
+    authority_score: 7
+    freshness: daily
+    cost: "免费（无需注册）"
+    license: "公开 API · 数据来源 GitHub（遵循 GitHub ToS 使用范围）"
+    status: live                          # 无需 key
+
+  # ── Wave 4 · 免费官方源（live · 无需 key） ──────────────────────────────
+  openalex:
+    vendor: OpenAlex (Our Research)
+    api_base: https://api.openalex.org
+    module: app.datasources.public.openalex
+    supported_kinds: [paper, search]
+    domain: [D10, D5]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: weekly
+    cost: "免费"
+    license: "CC0（公有领域·可商用）"
+    caveat: "建议 User-Agent 含邮箱进入 polite pool（速率更宽松）"
+    status: live                          # 无需 key；原 cataloged 占位，Wave4 实现升 live
+
+  hackernews:
+    vendor: Hacker News (Y Combinator) via Algolia Search API
+    api_base: https://hn.algolia.com/api/v1
+    module: app.datasources.public.hackernews
+    supported_kinds: [news, search]
+    domain: [D12, D6]
+    access_type: free
+    method: [O]
+    authority_score: 7
+    freshness: realtime
+    cost: "免费（Algolia HN Search API 官方授权·无需注册）"
+    license: "HN Algolia Search API ToS · 内容版权归原作者"
+    status: live                          # 无需 key
+
+  gleif:
+    vendor: GLEIF (Global Legal Entity Identifier Foundation)
+    api_base: https://api.gleif.org/api/v1
+    module: app.datasources.public.gleif
+    supported_kinds: [company, lei]
+    domain: [D11]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: daily
+    cost: "免费（G20 授权公开基础设施）"
+    license: "CC0 / 公开基础数据（GLEIF 官方 API）"
+    caveat: "JSON:API 格式；法人名搜索含匹配；LEI 为 20 位标准编码"
+    status: live                          # 无需 key
+
+  github_intel_rss:
+    vendor: mnfst/awesome-free-llm-apis (CC0) + mlcontests.github.io (GPL-3.0)
+    api_base: https://raw.githubusercontent.com
+    module: app.datasources.public.github_intel_rss
+    supported_kinds: [ai_deal, competition, llm_api]
+    domain: [D17, D12]
+    access_type: free
+    method: [O, W]
+    authority_score: 7
+    freshness: weekly
+    cost: "免费（raw GitHub JSON·无 API key）"
+    license: "CC0（mnfst·提供者列表）+ GPL-3.0（mlcontests·竞赛列表）"
+    caveat: |
+      fetch_registry = mnfst data.json（24家 LLM 免费 API 额度·CC0·2026-05-20 更新）；
+      fetch_mlcontests = mlcontests master branch（350条竞赛·GPL-3.0·免认证）；
+      cheahjs/free-llm-api-resources license 未明确·暂不入管线（待确认后升主力）
+    status: live                          # 无需 key；两源均实测 HTTP 200（2026-06-12）
+
+  # ── Wave 5 · P0 批量 keyless 免费源（2026-06-12 多agent并发）─────────────
+# probe 数据源台账 P0-1 批次（金融F宏观官方源）
+# 写入日期：2026-06-12
+# 注意：此文件由 coding agent 生成，由元东方统一合并进 ledger.yaml
+# 格式与 ledger.yaml sources: 下的缩进规范一致（2空格 + 字段）
+
+  imf_sdmx:
+    vendor: International Monetary Fund (IMF)
+    api_base: https://dataservices.imf.org/REST/SDMX_JSON.svc
+    module: app.datasources.public.imf_sdmx
+    supported_kinds: [macro, indicator, fx, rate]
+    domain: [D14, D13]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: daily
+    cost: "免费"
+    license: "IMF 公有领域数据，商业使用合法"
+    caveat: "Mac 直连 dataservices.imf.org SSL EOF（需 probe-a 代理验证）；备用路径：通过 dbnomics 访问 IMF/IFS 数据集（Mac 直连可达）"
+    status: cataloged  # 需 probe-a 代理验证；via dbnomics 可部分访问
+
+  eurostat:
+    vendor: Eurostat (European Commission)
+    api_base: https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data
+    module: app.datasources.public.eurostat
+    supported_kinds: [macro, indicator, rate]
+    domain: [D14, D13]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "CC BY 4.0（Eurostat reuse policy）"
+    caveat: "已实测 Mac 可达：prc_hicp_manr(HICP) 返回24条月度值；支持 get_dataset / get_observations / search_tables"
+    status: live
+
+  oecd:
+    vendor: OECD (Organisation for Economic Co-operation and Development)
+    api_base: https://stats.oecd.org/SDMX-JSON/data
+    module: app.datasources.public.oecd
+    supported_kinds: [macro, indicator, rate]
+    domain: [D14, D13]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "CC BY 4.0 / OECD Terms（须署名）"
+    caveat: "主用 stats.oecd.org 旧 SDMX-JSON API（实测可达）；新 sdmx.oecd.org API 端点版本号复杂暂留备用；kei() 函数实测返回 USA CPI 数据"
+    status: live
+
+  dbnomics:
+    vendor: DBnomics (Nomics SAS)
+    api_base: https://api.db.nomics.world/v22
+    module: app.datasources.public.dbnomics
+    supported_kinds: [macro, indicator, time_series]
+    domain: [D14]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: daily
+    cost: "免费"
+    license: "数据版权归各原始来源机构（IMF/ECB/WB/OECD等）；DBnomics 平台免费使用"
+    caveat: "实测 Mac 可达；providers(5条)✅；series(IMF/IFS/M.CN.PCPI_IX)✅ 返回中国月CPI数据；search() 需指定 provider+dataset（全局搜索超时）"
+    status: live
+
+  cninfo:
+    vendor: 巨潮资讯网（中国证监会官方信息披露平台）
+    api_base: https://www.cninfo.com.cn/new/hisAnnouncement/query
+    module: app.datasources.public.cninfo
+    supported_kinds: [announcement, company, filing]
+    domain: [D11]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: realtime
+    cost: "免费"
+    license: "中国证监会官方监管公示数据，公有领域"
+    caveat: "Mac 直连：全库公告查询可达（150万条）✅；stock_code 精确过滤在 Mac 不生效（服务端 stock 参数失效）；需 probe-a 代理验证精确股票过滤；stock_info 端点 404"
+    status: live  # 全库公告可达；精确股票过滤需 probe-a
+
+  chinamoney_lpr:
+    vendor: 中国货币网（中国人民银行授权利率信息发布平台）
+    api_base: https://www.chinamoney.com.cn/ags/ms/cm-u-bk-ylzs
+    module: app.datasources.public.chinamoney_lpr
+    supported_kinds: [rate, lpr, macro]
+    domain: [D13, D14]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: monthly
+    cost: "免费"
+    license: "央行官方公示利率数据，公有领域"
+    caveat: "Mac 直连 LprHisDate 端点 404（可能需要 probe-a 代理验证；/ags/ms/ 路径对境外 IP 封闭）"
+    status: cataloged  # 需 probe-a 代理验证
+
+  sge_gold:
+    vendor: 上海黄金交易所
+    api_base: https://www.sge.com.cn
+    module: app.datasources.public.sge_gold
+    supported_kinds: [gold, commodity, rate]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: realtime
+    cost: "免费（延时15分钟）"
+    license: "SGE 官方公示延时行情，公有领域"
+    caveat: "Mac 直连 HTML 页面含 Au 关键词但无 JSON API；行情数据通过 JS 动态加载；未找到 JSON 端点；需 probe-a 代理+Playwright 或后台 API 发现"
+    status: cataloged  # 需 probe-a 代理验证或 JS 逆向发现 JSON API
+
+  chinawealth:
+    vendor: 中国理财网（银行业理财登记托管中心）
+    api_base: https://www.chinawealth.com.cn/zzlc/fhInfo/queryFhInfo.go
+    module: app.datasources.public.chinawealth
+    supported_kinds: [wealth_product, bank_finance, rate]
+    domain: [D11, D13]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "官方监管公示数据，公有领域"
+    caveat: "Mac 直连 queryFhInfo.go 端点 404（境外 IP 封闭或路径变更）；需 probe-a 代理验证"
+    status: cataloged  # 需 probe-a 代理验证
+
+  amac:
+    vendor: 中国基金业协会（AMAC）
+    api_base: https://gs.amac.org.cn/amac-infodisc/api
+    module: app.datasources.public.amac
+    supported_kinds: [fund, private_equity, compliance]
+    domain: [D11, D8]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "官方监管公示数据，公有领域"
+    caveat: "Mac 直连：私募基金管理人查询(gs.amac.org.cn)✅ 返回10条；公募基金查询(www.amac.org.cn)端点 404；建议以 gs.amac.org.cn 为主端点"
+    status: live  # private_fund_manager ✅；public_fund_list 端点 404 暂忽略
+
+  cbank_rss:
+    vendor: 美联储(Fed) / 欧洲央行(ECB) / 中国人民银行(PBoC) 官方 RSS
+    api_base: https://www.federalreserve.gov/feeds/press_all.xml
+    module: app.datasources.public.cbank_rss
+    supported_kinds: [policy, announcement, central_bank]
+    domain: [D14]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: realtime
+    cost: "免费"
+    license: "各国央行官方新闻发布，公有领域"
+    caveat: "Mac 直连：Fed RSS ✅（2026-06-11最新声明）；ECB RSS ✅（Lagarde声明）；PBoC RSS 404（pbc.gov.cn/rss/rss.xml 境外 IP 不可达）；fetch_all() 返回 Fed+ECB 共4条"
+    status: live  # Fed+ECB ✅；PBoC 需 probe-a 代理验证
+
+  # ── P0-2 批次 · 金融F / 风控C/E ──────────────────────────────────────────
+
+  ccxt_src:
+    vendor: CCXT (CryptoExchangeJS)
+    api_base: "多交易所 REST（通过 ccxt 库路由）"
+    module: app.datasources.public.ccxt_src
+    supported_kinds: [crypto, price, ohlcv, orderbook]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: realtime
+    cost: "免费（各 CEX 公开行情端点；ccxt 库 MIT）"
+    license: "各 CEX ToS — 公开行情仅限内部使用"
+    caveat: "🌐 Binance/Bybit/OKX/Gate 等被大陆封锁，Mac 部分可连（如 Kraken）；生产需 probe-a 代理 · kraken/coinbase 已实测 live"
+    redistribute: false   # 🔴 仅内部决策，禁对外分发原始行情
+    dependency: "pip install ccxt"
+    status: live          # ccxt 已装（107 exchange）· kraken ticker 实测成功
+
+  exchange_deriv:
+    vendor: Binance/Bybit/OKX 官方合约 REST
+    api_base: "Binance:https://fapi.binance.com · Bybit:https://api.bybit.com · OKX:https://www.okx.com/api/v5"
+    module: app.datasources.public.exchange_deriv
+    supported_kinds: [funding_rate, open_interest, derivatives]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（官方公开端点，无需 API Key）"
+    license: "各 CEX 官方 ToS（公开数据）"
+    caveat: "🌐 三家均被大陆封锁 · Mac 实测 Binance 返回 451（地区限制） · 需 probe-a 代理验证 · 模块逻辑已验证 OKX 端点格式正确"
+    status: cataloged     # 需 probe-a 代理验证；Mac 451/超时
+
+  hyperliquid:
+    vendor: Hyperliquid
+    api_base: https://api.hyperliquid.xyz/info
+    module: app.datasources.public.hyperliquid
+    supported_kinds: [crypto, perpetual, funding_rate, open_interest, orderbook]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: realtime
+    cost: "免费（官方 Info API，无需认证）"
+    license: "Hyperliquid 公开 API（链上数据·公有性质）"
+    caveat: "Mac 已实测可达 · BTC mid=63404.5 · 数据含 OI/资金费率/订单簿 · 全量 ~300+ 资产"
+    status: live          # Mac 实测 all_mids 成功，BTC mid 正常返回
+
+  alt_fng:
+    vendor: Alternative.me
+    api_base: https://api.alternative.me/fng/
+    module: app.datasources.public.alt_fng
+    supported_kinds: [sentiment, fear_greed, crypto]
+    domain: [D13]
+    access_type: free
+    method: [O]
+    authority_score: 7
+    freshness: daily
+    cost: "免费（无限额度）"
+    license: "Alternative.me 公开 API，免费开放"
+    caveat: "Mac 已实测 · value=12(Extreme Fear) · timestamp 正确 · 每日更新"
+    status: live          # Mac 实测 latest() 返回 value=12, Extreme Fear
+
+  ofac_sls:
+    vendor: U.S. Department of Treasury (OFAC)
+    api_base: https://www.treasury.gov/ofac/downloads
+    module: app.datasources.public.ofac_sls
+    supported_kinds: [sanctions, sdn, compliance]
+    domain: [D8]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: daily
+    cost: "免费（美国政府公开数据）"
+    license: "U.S. Government Works（公有领域）"
+    caveat: "无 REST 搜索 API · 下载全量 XML（~2-3MB）后本地解析搜索 · 禁高频下载（建议每日缓存）· Mac 实测 download+search 成功（Putin→Vladimir Vladimirovich PUTIN 已找到）"
+    status: live          # Mac 实测 download_sdn_sample + search_sdn('PUTIN') 成功
+
+  sanctions_network:
+    vendor: sanctions.network (Arsh Singh)
+    api_base: https://api.sanctions.network
+    module: app.datasources.public.sanctions_network
+    supported_kinds: [sanctions, compliance, entity]
+    domain: [D8]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: daily
+    cost: "免费（明确声明 free to use for any use case）"
+    license: "开放许可（数据来源 OFAC/UN/EU/UK 等官方制裁名单）"
+    caveat: "Mac 实测 /rpc/search_sanctions 成功 · Putin → ['Vladimir PUTIN', 'Maria PUTINA'] · PostgREST 后端 · 覆盖 OFAC/UNSC/EU/UK"
+    status: live          # Mac 实测成功，搜索 Putin 返回正确结果
+
+  crt_sh:
+    vendor: Sectigo / crt.sh
+    api_base: https://crt.sh
+    module: app.datasources.public.crt_sh
+    supported_kinds: [certificate, domain, ssl, ct_log]
+    domain: [D8]
+    access_type: free
+    method: [O, W]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（公共基础设施服务）"
+    license: "Certificate Transparency 公开日志（RFC 6962）"
+    caveat: "Mac 实测一次 github.com 成功（679条记录）· 服务间歇性 502（建议 probe-a 稳定运行）· 无速率文档但高频会被限"
+    status: live          # Mac 实测 github.com 查询成功（679条）；502 是间歇性，非常态
+
+  rdap_icann:
+    vendor: RDAP (rdap.org / ARIN)
+    api_base: https://rdap.org
+    module: app.datasources.public.rdap_icann
+    supported_kinds: [domain, whois, registrar, ip, asn]
+    domain: [D4, D8]
+    access_type: free
+    method: [O, W]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（ICANN 标准协议，ARIN 维护聚合入口）"
+    license: "公开注册数据（GDPR 保护区注册人信息可能屏蔽）"
+    caveat: "Mac 实测 example.com 成功：注册商/NS/创建日期全部正确 · RDAP 取代 WHOIS · 支持 domain/IP/ASN 三类查询"
+    status: live          # Mac 实测 domain_lookup('example.com') 成功
+
+  wikidata_sparql:
+    vendor: Wikidata / Wikimedia Foundation
+    api_base: https://query.wikidata.org/sparql
+    module: app.datasources.public.wikidata_sparql
+    supported_kinds: [knowledge_graph, entity, person, company, sparql]
+    domain: [D6, D11]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费（CC0 公有领域）"
+    license: "CC0（Wikidata 数据完全公有领域）"
+    caveat: "Mac 当前 IP 触发 429 限速（多次密集调用后被限）· 服务本身正常 · 建议 probe-a 稳定运行 · 模块 SPARQL 语法已验证（entity_facts/search_person/search_company 均有效）· 需 polite 延迟 ≥1s"
+    status: cataloged     # 需 probe-a 代理验证（Mac IP 被限速，非服务故障）
+  deps_dev:
+    vendor: Google Open Source Insights (deps.dev)
+    api_base: https://api.deps.dev/v3alpha
+    module: app.datasources.public.deps_dev
+    supported_kinds: [package, dependency, version]
+    domain: [D12]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: daily
+    cost: "免费（Google 官方公开 API，无需 key）"
+    license: "公开域（Open Source Insights · CC0 兼容）"
+    status: live                          # 无需 key · Mac 直连 200 ✅
+
+  gh_archive:
+    vendor: GH Archive (Ilya Grigorik / GitHub Events)
+    api_base: https://data.gharchive.org
+    module: app.datasources.public.gh_archive
+    supported_kinds: [event, push, pr, release, star]
+    domain: [D12]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: hourly
+    cost: "免费（GH Archive CC0 公有领域）"
+    license: "CC0 / 公有领域（GitHub Events 归档）"
+    status: live                          # 无需 key · Mac 直连 200 ✅ · 单文件 ~60-100MB gzip
+
+  github_advisory:
+    vendor: GitHub Security Advisory Database
+    api_base: https://api.github.com/advisories
+    module: app.datasources.public.github_advisory
+    supported_kinds: [advisory, cve, security]
+    domain: [D8, D12]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（公开端点无需 token · 60次/hr · 配置 GITHUB_TOKEN 可升 5000/hr）"
+    license: "CC0 / 公有领域（GitHub Security Advisories）"
+    status: live                          # 无需 key · Mac 直连 200 ✅
+
+  crossref:
+    vendor: Crossref
+    api_base: https://api.crossref.org/works
+    module: app.datasources.public.crossref
+    supported_kinds: [paper, doi, citation]
+    domain: [D10]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费（polite pool · 带 mailto 参数提升速率）"
+    license: "书目元数据 · Crossref ToS 允许非商业研究与分析"
+    status: live                          # 无需 key · Mac 直连 200 ✅
+
+  reddit_rss:
+    vendor: Reddit (公开 JSON 端点)
+    api_base: https://www.reddit.com
+    module: app.datasources.public.reddit_rss
+    supported_kinds: [social, forum, news]
+    domain: [D6]
+    access_type: free
+    method: [O]
+    authority_score: 7
+    freshness: realtime
+    cost: "免费（官方公开 .json 端点，无需 OAuth）"
+    license: "Reddit User Agreement · 内容版权归原作者"
+    status: cataloged                     # 需 probe-a 代理验证 · Mac 直连 403（IP 限制）· UA 格式 platform:app:ver (by /u/xxx)
+
+  itunes_search:
+    vendor: Apple iTunes Search API
+    api_base: https://itunes.apple.com/search
+    module: app.datasources.public.itunes_search
+    supported_kinds: [podcast, app, music, ebook]
+    domain: [D6]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: daily
+    cost: "免费（Apple 官方公开 API · 建议 ≤20次/分钟）"
+    license: "Apple iTunes Search API ToS · 内容元数据允许聚合与发现用途"
+    status: live                          # 无需 key · Mac 直连 200 ✅
+
+  youtube_oembed:
+    vendor: YouTube (Google) oEmbed
+    api_base: https://www.youtube.com/oembed
+    module: app.datasources.public.youtube_oembed
+    supported_kinds: [video, social]
+    domain: [D6]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: realtime
+    cost: "免费（YouTube 官方 oEmbed · 无需 API key）"
+    license: "YouTube ToS · oEmbed v1 规范 · 元数据允许内容聚合与预览"
+    status: live                          # 无需 key · Mac 直连 200 ✅ · 大陆直连可能慢需 probe-a 代理验证
+
+  gpuhunt_src:
+    vendor: dstackai/gpuhunt (MIT License)
+    module: app.datasources.public.gpuhunt_src
+    supported_kinds: [gpu_price, cloud_compute]
+    domain: [D17, D15]
+    access_type: free
+    method: [L, W]
+    authority_score: 8
+    freshness: daily
+    cost: "免费（gpuhunt MIT · S3 catalog 自动刷新）"
+    license: "MIT License (dstackai/gpuhunt)"
+    status: live
+    note: "实测 catalog.load() + query() 成功；覆盖 aws/azure/gcp/lambdalabs/runpod/nebius/oci/cloudrift/verda 9 家（库未接远端实时拉取的 4 家）；gpuhunt 已装入 venv"
+
+  ai_vendor_rss:
+    vendor: OpenAI / HuggingFace / Google AI / Mistral AI (各官方 RSS)
+    module: app.datasources.public.ai_vendor_rss
+    supported_kinds: [ai_news, vendor_blog, release]
+    domain: [D17, D12]
+    access_type: free
+    method: [W]
+    authority_score: 9
+    freshness: daily
+    cost: "免费"
+    license: "各厂商官方 RSS 公开出口"
+    status: live
+    note: "实测全部 200 OK：openai.com/news/rss.xml / huggingface.co/blog/feed.xml / blog.research.google feeds / mistral.ai/rss.xml；Anthropic 无公开 RSS（/feed /rss 均 404）；Olshansk/rss-feeds JSON 文件 404（README 可读·OPML 不存在）；直接聚合各厂商官方源"
+
+  cloudcredits:
+    vendor: dakshshah96/awesome-startup-credits (MIT License)
+    module: app.datasources.public.cloudcredits
+    supported_kinds: [cloud_credits, startup_deal]
+    domain: [D17, D15]
+    access_type: free
+    method: [W]
+    authority_score: 7
+    freshness: weekly
+    cost: "免费"
+    license: "MIT License (dakshshah96/awesome-startup-credits)"
+    status: live
+    note: "实测 200 OK，解析出 47 条 + 15 分类；t3-sh/cloudcredits.io raw JSON 路径全 404（无机器可读端点），改用 dakshshah96 MIT 源；cloudcredits.io 网站为 SSR，无公开 JSON"
+
+  startup_credits:
+    vendor: dakshshah96/awesome-startup-credits (MIT License)
+    module: app.datasources.public.startup_credits
+    supported_kinds: [startup_credits, ai_deal]
+    domain: [D17]
+    access_type: free
+    method: [W]
+    authority_score: 7
+    freshness: weekly
+    cost: "免费"
+    license: "MIT License (dakshshah96/awesome-startup-credits)"
+    status: live
+    note: "与 cloudcredits.py 同源 URL；本模块侧重金额量化（USD 解析+时长提取）；实测 47 条中 16 条提取到具体金额，高价值(>=10k)条目 5 条，最高 IBM $120,000；awesome-builder-programs 路径 404 暂不接"
+
+  holiday_cn:
+    vendor: NateScarlet/holiday-cn (MIT License)
+    module: app.datasources.public.holiday_cn
+    supported_kinds: [holiday, workday_schedule]
+    domain: [D15]
+    access_type: free
+    method: [W]
+    authority_score: 9
+    freshness: yearly
+    cost: "免费"
+    license: "MIT License (NateScarlet/holiday-cn)"
+    status: live
+    note: "实测 2026.json 200 OK (4843 bytes) / 2025.json 200 OK；2026 年共 39 天特殊安排，含 33 天节假日（is_offday）；is_holiday('2026-10-01')=True 验证正确"
+
+  appstore_discounts:
+    vendor: Apple iTunes Official API (Apple ToS)
+    module: app.datasources.public.appstore_discounts
+    supported_kinds: [app_price, app_discount, app_free]
+    domain: [D15]
+    access_type: free
+    method: [O, W]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（Apple 官方 Search/Lookup/RSS API，无 key）"
+    license: "Apple Service Performance Guidelines（仅公开接口，不高频轮询）"
+    status: live
+    note: "实测 iTunes RSS topfreeapplications 200 OK，返回 10 条美区 Top Free App；iTunes Search API 200 OK；Lookup API 200 OK（单App元数据+当前价格）；App Store 无原生'限免'标签，需上层维护价格快照对比，本模块返回当前价格供上层决策"
+
+candidates_to_evaluate:   # 待标准19核验对比选型(R1 付费授权前置)
+  - 新榜
+  - 飞瓜
+
+# ── 模板(选型+核验后填入 sources) ──
+# <id>:
+#   vendor: 供应商名
+#   api_base: https://...
+#   domain: [D1]           # 必填：信息域列表
+#   access_type: free      # free | paid | free_with_key | paid_with_key
+#   method: [O]            # L / S / W / O / D
+#   authority_score: 7     # 1-10
+#   freshness: daily       # realtime | daily | weekly | static
+#   cost: "免费"
+#   license: "..."
+#   status: cataloged      # live | pending | cataloged | rejected
+#   gate19:                # 标准19 逐项(全 true 才放行)
+#     mature: false
+#     verified: false
+#     data_authentic: false
+#     vendor_qualified: false
+#     authorized: false
+#     license_ok: false
+#     security_ok: false

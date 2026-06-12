@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mfc:billing",
+  "title": "计费契约",
+  "type": "object",
+  "properties": {
+    "base": {
+      "type": "number"
+    },
+    "premium_data": {
+      "type": "number"
+    },
+    "settlement": {
+      "type": "object",
+      "description": "phase1 记账·phase2 分成",
+      "properties": {
+        "tool_id": {
+          "type": "string"
+        },
+        "share": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

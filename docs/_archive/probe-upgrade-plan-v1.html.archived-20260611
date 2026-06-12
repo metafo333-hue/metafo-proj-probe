@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>probe 升级规划 v1.0 · 北极星文档</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue:#1E3A8A; --orange:#FF7A1A; --ink:#111827; --sub:#6B7280;
+    --line:#E5E7EB; --bg:#F7F8FA; --card:#FFFFFF;
+    --green:#0F9D58; --red:#D93025; --amber:#F59E0B; --purple:#7C3AED;
+    --blue-soft:#EEF2FF; --orange-soft:#FFF3E9; --green-soft:#E6F4EA;
+    --red-soft:#FDECEA; --purple-soft:#F5F3FF;
+    --radius:14px; --shadow:0 1px 3px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.05);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 28px 100px; }
+
+  /* ── HERO ── */
+  h1, h2, h3, h4, .brand { font-family: "Fredoka", -apple-system, "PingFang SC", sans-serif; }
+  .hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #0d1e5c 0%, #1E3A8A 45%, #2547b0 100%);
+    border-radius: 24px; padding: 48px 44px 44px; color: #fff; box-shadow: var(--shadow);
+  }
+  .hero::before {
+    content: ""; position: absolute; left: -80px; bottom: -80px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, rgba(255,122,26,.45), transparent 68%);
+    pointer-events: none;
+  }
+  .hero::after {
+    content: ""; position: absolute; right: -60px; top: -60px;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(99,140,255,.35), transparent 70%);
+    pointer-events: none;
+  }
+  .hero-inner { position: relative; z-index: 1; }
+  .hero .tag {
+    display: inline-block; background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.22);
+    padding: 4px 14px; border-radius: 999px; font-size: 12px;
+    letter-spacing: .6px; margin-bottom: 16px; text-transform: uppercase;
+  }
+  .hero h1 { margin: 0 0 10px; font-size: 34px; font-weight: 700; line-height: 1.2; }
+  .hero .sub-title { margin: 0 0 20px; font-size: 15.5px; opacity: .88; max-width: 680px; line-height: 1.6; }
+  .hero .meta {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    font-size: 12.5px; opacity: .9; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px;
+  }
+  .hero .meta span b { color: var(--orange); font-weight: 700; }
+
+  /* ── NORTH STAR BANNER ── */
+  .northstar {
+    background: var(--card); border-left: 5px solid var(--orange);
+    border-radius: var(--radius); padding: 18px 24px; margin: 24px 0 6px;
+    box-shadow: var(--shadow); display: flex; gap: 18px; align-items: flex-start;
+  }
+  .northstar .icon { font-size: 28px; flex-shrink: 0; margin-top: 2px; }
+  .northstar .big {
+    font-family: "Fredoka"; font-size: 20px; font-weight: 700;
+    color: var(--blue); line-height: 1.3; margin: 0 0 6px;
+  }
+  .northstar .txt { font-size: 13.5px; color: #374151; margin: 0; }
+
+  /* ── SECTIONS ── */
+  section {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-top: 22px;
+    box-shadow: var(--shadow);
+  }
+  .sec-h { display: flex; align-items: center; gap: 12px; margin: 0 0 4px; }
+  .num {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--blue-soft); color: var(--blue);
+    font-family: "Fredoka"; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    flex-shrink: 0;
+  }
+  .num.o { background: var(--orange-soft); color: var(--orange); }
+  .num.g { background: var(--green-soft); color: var(--green); }
+  .num.p { background: var(--purple-soft); color: var(--purple); }
+  h2 { font-size: 21px; margin: 0; font-weight: 600; }
+  .sec-desc { color: var(--sub); font-size: 13px; margin: 3px 0 22px 48px; }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+  th, td { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #FAFBFC; color: #374151; font-weight: 600; font-size: 12px; letter-spacing: .2px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FAFBFF; }
+
+  /* ── PILLS ── */
+  .pill {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; line-height: 1.75; white-space: nowrap;
+  }
+  .pill.g { background: var(--green-soft); color: var(--green); }
+  .pill.r { background: var(--red-soft); color: var(--red); }
+  .pill.a { background: #FEF3DA; color: #B45309; }
+  .pill.b { background: var(--blue-soft); color: var(--blue); }
+  .pill.p { background: var(--purple-soft); color: var(--purple); }
+  .pill.gr { background: #F3F4F6; color: #6B7280; }
+
+  /* ── CALLOUT NOTES ── */
+  .note {
+    border-radius: 10px; padding: 13px 16px; font-size: 13px; margin: 14px 0 0;
+  }
+  .note.warn { background: var(--orange-soft); border: 1px solid #FAD9BE; color: #9A4A06; }
+  .note.info { background: var(--blue-soft); border: 1px solid #D4DCFB; color: #1e3a8a; }
+  .note.success { background: var(--green-soft); border: 1px solid #B7DFC7; color: #145c34; }
+  .note.danger { background: var(--red-soft); border: 1px solid #F6C9C4; color: #A52714; }
+  .note b { font-weight: 700; }
+
+  /* ── CARDS GRID ── */
+  .cards-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; margin-top: 8px; }
+  .cards-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 8px; }
+  .card {
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: #fff;
+  }
+  .card.hl { border-color: var(--blue); background: var(--blue-soft); }
+  .card.hl-o { border-color: var(--orange); background: var(--orange-soft); }
+  .card h4 { margin: 0 0 7px; font-size: 14.5px; color: var(--blue); font-family: "Fredoka"; font-weight: 600; }
+  .card h4.o { color: var(--orange); }
+  .card p { margin: 0; font-size: 12.5px; color: #4B5563; line-height: 1.6; }
+  .card .kv { font-size: 12px; color: var(--sub); margin-top: 8px; }
+  .card .kv b { color: var(--ink); }
+
+  /* ── ARCH DIAGRAM ── */
+  .arch {
+    background: linear-gradient(135deg, #F0F4FF 0%, #FFF5EF 100%);
+    border: 1px solid #dde3f7; border-radius: 16px;
+    padding: 28px 24px; margin: 14px 0;
+  }
+  .arch-row { display: flex; gap: 12px; align-items: stretch; margin-bottom: 10px; flex-wrap: wrap; }
+  .arch-row:last-child { margin-bottom: 0; }
+  .arch-box {
+    flex: 1; min-width: 140px;
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; text-align: center;
+  }
+  .arch-box .layer-tag {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .6px;
+    text-transform: uppercase; color: var(--sub); margin-bottom: 6px;
+  }
+  .arch-box .layer-title {
+    font-family: "Fredoka"; font-size: 15px; font-weight: 600; color: var(--blue); margin: 0 0 4px;
+  }
+  .arch-box .layer-items { font-size: 11.5px; color: #374151; line-height: 1.6; }
+  .arch-box.data { border-color: #93c5fd; background: #EFF6FF; }
+  .arch-box.analysis { border-color: #a78bfa; background: #F5F3FF; }
+  .arch-box.output { border-color: #6ee7b7; background: #ECFDF5; }
+  .arch-box.contract { border-color: #fcd34d; background: #FFFBEB; }
+  .arch-arrow {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: var(--sub); flex-shrink: 0; padding: 0 4px;
+  }
+
+  /* ── PHASE TIMELINE ── */
+  .timeline { margin: 10px 0; }
+  .phase {
+    border-left: 3px solid var(--line); padding: 0 0 22px 22px;
+    position: relative; margin-left: 10px;
+  }
+  .phase:last-child { padding-bottom: 0; border-left-color: transparent; }
+  .phase::before {
+    content: ""; position: absolute; left: -8px; top: 4px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--blue); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--blue);
+  }
+  .phase.p1::before { background: var(--orange); box-shadow: 0 0 0 2px var(--orange); }
+  .phase.p2::before { background: var(--sub); box-shadow: 0 0 0 2px var(--sub); }
+  .phase .phase-tag {
+    font-size: 11px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--blue); margin-bottom: 4px;
+  }
+  .phase .phase-tag.p1 { color: var(--orange); }
+  .phase .phase-tag.p2 { color: var(--sub); }
+  .phase h3 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+  .phase ul { margin: 0; padding-left: 18px; font-size: 13px; color: #374151; }
+  .phase ul li { margin-bottom: 5px; }
+
+  /* ── DEPTH LINE ── */
+  .depth-row { display: flex; gap: 0; margin: 12px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .depth-col { flex: 1; padding: 18px 16px; }
+  .depth-col.d1 { background: #F9FAFB; border-right: 1px solid var(--line); }
+  .depth-col.d2 { background: var(--blue-soft); border-right: 1px solid var(--line); }
+  .depth-col.d3 { background: linear-gradient(135deg, #FFF5EF, #FFF0E3); }
+  .depth-col .d-tag { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; }
+  .depth-col.d1 .d-tag { color: var(--sub); }
+  .depth-col.d2 .d-tag { color: var(--blue); }
+  .depth-col.d3 .d-tag { color: var(--orange); }
+  .depth-col h4 { margin: 0 0 8px; font-size: 14px; font-family: "Fredoka"; }
+  .depth-col ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: #374151; }
+  .depth-col ul li { margin-bottom: 4px; }
+  .depth-price {
+    display: inline-block; margin-top: 10px;
+    padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  }
+  .d1 .depth-price { background: #E5E7EB; color: #374151; }
+  .d2 .depth-price { background: var(--blue); color: #fff; }
+  .d3 .depth-price { background: var(--orange); color: #fff; }
+
+  /* ── VS COMPARE ── */
+  .vs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 0; margin: 10px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .vs-col { padding: 0; }
+  .vs-head { padding: 12px 14px; font-size: 13px; font-weight: 600; text-align: center; }
+  .vs-head.c0 { background: #F3F4F6; color: var(--sub); }
+  .vs-head.c1 { background: #F3F4F6; color: #374151; }
+  .vs-head.c2 { background: #F3F4F6; color: #374151; }
+  .vs-head.c3 { background: linear-gradient(135deg,#1E3A8A,#2547b0); color: #fff; }
+  .vs-row { display: contents; }
+  .vs-cell {
+    padding: 10px 14px; font-size: 12.5px; border-top: 1px solid var(--line);
+    text-align: center; color: #374151; vertical-align: top;
+  }
+  .vs-cell.lbl { text-align: left; font-weight: 600; color: var(--ink); background: #FAFBFC; }
+  .vs-cell.hl { background: #F0F4FF; }
+  .vs-cell .chk { color: var(--green); font-weight: 700; }
+  .vs-cell .crs { color: var(--red); font-weight: 700; }
+
+  /* ── COMPLIANCE RULES ── */
+  .rule-list { list-style: none; margin: 0; padding: 0; }
+  .rule-list li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .rule-list li:last-child { border-bottom: none; }
+  .rule-icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+  .rule-txt b { font-weight: 700; color: var(--ink); }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center; color: var(--sub); font-size: 12px;
+    margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line);
+    line-height: 1.9;
+  }
+
+  @media(max-width:760px) {
+    .wrap { padding: 24px 16px 60px; }
+    .hero { padding: 30px 24px; }
+    .hero h1 { font-size: 26px; }
+    .cards-2, .cards-3 { grid-template-columns: 1fr; }
+    .arch-row { flex-direction: column; }
+    .depth-row, .vs-grid { flex-direction: column; display: flex; }
+    section { padding: 20px 18px; }
+  }
+</style>
+</head>
+<body>
+<!-- ⚠️ 已归档 2026-06-11:本图停留旧「链接情报参谋/D1-D9/TikHub主轴」代次,无双审8闸/无9赛道,被 probe-master-solution-v2.md 取代·勿引用 -->
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="tag">probe · 北极星文档 v1.0 · 2026-06-04</div>
+      <h1>链接情报参谋<br>升级规划</h1>
+      <p class="sub-title">
+        给任意链接 → 10秒内知道「值不值得做、怎么做、有没有风险、谁做过」。<br>
+        面向自媒体创作者，输出<strong>决策结论</strong>而非原始数据。
+      </p>
+      <div class="meta">
+        <span>产品代号 <b>probe</b></span>
+        <span>归属 <b>metafoclaw 母体平台</b></span>
+        <span>接入地址 <b>probe.metafoclaw.com</b></span>
+        <span>母体工具路径 <b>metafoclaw-platform/tools/link-intel/</b></span>
+        <span>当前状态 <b>MVP · L1 契约 11/11 ✓</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- NORTH STAR -->
+  <div class="northstar">
+    <div class="icon">🧭</div>
+    <div>
+      <div class="big">核心差异化命题（V4）</div>
+      <p class="txt">
+        TikHub / 飞瓜 / AnySearch 卖<strong>原料</strong>（CSV / JSON / 流量数据）。<br>
+        probe 的唯一价值主张：<strong>原料进 · 结论出</strong>——trafilatura / TikHub / AnySearch 是原料，D2结构拆解 / D5竞品横评 / D7二创路径是加工后的决策结论，不可替代。<br>
+        成品质量是生死命门（Manus 因交付错误成品失败，probe 必须交付对的成品）。
+      </p>
+    </div>
+  </div>
+
+  <!-- §1 产品定位 -->
+  <section>
+    <div class="sec-h">
+      <div class="num">1</div>
+      <h2>probe 是什么</h2>
+    </div>
+    <p class="sec-desc">一句话定位 · 目标用户 · 核心承诺</p>
+
+    <div class="cards-3">
+      <div class="card hl">
+        <h4>产品一句话</h4>
+        <p>输入任意链接，10秒内输出「值不值得做 / 怎么做 / 有没有风险 / 谁做过」的决策报告。</p>
+      </div>
+      <div class="card">
+        <h4>目标用户</h4>
+        <p>自媒体创作者、MCN 内容策划、短视频运营——需要快速判断一条内容素材能否复制/改编/合规使用。</p>
+      </div>
+      <div class="card">
+        <h4>核心承诺</h4>
+        <p>不是数据看板，不是采集工具。是<strong>参谋</strong>：给出拍板级建议，不让用户自己解读数据。</p>
+      </div>
+    </div>
+
+    <div class="note info" style="margin-top:16px;">
+      <b>合规铁律（已定）：</b>原料进结论出 / aigc_flag 必填 / 不自建爬虫（只调公开合规 API）/ 三层深度线（public → preview → paid）
+    </div>
+  </section>
+
+  <!-- §2 能力全景 -->
+  <section>
+    <div class="sec-h">
+      <div class="num">2</div>
+      <h2>能力全景（升级后）</h2>
+    </div>
+    <p class="sec-desc">A线（素材层）/ B线（分析层）/ C线（决策层）完整能力矩阵</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>能力名</th>
+          <th>线</th>
+          <th>当前状态</th>
+          <th>主要依赖</th>
+          <th>优先级</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>D1</strong></td>
+          <td>真相核查<br><small style="color:var(--sub)">可核查声称 + 核查结论 + 来源</small></td>
+          <td>B线·分析</td>
+          <td><span class="pill a">桩待补</span></td>
+          <td>AnySearch（免费1000次/天，无需key）</td>
+          <td><span class="pill g">P0·立即</span></td>
+        </tr>
+        <tr>
+          <td><strong>D2</strong></td>
+          <td>结构拆解<br><small style="color:var(--sub)">钩子→正文→CTA + 结构公式</small></td>
+          <td>B线·分析</td>
+          <td><span class="pill a">桩待补</span></td>
+          <td>LLM（ds-direct-chat / sf-pro）+ trafilatura 文本</td>
+          <td><span class="pill g">P0·立即</span></td>
+        </tr>
+        <tr>
+          <td><strong>D3</strong></td>
+          <td>视觉拆解<br><small style="color:var(--sub)">关键帧分析</small></td>
+          <td>B线·分析</td>
+          <td><span class="pill gr">Phase2</span></td>
+          <td>视频抽帧 + 视觉LLM</td>
+          <td><span class="pill gr">P2</span></td>
+        </tr>
+        <tr>
+          <td><strong>D4</strong></td>
+          <td>出处溯源<br><small style="color:var(--sub)">原创/搬运/二创判定</small></td>
+          <td>B线·分析</td>
+          <td><span class="pill a">待TikHub key</span></td>
+          <td>TikHub（五平台覆盖，$0.001/req）</td>
+          <td><span class="pill b">P1</span></td>
+        </tr>
+        <tr>
+          <td><strong>D5</strong></td>
+          <td>竞品横评<br><small style="color:var(--sub)">≥3竞品对比 + 差异化机会</small></td>
+          <td>B线·分析</td>
+          <td><span class="pill a">桩待补</span></td>
+          <td>AnySearch 联网搜索 + TikHub 平台数据</td>
+          <td><span class="pill g">P0·AnySearch版</span></td>
+        </tr>
+        <tr>
+          <td><strong>D6</strong></td>
+          <td>发布者画像<br><small style="color:var(--sub)">账号类型/调性/商业背景</small></td>
+          <td>B线·分析</td>
+          <td><span class="pill a">待TikHub key</span></td>
+          <td>TikHub 1010端点</td>
+          <td><span class="pill b">P1</span></td>
+        </tr>
+        <tr>
+          <td><strong>D7</strong></td>
+          <td>二创路径<br><small style="color:var(--sub)">借/换/串 三路方案 + 推荐优先级</small></td>
+          <td>C线·决策</td>
+          <td><span class="pill a">桩待补</span></td>
+          <td>LLM（基于D2结构结论推理）</td>
+          <td><span class="pill g">P0·立即</span></td>
+        </tr>
+        <tr>
+          <td><strong>D8</strong></td>
+          <td>合规风险<br><small style="color:var(--sub)">版权/平台规则/AIGC/总体可用性</small></td>
+          <td>C线·决策</td>
+          <td><span class="pill a">桩待补</span></td>
+          <td>LLM 规则推理 + aigc_flag</td>
+          <td><span class="pill g">P0·随D2</span></td>
+        </tr>
+        <tr>
+          <td><strong>D9</strong></td>
+          <td>IP适配<br><small style="color:var(--sub)">受众适配评分</small></td>
+          <td>C线·决策</td>
+          <td><span class="pill gr">Phase2</span></td>
+          <td>TikHub 受众画像 + LLM</td>
+          <td><span class="pill gr">P2</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:20px;">
+      <h3 style="margin:0 0 10px;font-size:15px;font-weight:600;">A线（素材层）· 数据采集能力</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>组件</th>
+            <th>覆盖内容</th>
+            <th>当前状态</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>trafilatura</td>
+            <td>文章/博客/图文 — article提取</td>
+            <td><span class="pill g">已落地 · 40KB实测</span></td>
+            <td>L0 extractor，技术合规</td>
+          </tr>
+          <tr>
+            <td>markitdown / github-raw</td>
+            <td>文档类（Markdown/PDF/GitHub）</td>
+            <td><span class="pill g">已落地</span></td>
+            <td>L0 extractor</td>
+          </tr>
+          <tr>
+            <td>TikHub 适配器</td>
+            <td>抖音/B站/快手/小红书/微博 五平台</td>
+            <td><span class="pill a">适配器就绪·待API key</span></td>
+            <td>16+平台，1010端点，$0.001/req起</td>
+          </tr>
+          <tr>
+            <td>AnySearch</td>
+            <td>联网搜索（search/batch_search/extract）</td>
+            <td><span class="pill g">免费1000次/天·无需key·可立即接</span></td>
+            <td>垂直域：finance(A股) + academic(PubMed)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note success" style="margin-top:16px;">
+      <b>7段报告骨架（完整输出格式）：</b><br>
+      ① 首屏速判（A/B/C/D评级 + 15秒拍板 + 三步行动） ② 真相核查 ③ 内容拆解 ④ 竞品横评 ⑤ 二创方案 ⑥ 风险合规 ⑦ 完整明细
+    </div>
+  </section>
+
+  <!-- §3 核心价值三层体现 -->
+  <section>
+    <div class="sec-h">
+      <div class="num o">3</div>
+      <h2>核心价值的三层体现</h2>
+    </div>
+    <p class="sec-desc">probe 的差异化不是功能点堆砌，而是价值链层级的跨越</p>
+
+    <div class="cards-3">
+      <div class="card hl-o">
+        <h4 class="o">V4 · 原料进 结论出</h4>
+        <p>TikHub/trafilatura/AnySearch 提供原料，D2/D5/D7 是加工结论。用户看到的不是数据，是「这条内容<strong>值得做 / A级 / 推荐用换架构法</strong>」。</p>
+        <div class="kv">对标：TikHub 声明"not a done-for-you service"→ 这是我们的市场真空</div>
+      </div>
+      <div class="card hl">
+        <h4>V3 · 一句话交付成品</h4>
+        <p>报告首屏是评级（A/B/C/D）+ 一句拍板结论 + 三步行动，10秒内可做决策。豆包价格锚 68/200/500 元/月，付费档必须卖<strong>成品/独有结论</strong>。</p>
+        <div class="kv">对标：飞瓜/蝉妈妈卖看板，用户还得自己解读→ 我们填补「最后一公里」</div>
+      </div>
+      <div class="card">
+        <h4>V2 · 填平编排鸿沟</h4>
+        <p>整条链路「采集 → D1~D9分析 → 7段报告」自动跑完交付，用户无需理解 API/LLM/数据源是如何协同的。</p>
+        <div class="kv">对标：市场竞调3-0对抗验证确认，「AI自动跑完整条链路」是真空位</div>
+      </div>
+    </div>
+
+    <!-- vs compare table -->
+    <h3 style="margin:24px 0 10px;font-size:15px;font-weight:600;">与主要竞品/工具的本质区别</h3>
+    <div class="vs-grid">
+      <div class="vs-col">
+        <div class="vs-head c0">能力维度</div>
+        <div class="vs-cell lbl">产品类型</div>
+        <div class="vs-cell lbl">输出格式</div>
+        <div class="vs-cell lbl">D2 结构拆解</div>
+        <div class="vs-cell lbl">D7 二创路径</div>
+        <div class="vs-cell lbl">D1 真相核查</div>
+        <div class="vs-cell lbl">完整链路自动</div>
+        <div class="vs-cell lbl">定价逻辑</div>
+      </div>
+      <div class="vs-col">
+        <div class="vs-head c1">TikHub</div>
+        <div class="vs-cell">原料 API</div>
+        <div class="vs-cell">CSV / JSON</div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell">按请求数 $0.001/req</div>
+      </div>
+      <div class="vs-col">
+        <div class="vs-head c2">飞瓜 / 蝉妈妈</div>
+        <div class="vs-cell">数据看板</div>
+        <div class="vs-cell">可视化图表</div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell"><span class="crs">✗</span></div>
+        <div class="vs-cell">月订阅看板</div>
+      </div>
+      <div class="vs-col">
+        <div class="vs-head c3">probe（升级后）</div>
+        <div class="vs-cell hl"><strong>决策参谋</strong></div>
+        <div class="vs-cell hl"><strong>评级 + 结论 + 三步行动</strong></div>
+        <div class="vs-cell hl"><span class="chk">✓</span> 结构公式 + LLM</div>
+        <div class="vs-cell hl"><span class="chk">✓</span> 借/换/串 三路</div>
+        <div class="vs-cell hl"><span class="chk">✓</span> AnySearch 联网</div>
+        <div class="vs-cell hl"><span class="chk">✓</span> 全链路自动跑</div>
+        <div class="vs-cell hl">成品质量付费</div>
+      </div>
+    </div>
+
+    <div class="note warn" style="margin-top:16px;">
+      <b>生死命门提醒：</b>Manus 失败根因是交付了<strong>错误的成品</strong>。probe 付费档的护城河 = 成品准确率，D1真相核查 + D8合规判断必须在 P0 阶段同步落地，不可为了快交付而省略。
+    </div>
+  </section>
+
+  <!-- §4 升级架构图 -->
+  <section>
+    <div class="sec-h">
+      <div class="num g">4</div>
+      <h2>升级架构图</h2>
+    </div>
+    <p class="sec-desc">数据层 → 分析层 → 结论层 → L1契约层（母体接入）</p>
+
+    <div class="arch">
+
+      <div class="arch-row">
+        <div class="arch-box data">
+          <div class="layer-tag">Layer 0 · 数据层</div>
+          <div class="layer-title">A线 · 素材采集</div>
+          <div class="layer-items">
+            trafilatura（article）<br>
+            markitdown / github-raw<br>
+            TikHub 适配器（五平台·待key）<br>
+            AnySearch（联网·免费·可立即）
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box analysis">
+          <div class="layer-tag">Layer 1 · 分析层</div>
+          <div class="layer-title">B线 · D1-D9 LLM管线</div>
+          <div class="layer-items">
+            D1 真相核查（AnySearch）<br>
+            D2 结构拆解（LLM·P0）<br>
+            D4 出处溯源（TikHub·P1）<br>
+            D5 竞品横评（AnySearch+TikHub）<br>
+            D6 发布者画像（TikHub·P1）<br>
+            D7 二创路径（LLM·P0）<br>
+            D8 合规风险（LLM·P0）
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box output">
+          <div class="layer-tag">Layer 2 · 结论层</div>
+          <div class="layer-title">C线 · 决策输出</div>
+          <div class="layer-items">
+            A/B/C/D 评级<br>
+            15秒拍板结论<br>
+            三步行动清单<br>
+            7段完整报告<br>
+            aigc_flag 标注<br>
+            三层深度线输出
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box contract">
+          <div class="layer-tag">Layer 3 · 接入层</div>
+          <div class="layer-title">L1契约 · 母体平台</div>
+          <div class="layer-items">
+            selftest 11/11 ✓<br>
+            pytest 6/6 ✓<br>
+            tools/link-intel/<br>
+            probe.metafoclaw.com<br>
+            首个远程镶嵌工具验证
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;font-size:12px;color:#555;text-align:center;">
+        LLM 路由：服务器 DeepSeek（别名 ds-direct-chat） + Qwen/Dashscope（别名 sf-pro）· 通过 LiteLLM 统一分发
+      </div>
+    </div>
+
+    <h3 style="margin:20px 0 10px;font-size:15px;font-weight:600;">三层深度线（数据流方向）</h3>
+    <div class="depth-row">
+      <div class="depth-col d1">
+        <div class="d-tag">public · 免费引流</div>
+        <h4>评级速判</h4>
+        <ul>
+          <li>A/B/C/D 评级</li>
+          <li>一句话结论</li>
+          <li>总体可用性（是/否）</li>
+        </ul>
+        <div class="depth-price">免费 · 无需登录</div>
+      </div>
+      <div class="depth-col d2">
+        <div class="d-tag">preview · 注册</div>
+        <h4>结构预览</h4>
+        <ul>
+          <li>+ 结构公式（钩子/正文/CTA）</li>
+          <li>+ D7 二创路径简版</li>
+          <li>+ D8 合规风险摘要</li>
+        </ul>
+        <div class="depth-price">注册即解锁</div>
+      </div>
+      <div class="depth-col d3">
+        <div class="d-tag">paid · 付费完整</div>
+        <h4>完整7段报告</h4>
+        <ul>
+          <li>+ D1 真相核查（含来源）</li>
+          <li>+ D5 竞品横评（≥3竞品）</li>
+          <li>+ D4/D6 平台数据（TikHub）</li>
+          <li>+ 完整二创三路优先级</li>
+        </ul>
+        <div class="depth-price">付费档 · 成品交付</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 实现优先级三阶段 -->
+  <section>
+    <div class="sec-h">
+      <div class="num p">5</div>
+      <h2>实现优先级（三阶段）</h2>
+    </div>
+    <p class="sec-desc">按依赖解锁顺序排列，P0 阶段零外部依赖，可立即开始</p>
+
+    <div class="timeline">
+      <div class="phase">
+        <div class="phase-tag">P0 · 立即可做 · 0新依赖</div>
+        <h3>核心LLM管线 + AnySearch接入</h3>
+        <ul>
+          <li><strong>AnySearch → D1 真相核查：</strong>免费1000次/天，无需key，调 search/extract 接口，LLM归纳结论写入7段报告第②段</li>
+          <li><strong>AnySearch → D5 竞品横评（基础版）：</strong>联网搜同类内容，LLM提取≥3竞品，输出差异化机会</li>
+          <li><strong>LLM → D2 结构拆解：</strong>trafilatura输出 → ds-direct-chat/sf-pro → 钩子/正文/CTA + 结构公式</li>
+          <li><strong>LLM → D7 二创路径：</strong>基于D2结构结论推理，借/换/串三路方案 + 推荐优先级</li>
+          <li><strong>LLM → D8 合规风险：</strong>与D2同批跑，aigc_flag 强制输出</li>
+          <li><strong>首屏速判：</strong>A/B/C/D评级逻辑升级——从字数判评级改为LLM综合D1/D2/D8结论评级</li>
+          <li><strong>三层深度线输出切割：</strong>将7段报告按 public/preview/paid 切分输出</li>
+        </ul>
+        <div class="note success" style="margin-top:10px;">
+          <b>交付标准：</b>selftest 11+N/11+N ✓ · D2/D7/D8 单条链接端到端实测通过 · 三层深度线输出格式验证
+        </div>
+      </div>
+
+      <div class="phase p1">
+        <div class="phase-tag p1">P1 · 待TikHub API key 解锁</div>
+        <h3>五平台数据驱动 D4/D5/D6</h3>
+        <ul>
+          <li><strong>D4 出处溯源：</strong>TikHub 抖音/B站/快手/小红书/微博 跨平台检索，判定原创/搬运/二创</li>
+          <li><strong>D5 竞品横评（完整版）：</strong>TikHub 平台数据 + AnySearch 联网，补充互动量/发布时间维度</li>
+          <li><strong>D6 发布者画像：</strong>TikHub 账号端点，输出账号类型/调性/商业背景/历史爆款</li>
+          <li><strong>7段报告第④竞品横评 + 完整明细：</strong>补充平台真实互动数据</li>
+          <li><strong>paid深度线完整：</strong>D4/D5/D6 结论并入付费报告</li>
+        </ul>
+        <div class="note warn" style="margin-top:10px;">
+          <b>成本控制：</b>TikHub $0.001/req，单次完整报告（D4+D5+D6）预估5-15 req，约¥0.07-0.10/次。付费档定价需覆盖此成本。
+        </div>
+      </div>
+
+      <div class="phase p2">
+        <div class="phase-tag p2">P2 · Phase2 · 视觉与深度分析</div>
+        <h3>视觉拆解 + IP适配（需视频/受众画像）</h3>
+        <ul>
+          <li><strong>D3 视觉拆解：</strong>视频抽帧 → 关键帧分析 → 视觉LLM（需视频流处理能力）</li>
+          <li><strong>D9 IP适配：</strong>TikHub受众画像 + LLM推理，输出内容对特定IP/账号的适配评分</li>
+          <li><strong>ASR字幕提取：</strong>短视频语音转文字 → 补充D2结构分析输入</li>
+          <li><strong>多链接批量分析：</strong>同一话题10条链接批量跑，输出竞品矩阵</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- §6 商业设计 -->
+  <section>
+    <div class="sec-h">
+      <div class="num">6</div>
+      <h2>商业设计（三层深度线）</h2>
+    </div>
+    <p class="sec-desc">以「成品质量」为核心壁垒，付费档卖独有结论而非数据访问权</p>
+
+    <div class="cards-3">
+      <div class="card">
+        <h4>public · 评级快判</h4>
+        <p>A/B/C/D 评级 + 一句话结论 + 总体可用性（是/否）。无需登录，免费引流。</p>
+        <div class="kv"><b>目的：</b>让用户10秒感受到 probe 的判断力，产生"这就是我要的"的感觉</div>
+        <div class="kv" style="margin-top:6px;"><b>限制：</b>不显示依据，不显示结构，不显示二创路径</div>
+      </div>
+      <div class="card hl">
+        <h4>preview · 结构预览</h4>
+        <p>+ 结构公式（钩子/正文/CTA格式）+ D7二创路径简版（仅推荐方案，不含全部三路）+ D8合规风险摘要（高/中/低）。注册即解锁。</p>
+        <div class="kv"><b>目的：</b>注册漏斗——用结构公式留住用户，让他们看到"怎么做"的轮廓</div>
+      </div>
+      <div class="card hl-o">
+        <h4>paid · 完整报告</h4>
+        <p>完整7段报告 + D1真相核查来源 + D5竞品横评（≥3竞品，含互动数据）+ D4出处溯源 + D6发布者画像 + 完整二创三路优先级排序。</p>
+        <div class="kv"><b>目的：</b>卖「成品/独有结论」，对标豆包68-500元/月的价格锚</div>
+        <div class="kv" style="margin-top:6px;"><b>护城河：</b>D5/D4/D6 依赖 TikHub 真实平台数据，竞品无法复制</div>
+      </div>
+    </div>
+
+    <div class="note info" style="margin-top:16px;">
+      <b>定价参考锚：</b>豆包 68元/月（基础）/ 200元/月（标准）/ 500元/月（专业）。probe paid 档不直接卖订阅，考虑按次（单报告）或月额度包，避免用户为"没用完"的额度不续费。具体定价策略待 P1 阶段用户测试后确定。
+    </div>
+  </section>
+
+  <!-- §7 与母体接入验证 -->
+  <section>
+    <div class="sec-h">
+      <div class="num g">7</div>
+      <h2>与母体的接入验证</h2>
+    </div>
+    <p class="sec-desc">probe 是 metafoclaw 母体平台的首个远程镶嵌工具，验证「外部数据API → probe → 母体」完整链路</p>
+
+    <div class="cards-2">
+      <div class="card">
+        <h4>已验证（当前状态）</h4>
+        <ul style="padding-left:16px;font-size:13px;margin:6px 0 0;color:#374151;">
+          <li>L1 契约层：selftest 11/11 ✓ · pytest 6/6 ✓</li>
+          <li>母体接入路径：metafoclaw-platform/tools/link-intel/</li>
+          <li>远程镶嵌方式：probe.metafoclaw.com（独立服务 + 母体内嵌）</li>
+          <li>L0 extractors：trafilatura/markitdown 真实输出已验（40KB实测）</li>
+          <li>TikHub 适配器：五平台覆盖，适配器层就绪，等 API key</li>
+        </ul>
+      </div>
+      <div class="card hl">
+        <h4>待验证链路（P0 后）</h4>
+        <ul style="padding-left:16px;font-size:13px;margin:6px 0 0;color:#374151;">
+          <li>AnySearch → D1联网核查 → 7段报告第②段 端到端</li>
+          <li>trafilatura文本 → LLM(ds-direct-chat) → D2结构公式 端到端</li>
+          <li>D2结论 → LLM → D7二创路径 端到端</li>
+          <li>三层深度线（public/preview/paid）输出切分格式</li>
+          <li>母体平台 tools/link-intel/ 展示7段报告渲染效果</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin:20px 0 10px;font-size:15px;font-weight:600;">合规铁律检查清单（接入前必过）</h3>
+    <ul class="rule-list">
+      <li>
+        <span class="rule-icon">✅</span>
+        <span class="rule-txt"><b>原料进结论出：</b>probe 只调公开合规 API（TikHub/AnySearch/trafilatura），不自建爬虫，不绕过平台访问控制</span>
+      </li>
+      <li>
+        <span class="rule-icon">✅</span>
+        <span class="rule-txt"><b>aigc_flag 必填：</b>所有LLM生成结论必须带 aigc_flag 标注，付费报告明确声明「AI辅助分析」</span>
+      </li>
+      <li>
+        <span class="rule-icon">✅</span>
+        <span class="rule-txt"><b>三层深度线：</b>public评级 / preview结构 / paid完整报告，付费内容不在免费层泄露</span>
+      </li>
+      <li>
+        <span class="rule-icon">✅</span>
+        <span class="rule-txt"><b>L1 契约维护：</b>每次 D 维度新增都同步更新 selftest 断言，保证契约完整性</span>
+      </li>
+      <li>
+        <span class="rule-icon">⚠️</span>
+        <span class="rule-txt"><b>TikHub key 管理：</b>入 ~/vault/credentials/，仓内用 PLACEHOLDER，绝不明文入代码</span>
+      </li>
+      <li>
+        <span class="rule-icon">⚠️</span>
+        <span class="rule-txt"><b>D3/D9 Phase2 限制：</b>视频抽帧/受众画像在 P2 前不对外开放，不在 public/preview 层承诺此能力</span>
+      </li>
+    </ul>
+
+    <div class="note success" style="margin-top:16px;">
+      <b>首个远程镶嵌工具的战略意义：</b>probe 验证完整后，metafoclaw 母体平台「外部数据API → 独立工具 → 母体镶嵌」的接入模式即可复用于后续工具（如 domain-intel、content-audit 等），形成工具生态标准链路。
+    </div>
+  </section>
+
+  <!-- FINAL STATUS BOARD -->
+  <section>
+    <div class="sec-h">
+      <div class="num">★</div>
+      <h2>当前状态 &amp; 最近行动项</h2>
+    </div>
+    <p class="sec-desc">截至 2026-06-04 · 基于调研验证后的真实状态</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>行动项</th>
+          <th>阶段</th>
+          <th>状态</th>
+          <th>前置条件</th>
+          <th>预期产出</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AnySearch 接入 + D1 真相核查</td>
+          <td><span class="pill g">P0</span></td>
+          <td><span class="pill a">待开发</span></td>
+          <td>无（免费·无key）</td>
+          <td>7段报告②段上线</td>
+        </tr>
+        <tr>
+          <td>LLM管线 D2 结构拆解</td>
+          <td><span class="pill g">P0</span></td>
+          <td><span class="pill a">待开发</span></td>
+          <td>服务器 LiteLLM 已运行</td>
+          <td>结构公式 + preview层</td>
+        </tr>
+        <tr>
+          <td>LLM管线 D7 二创路径 + D8 合规</td>
+          <td><span class="pill g">P0</span></td>
+          <td><span class="pill a">待开发</span></td>
+          <td>D2 结论输出就绪</td>
+          <td>二创三路 + aigc_flag</td>
+        </tr>
+        <tr>
+          <td>评级逻辑升级（字数→LLM综合）</td>
+          <td><span class="pill g">P0</span></td>
+          <td><span class="pill a">待开发</span></td>
+          <td>D1/D2/D8 管线就绪</td>
+          <td>A/B/C/D 首屏速判</td>
+        </tr>
+        <tr>
+          <td>三层深度线输出切分</td>
+          <td><span class="pill g">P0</span></td>
+          <td><span class="pill a">待开发</span></td>
+          <td>7段报告骨架完整</td>
+          <td>public/preview/paid格式</td>
+        </tr>
+        <tr>
+          <td>TikHub API key 申请</td>
+          <td><span class="pill b">P1</span></td>
+          <td><span class="pill r">阻塞·等key</span></td>
+          <td>元东方授权申请</td>
+          <td>D4/D5/D6 解锁</td>
+        </tr>
+        <tr>
+          <td>D4 出处溯源 + D6 发布者画像</td>
+          <td><span class="pill b">P1</span></td>
+          <td><span class="pill gr">待TikHub key</span></td>
+          <td>TikHub key 已配置</td>
+          <td>paid层完整</td>
+        </tr>
+        <tr>
+          <td>D3 视觉拆解 / D9 IP适配</td>
+          <td><span class="pill gr">P2</span></td>
+          <td><span class="pill gr">Phase2 排期</span></td>
+          <td>视频流处理方案确认</td>
+          <td>视觉分析能力</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    probe 升级规划 v1.0 · metafoclaw 产品文档 · 2026-06-04<br>
+    文档路径：probe/docs/probe-upgrade-plan-v1.html<br>
+    蜀ICP备2026010386号-1
+  </footer>
+
+</div>
+</body>
+</html>
