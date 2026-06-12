@@ -37,14 +37,16 @@
 
 ## 二、待 S1 实现的断层清单（按审查优先级）
 
-| # | 断层 | 处理方式 | 涉及文件 | 验收标准 | 优先级 |
+> **2026-06-13 重盘**（代码实态逐项核对·台账此前滞后）：6 条中 3 条已完成、3 条半成——剩余工作量远小于纸面。
+
+| # | 断层 | 处理方式 | 涉及文件 | 验收标准 | 状态(2026-06-13 重盘) |
 |---|------|---------|---------|---------|--------|
-| 1 | **8 闸接真 backend** | StubBackend → 真模型（faithfulness/nli/judge/detect_aigc） | `app/audit/backends.py` | conclusion_label 出真实审核值 | 🔴 P1 |
-| 2 | **数据源准入门口径** | 文档化裁定：`qualified`（采购边界·主门）· `gate_passed`（gate19 官方授权·更高合规备选·非阻塞）；`get_adapter` 对 active 源校验一致 | `registry.py` 注释 + `gate19-and-dedup` 文档 | 口径单一、无"两套门"歧义 | 🔴 P2 |
-| 3 | **`_chat` 透出 usage** | `_chat` 返 `(text, usage)`，调用方累计 usage → 喂 cost | `llm.py` + `l0.deep_probe` + `pipeline` | cost_event 有真 token 数 | 🟡 P3 |
-| 4 | **governor 统一取数入口** | 先在 pipeline/l0 凿出**唯一取数函数**（现在 article/doc 走 extractors、video/social 走 registry 两条岔路），governor 才有挂载点接管"禁绕过" | `l0` / `pipeline` + 新建 `governor.py` | 取数走唯一入口·可被治理 | 🟡 P3 |
-| 5 | **metering 埋点** | 包装 llm/api 出口埋 cost_event（cost-metering 设计落码） | 新建 `metering.py` | 每次调用成本可见 | 🟡 P3 |
-| 6 | **字段错位 / redact 死代码** | deep_probe 产七段 s1-s7 字段 → 用 `redact_by_tier`；或删 redact_by_tier 统一用 `apply_depth_line` | `l0` / `guards.py` | 单一裁剪函数·字段对齐 | 🟢 |
+| 1 | **8 闸接真 backend** | StubBackend → 真模型（faithfulness/nli/judge/detect_aigc） | `app/audit/backends.py` | conclusion_label 出真实审核值 | 🚧 **收口中**：LiteLLMBackend 四接口已实现+get_backend() env 自动选择已建；2026-06-13 修复 run_audit 默认兜底（StubBackend()→get_backend()·此前生产配 key 也跑桩）；待 probe-a 部署验证 |
+| 2 | **数据源准入门口径** | 文档化裁定：`qualified`（采购边界·主门）· `gate_passed`（gate19 官方授权·更高合规备选·非阻塞）；`get_adapter` 对 active 源校验一致 | `registry.py` 注释 + `gate19-and-dedup` 文档 | 口径单一、无"两套门"歧义 | ✅ **已完成**（registry.py 双口径注释+实现核验）|
+| 3 | **`_chat` 透出 usage** | `_chat` 返 `(text, usage)`，调用方累计 usage → 喂 cost | `llm.py` + `l0.deep_probe` + `pipeline` | cost_event 有真 token 数 | ✅ **已完成**（`_chat_with_usage` 返 (text, usage_dict) 核验）|
+| 4 | **governor 统一取数入口** | 先在 pipeline/l0 凿出**唯一取数函数**（现在 article/doc 走 extractors、video/social 走 registry 两条岔路），governor 才有挂载点接管"禁绕过" | `l0` / `pipeline` + 新建 `governor.py` | 取数走唯一入口·可被治理 | ✅ **已完成**（governor.py `fetch_one(url, kind)` 核验·2026-06-12 建）|
+| 5 | **metering 埋点** | 包装 llm/api 出口埋 cost_event（cost-metering 设计落码） | 新建 `metering.py` | 每次调用成本可见 | 🚧 **半成偏离**：metering.py 已建但写 JSONL；设计（W2-10/R28）要求 PG `probe_cost_events` 表——S1 内迁 PG |
+| 6 | **字段错位 / redact 死代码** | deep_probe 产七段 s1-s7 字段 → 用 `redact_by_tier`；或删 redact_by_tier 统一用 `apply_depth_line` | `l0` / `guards.py` | 单一裁剪函数·字段对齐 | 🚧 **半成**：`redact_by_tier` 已是主管线唯一裁剪（pipeline L138）✅；但 `apply_depth_line` 未删（selftest.py L43-45 仍调）——D2 裁定要求废弃·待 selftest 改写后删 |
 
 > 新三文档（API 调取治理三件套：risk-checklist / cost-metering / data-dynamic-governance）的完整落码 = 上表 #3/#4/#5，它们要编排的 `governor.py`/`metering.py` 现不存在，需先凿挂载点（#4）才有落点。
 
