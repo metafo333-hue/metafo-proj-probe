@@ -41,7 +41,7 @@
 
 | # | 断层 | 处理方式 | 涉及文件 | 验收标准 | 状态(2026-06-13 重盘) |
 |---|------|---------|---------|---------|--------|
-| 1 | **8 闸接真 backend** | StubBackend → 真模型（faithfulness/nli/judge/detect_aigc） | `app/audit/backends.py` | conclusion_label 出真实审核值 | 🚧 **收口中**：LiteLLMBackend 四接口已实现+get_backend() env 自动选择已建；2026-06-13 修复 run_audit 默认兜底（StubBackend()→get_backend()·此前生产配 key 也跑桩）；待 probe-a 部署验证 |
+| 1 | **8 闸接真 backend** | StubBackend → 真模型（faithfulness/nli/judge/detect_aigc） | `app/audit/backends.py` | conclusion_label 出真实审核值 | ✅ **LIVE（2026-06-13 probe-a 生产验证）**：run_audit 默认兜底 StubBackend()→get_backend() 已修并部署（备份 gates.py.bak.20260613-114402）·重启后 backend=litellm·selftest 11/11·真任务实测忠实度 0.70 真值+矛盾检出（声称42万 vs 来源38.6万）。⚠️ 观察：_chat_with_usage 实际命中 deepseek provider（非设计预期 litellm cc-sonnet 优先）——不阻塞·待 W2-9 provider 顺序校准 |
 | 2 | **数据源准入门口径** | 文档化裁定：`qualified`（采购边界·主门）· `gate_passed`（gate19 官方授权·更高合规备选·非阻塞）；`get_adapter` 对 active 源校验一致 | `registry.py` 注释 + `gate19-and-dedup` 文档 | 口径单一、无"两套门"歧义 | ✅ **已完成**（registry.py 双口径注释+实现核验）|
 | 3 | **`_chat` 透出 usage** | `_chat` 返 `(text, usage)`，调用方累计 usage → 喂 cost | `llm.py` + `l0.deep_probe` + `pipeline` | cost_event 有真 token 数 | ✅ **已完成**（`_chat_with_usage` 返 (text, usage_dict) 核验）|
 | 4 | **governor 统一取数入口** | 先在 pipeline/l0 凿出**唯一取数函数**（现在 article/doc 走 extractors、video/social 走 registry 两条岔路），governor 才有挂载点接管"禁绕过" | `l0` / `pipeline` + 新建 `governor.py` | 取数走唯一入口·可被治理 | ✅ **已完成**（governor.py `fetch_one(url, kind)` 核验·2026-06-12 建）|
