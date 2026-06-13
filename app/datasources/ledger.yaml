@@ -213,15 +213,15 @@ sources:
     module: app.datasources.public.opencorporates
     supported_kinds: [company, search]
     domain: [D11]                         # v4 归类修正:企业工商归D11(原误标D4)
-    access_type: free_with_key
+    access_type: paid_with_key            # 免费层 2026-06 取消 · 仅付费
     method: [O]
     authority_score: 8
     freshness: weekly
-    cost: "免费（有限额度）· 有 OPENCORPORATES_TOKEN 提升限额"
-    license: "ODbl (Open Database License)"
+    cost: "付费 · Essentials £2,250/年起（免费层已于 2026-06 取消）· 商用主体不可白嫖（免费档仅限记者/NGO/公益学者/个人）"
+    license: "ODbl（数据源自公开注册处 · 可直接接上游官方源绕过本聚合层）"
     needs_key: true
     key_env: OPENCORPORATES_TOKEN
-    status: live                          # 无 token 低限额可用；有 token 更高配额
+    status: rejected                      # 2026-06-13 退役 · 免费替代组合:edgar(美上市·公有领域)+companies_house(英全量·OGL可商用)+gleif(全球LEI+母子公司Level2·CC0)+wikidata(通用实体·CC0) · 仅"非英美·非上市·无LEI中小企业全球统一注册"缺口残留(需逐国官方open registry或针对性付费·不必买全量订阅) · 依据 deep-research 报告(2026-06-13)
 
   virustotal:
     vendor: VirusTotal (Google)
@@ -468,16 +468,16 @@ sources:
     vendor: GLEIF (Global Legal Entity Identifier Foundation)
     api_base: https://api.gleif.org/api/v1
     module: app.datasources.public.gleif
-    supported_kinds: [company, lei]
+    supported_kinds: [company, lei, relationship, parent, children]
     domain: [D11]
     access_type: free
     method: [O]
     authority_score: 10
     freshness: daily
     cost: "免费（G20 授权公开基础设施）"
-    license: "CC0 / 公开基础数据（GLEIF 官方 API）"
-    caveat: "JSON:API 格式；法人名搜索含匹配；LEI 为 20 位标准编码"
-    status: live                          # 无需 key
+    license: "CC0 / 公开基础数据（GLEIF 官方 API · 可商用）"
+    caveat: "JSON:API 格式；法人名搜索含匹配；LEI 为 20 位标准编码。母子公司关系(Level 2)经 get_relationships(lei) 取直接/最终母公司+直接子公司·404=无关系报告(合法空)·免费替代 OpenCorporates 公司层级能力(覆盖会计合并口径·母公司须持LEI且已报关系)"
+    status: live                          # 无需 key · 母子公司关系 Mac 实测 Apple 子公司链 200 ✅（2026-06-13）
 
   github_intel_rss:
     vendor: mnfst/awesome-free-llm-apis (CC0) + mlcontests.github.io (GPL-3.0)
