@@ -2,6 +2,23 @@
 
 > 更新：2026-06-13 · 性质：机械盘点，仅记录事实状态，不含计划
 
+## 〇、M1 公开档上线状态（2026-06-13 端到端 LIVE）
+
+**匿名访客现可用**：访问 probe.metafoclaw.com → 落地页 hero 输入区 → 粘贴链接 → 渲染 public 结果（标题+正文预览+信源+置信+登录升级钩子）。E2E 实测过（wikipedia 链接成功渲染）。
+
+| 维度 | 状态 |
+|------|------|
+| 八闸真模型 | ✅ LIVE（deepseek·litellm ufo2侧 ReadTimeout 待修） |
+| anon invoke + per-IP 限流 + 每日熔断 | ✅ LIVE |
+| 落地页公开 + hero 核查输入 UI | ✅ LIVE（源=`运营报告/probe-landing-v1.0.html`·1484行·与 probe-a 同步） |
+| task_id 随机化(闭IDOR) + workers=1 + httpx代理抓取 | ✅ LIVE |
+| favicon 内联 | ✅ |
+| S1 六断层 | ①②③④⑥ ✅ · ⑤ metering 推迟 M2(埋点未接) |
+
+**M1 收尾跟进（非产品阻塞）**：R30⑨ 元衡值守注册(走 R-EHW 流程) · litellm ufo2 修复(M2质量) · app 全局预算熔断已加(Phase3-6) · metering PG 启用(M2)。
+
+---
+
 ---
 
 ## 一、文件夹结构总览
@@ -133,12 +150,15 @@ probe/
 ### 存根/未接真实后端
 | 模块 | 状态 | 阻塞点 |
 |------|------|--------|
-| **八闸 backends** | ⚠️ StubBackend | 须接真实 LLM（faithfulness/nli/judge/aigc） |
+| **八闸 backends** | ✅ LIVE(litellm/deepseek) | get_backend() env 自动选·真模型在跑(litellm ufo2侧ReadTimeout→deepseek fallback) |
 | **tikhub 适配器** | ⚠️ 代码就绪·无 key | 需 R1 付费授权 |
-| **governor.py** | ❌ 未建 | S1 施工：统一取数入口 |
-| **metering.py** | ❌ 未建 | S1 施工：成本埋点 |
-| llm._chat usage 透传 | ⚠️ 未做 | 成本无法计量 |
-| 字段统一（s1-s7/redact_by_tier） | ⚠️ 错位 | D2 裁定已定，S1 落实 |
+| **governor.py** | ✅ 已建 | 统一取数 fetch_one |
+| **metering.py** | ✅ 已建(JSONL+PG双写就绪) | ⚠️ 埋点未接·M2 启用 |
+| llm._chat usage 透传 | ✅ _chat_with_usage 返 (text,usage) | — |
+| 字段统一（s1-s7/redact_by_tier） | ✅ 已统一·apply_depth_line 已删 | D2 落实完成 |
+| budget.py 每日熔断 | ✅ 已建+LIVE | anon 防刷·PROBE_ANON_DAILY_CAP |
+| task_id 随机化 | ✅ secrets.token_urlsafe | 闭 IDOR |
+| article 抓取 | ✅ httpx+mihomo代理 | 海外站可达·超时12s |
 
 ### 已隔离（不可用）
 | 路径 | 原因 |
