@@ -314,6 +314,23 @@ sources:
     caveat: "仅 IPv4（域名经 lookup_domain 先 DNS 解析）· 未收录 IP 返空"
     status: live                          # 无需 key · Mac 实测 1.1.1.1→8 暴露端口 200 ✅（2026-06-13）· 法风控资产侦察第N源
 
+  companies_house:
+    vendor: UK Companies House (official registry)
+    api_base: https://api.company-information.service.gov.uk
+    module: app.datasources.public.companies_house
+    supported_kinds: [company, officers, registry]
+    domain: [D11]
+    access_type: free_with_key
+    method: [O]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（注册免费 key · app probe-intel · key 在 vault probe.env）"
+    license: "Open Government Licence v3.0（官方允许商用）"
+    caveat: "HTTP Basic 认证 key 作用户名密码空 · 未配 COMPANIES_HOUSE_API_KEY 返空"
+    needs_key: true
+    key_env: COMPANIES_HOUSE_API_KEY
+    status: live                          # key 已激活入 vault · Mac 实测 Monzo Bank 搜索/档案/董事 200 ✅（2026-06-13）· 海外企业第二独立源（配 gleif 满足闸2）
+
   defillama:
     vendor: DeFi Llama
     api_base: https://api.llama.fi
