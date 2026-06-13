@@ -67,21 +67,34 @@ class TikHubAdapter(DataSourceAdapter):
             return {"_error": f"{type(e).__name__}: {str(e)[:160]}"}
         return self._normalize(raw, plat, url)
 
+    # 互动指标在各平台返回里的常见嵌套位置（抖音=statistics·小红书=interact_info 等）
+    _STAT_NESTS = ("statistics", "stats", "interact_info", "interactive_info")
+    _METRIC_KEYS = ("digg_count", "like_count", "comment_count", "share_count",
+                    "collect_count", "play_count", "recommend_count",
+                    "admire_count", "download_count", "forward_count")
+
     def _normalize(self, raw: Any, plat: str, url: str) -> dict[str, Any]:
         """第三方原始数据 → 标准化元数据（原料进结论出：只取元数据，不直吐全量原文）。
 
-        各平台字段不同，联调（配 key 后）按真实返回精修字段映射。
+        互动指标各平台位置不同（抖音在 data.statistics·小红书在 interact_info 等），
+        统一在常见嵌套位置探测，回退顶层；2026-06-13 实测抖音 statistics 校准。
         """
         data = raw.get("data", raw) if isinstance(raw, dict) else {}
         if not isinstance(data, dict):
             data = {}
-        title = data.get("desc") or data.get("title") or data.get("content") or ""
+        stat = {}
+        for key in self._STAT_NESTS:
+            v = data.get(key)
+            if isinstance(v, dict):
+                stat = v
+                break
+        src = {**data, **stat}                     # 嵌套指标优先于顶层同名
+        title = (data.get("desc") or data.get("title") or data.get("item_title")
+                 or data.get("content") or data.get("caption") or "")
         if not isinstance(title, str):
             title = str(title)
-        metrics = {k: data.get(k) for k in
-                   ("digg_count", "like_count", "comment_count",
-                    "share_count", "collect_count", "play_count")
-                   if k in data}
+        metrics = {k: src[k] for k in self._METRIC_KEYS
+                   if isinstance(src.get(k), (int, float))}
         return {
             "title": title[:200],
             "text": title,                         # 标准化元数据（标题/简介），非原始全文

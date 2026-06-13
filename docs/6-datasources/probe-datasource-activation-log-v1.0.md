@@ -21,8 +21,8 @@
 | **DeepSeek** | 付费（备用）| ✅ 已激活 | `DEEPSEEK_API_KEY` in vault probe.env | 从 tencent-sh `.model-keys.env` 读取 |
 | **Bailian (通义千问)** | 付费（备用）| ✅ 已激活 | `BAILIAN_API_KEY` in vault probe.env | qwen-plus 备用 provider |
 | **OpenCorporates** | 付费（£2,250+/年）| ⚠️ 账号已建·无免费层 | `OPENCORPORATES_TOKEN` = PLACEHOLDER | 账号 metafo333@gmail.com 已确认 · API 免费层取消 · 待拍板是否付费 |
-| **VirusTotal** | 免费层（500 req/day）| ⚠️ 注册受阻 | `VIRUSTOTAL_KEY` = PLACEHOLDER | 见下方注记 |
-| **TikHub** | 付费（$0.001/req）| ⏳ 待 R1 授权 | 未注册，等待元东方付款授权 | 已有调研报告，见下方 |
+| **VirusTotal** | 免费层（500 req/day）| ✅ 已激活（2026-06-13）| `VIRUSTOTAL_KEY` in vault + probe-a env | API v3 实测 HTTP 200·user probeintel2026·适配器 lookup 成功 |
+| **TikHub** | 付费（$0.001/req）| ✅ 已充值·可 live | 2026-06-13 账号已建(metafo333@gmail.com)·key 已取(66 scopes)·已充值 $20(实付$20.72含3.6%通道费·支付宝)·余额 $20.00+免费 $0.05·冒烟 API 200 | 已有调研报告，见下方 |
 
 ---
 
@@ -113,9 +113,17 @@
 
 ---
 
-### 2.8 VirusTotal — ⚠️ 注册受阻（reCAPTCHA Enterprise 服务端评分拦截）
+### 2.8 VirusTotal — ✅ 已激活（2026-06-13 · 账号原已存在）
 
-- **状态**：未获取 API key（2026-06-12 深度调试后确认）
+- **状态**：✅ API key 已取得并实测有效（API v3 /users/me HTTP 200·配额 500/天·适配器 lookup 成功）
+- **真相修正（2026-06-13）**：账号 `probeintel2026` **2026-06-12 那次 signup 其实已注册成功**——当时误判"被 reCAPTCHA Enterprise 拦"实为错误结论（signup POST 成功落库·账号已建）。2026-06-13 用 vault 账密直接**登录**（非重新注册）→ 进 `/gui/user/probeintel2026/apikey`（key 在 shadow DOM·递归穿透提取）→ 入 vault + probe-a env。
+- **教训**：注册类操作"被拦"的判断须以**实际能否登录/能否调 API** 为准，不能仅凭 signup 页面无明显成功提示就判失败（账号可能已静默创建）。
+- **凭据**：`VIRUSTOTAL_KEY`（64-hex）· vault `~/vault/credentials/api/probe.env` + probe-a `/opt/probe-app/env/.env`
+- **adapter**：`app/datasources/public/virustotal.py` → `lookup_url(url)` · 实测成功
+
+<details><summary>历史·2026-06-12 自动注册受阻分析（已被上方真相修正·留档）</summary>
+
+- 当时结论：未获取 API key（reCAPTCHA Enterprise headless 评分拦截）——**此结论错误**，账号实际已建成。
 - **注册端点（已确认）**：`POST https://www.virustotal.com/ui/signup`
   - Body：`{"data":{"user_id":"...","email":"...","password":"...","first_name":"...","last_name":"...","service":"gui"}}`
   - 关键 Header：`x-recaptcha-v3-token: <enterprise_token>` + `x-recaptcha-v3-action: checkbox`
@@ -138,18 +146,21 @@
   2. 填写：First name=Probe / Last name=Intel / Email=metafo333@gmail.com / Username=probeintel2026 / Password=`[见 ~/vault/credentials/api/probe.env VIRUSTOTAL_USERNAME/VIRUSTOTAL_PASSWORD]`
   3. 勾选 Terms of Service → 点击 Join us → 解完 CAPTCHA 即完成
   4. 注册成功后：账户设置 → API Key → 复制到 `~/vault/credentials/api/probe.env` 的 `VIRUSTOTAL_KEY`
-- **免费层**：500 req/day，4 req/min，够 probe 基础使用
-- **adapter**：`app/datasources/public/virustotal.py` → `lookup_url(url)` — 已实现，等 key 激活
+- 当时"唯一有效路径=真实 Chrome 手动注册"的判断方向对，但**账号其实已建**·实际只需登录取 key（2026-06-13 已完成）。
+
+</details>
 
 ---
 
-### 2.9 TikHub — ⏳ 待 R1 付款授权
+### 2.9 TikHub — ✅ 已充值·可 live
 
-- **服务**：TikTok/抖音数据 API
+- **服务**：TikTok/抖音/小红书/快手/微博/B站/YouTube/Reddit 等 16+ 平台数据 API
 - **定价**：$0.001/请求（付费）
+- **注册状态**（2026-06-13 引导注册完成）：账号 metafo333@gmail.com 已建+邮箱已验证+登录实测通过 · API key `probe-smoke`(66 scopes·永不过期)已取并存 vault · 冒烟 `user/get_user_info` 返回 code 200 认证有效
+- **充值状态**（2026-06-13 R1 授权完成）：元东方支付宝充值 $20 · 实付 **$20.72**(含 ~3.6% 通道费) · dashboard 余额 **$20.00** + 免费额度 $0.05 · 实测截图确认到账
+- **凭据**：`~/vault/credentials/api/tikhub.env`（EMAIL/PASSWORD/API_KEY · chmod 600）
 - **调研报告**：[probe/docs/4-research/tikhub-deep-research-20260603.md](../4-research/tikhub-deep-research-20260603.md)
-- **R1 红线**：任何付款操作须元东方密码确认，未获授权不得开通
-- **后续**：元东方拍板付款授权 → 注册 TikHub 账号 → key 存 vault
+- **后续**：① 用免费额度+余额冒烟 4 核心端点(抖音/TikTok/小红书详情+搜索)测字段完整度/时效 ② 写适配器 `app/datasources/tikhub.py` 升 live + ledger active
 
 ---
 
@@ -164,8 +175,8 @@
 | `BAILIAN_API_KEY` | `~/vault/credentials/api/probe.env` | 600 | ✅ 已配 |
 | `PROBE_SEARXNG_BASE` | `~/vault/credentials/api/probe.env` | 600 | ✅ 已配 |
 | `OPENCORPORATES_TOKEN` | `probe.env` = PLACEHOLDER | — | ⚠️ 账号已建·无免费API·待拍板 |
-| `VIRUSTOTAL_KEY` | `probe.env` = PLACEHOLDER | — | ⚠️ 待手动注册 |
-| TikHub key | 未创建 | — | ⏳ 待 R1 |
+| `VIRUSTOTAL_KEY` | `~/vault/credentials/api/probe.env` + probe-a env | 600 | ✅ 已配（2026-06-13·实测有效）|
+| `TIKHUB_API_KEY` | `~/vault/credentials/api/tikhub.env` | 600 | ✅ 已配（2026-06-13·已充值$20·余额$20+免费$0.05·冒烟200·可live）|
 
 ---
 

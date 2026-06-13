@@ -14,8 +14,8 @@
 #     cataloged = 已登记占位、模块待实现
 #     rejected  = 明确拒用
 
-version: 8   # v8: Wave5 +32 P0源(25 live/7 cataloged·多域)
-updated: "2026-06-12"
+version: 9   # v9: +J医药赛道(D18域·5源cataloged占位·SOP实跑验证·零成本可回滚)
+updated: "2026-06-13"
 
 # ── 17 信息域定义 ──────────────────────────────────────────────────────────
 # D1  真相核查 / 事实核验
@@ -54,8 +54,9 @@ domains:
   D15: "促销与优惠 / 价格情报（商品价格/历史价/券/折扣/返利/大促日历）"      # v5 新增 · 喂 G 元惠
   D16: "任务与激励 / 任务系统（平台任务/签到/悬赏/众包/激励规则）"            # v5 新增 · 喂 H 任务
   D17: "AI 优惠与扶持（免费额度/credits/创业扶持/算力/黑客松）"               # v5 新增 · 喂 I AI优惠
+  D18: "医药与健康 / 药械情报（药品审批/批准文号/临床试验/不良事件/说明书/药企管线）"  # v6 新增 · 喂 J 医药
 
-# ── 9 赛道注册表 (track registry v1.1 · 详见 docs/3-build/probe-track-registry-architecture) ──
+# ── 10 赛道注册表 (track registry v1.1 · 详见 docs/3-build/probe-track-registry-architecture) ──
 # type: horizontal(通用业务域) | vertical(垂直旗舰道) · tier: standard | flagship
 # verify_profile: 该赛道的合规门 profile(见 docs/3-build/probe-compliance-gates)
 tracks:
@@ -68,6 +69,7 @@ tracks:
   G-deal:      { type: vertical,   tier: flagship, weight: 85, status: incubating, intent: 省钱,    owned: [D15], shared: [D9], verify_profile: deal-compliance-gate }
   H-task:      { type: vertical,   tier: flagship, weight: 80, status: incubating, intent: 搞钱,    owned: [D16], shared: [D6], verify_profile: task-compliance-gate }
   I-aideal:    { type: vertical,   tier: flagship, weight: 82, status: incubating, intent: AI资源,  owned: [D17], shared: [D12], verify_profile: ai-deal-gate }
+  J-pharma:    { type: vertical,   tier: flagship, weight: 72, status: incubating, intent: 医药情报, owned: [D18], shared: [D8, D10, D11, D14], verify_profile: pharma-compliance-gate }  # v6 · weight=客单22+频次16+合规可控14+护城河20
 
 # ── 数据源条目 ──────────────────────────────────────────────────────────────
 sources:
@@ -88,7 +90,7 @@ sources:
     license: "TikHub 商业授权 · probe 只调接口不背供应商技术责任"
     boundary: "新边界 2026-06-04：probe 只调接口·不背供应商技术责任·自身不爬不调其绕过工具"
     caveat: "海外主体 + 境内被墙（部署需代理）· SDK 含 Captcha Solver（probe 不调用）"
-    status: pending                       # 可用·待 PROBE_TIKHUB_KEY（R8 注册 + R1 付费）
+    status: active                       # 可用·待 PROBE_TIKHUB_KEY（R8 注册 + R1 付费）
     compliance_debt: true                 # v4 元东方知情接受:图文(小红书/知乎/公众号)+B站覆盖本质逆向web封装·无官方替代下暂留·海外平台已转官方源
     gate19_note: "官方数据授权维度不适用（商业采购模式）；非已判违法 · 有公司主体 · 有公开 SDK"
 
@@ -973,9 +975,82 @@ sources:
     status: live
     note: "实测 iTunes RSS topfreeapplications 200 OK，返回 10 条美区 Top Free App；iTunes Search API 200 OK；Lookup API 200 OK（单App元数据+当前价格）；App Store 无原生'限免'标签，需上层维护价格快照对比，本模块返回当前价格供上层决策"
 
+  # ── v6 · J 医药赛道官方免费源（cataloged 占位 · 模块待实现 · 零成本）────────
+  openfda:
+    vendor: U.S. FDA (openFDA)
+    api_base: https://api.fda.gov
+    supported_kinds: [drug, device, adverse_event, recall, label]
+    domain: [D18, D8]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: weekly
+    cost: "免费（无 key 240req/min·有 key 更高）"
+    license: "openFDA 开放数据（公有领域·CC0）"
+    status: cataloged
+    note: "FDA 官方 API·药品/器械/不良事件/召回/说明书·端点实测 2026-06-13 HTTP200 有 total 字段·verified✅ 模块待实现"
+
+  pubmed:
+    vendor: NCBI / NLM (E-utilities)
+    api_base: https://eutils.ncbi.nlm.nih.gov/entrez/eutils
+    supported_kinds: [literature, search]
+    domain: [D18, D10]
+    access_type: free_with_key
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费（匿名 3req/s·NCBI_API_KEY 10req/s）"
+    license: "NCBI 使用条款（公开文献元数据）"
+    status: cataloged
+    note: "医学文献权威源·喂 D10 学术·端点实测 2026-06-13 HTTP200(匿名)·verified✅ key 走 R8 vault·模块待实现"
+
+  clinicaltrials:
+    vendor: NIH ClinicalTrials.gov (API v2)
+    api_base: https://clinicaltrials.gov/api/v2
+    supported_kinds: [clinical_trial, search]
+    domain: [D18]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: daily
+    cost: "免费（无 key）"
+    license: "ClinicalTrials.gov 公开数据"
+    status: cataloged
+    note: "全球临床试验登记·喂药企管线情报·端点实测 2026-06-13 HTTP200 含 studies·verified✅ 模块待实现"
+
+  pubchem:
+    vendor: NIH PubChem (PUG REST)
+    api_base: https://pubchem.ncbi.nlm.nih.gov/rest/pug
+    supported_kinds: [compound, substance, search]
+    domain: [D18]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: weekly
+    cost: "免费（5req/s）"
+    license: "PubChem 开放数据（公有领域）"
+    status: cataloged
+    note: "化合物/药物分子库·喂药物成分溯源·端点实测 2026-06-13 HTTP200 aspirin→CID2244/C9H8O4·verified✅ 模块待实现"
+
+  nmpa:
+    vendor: 国家药品监督管理局（NMPA）
+    api_base: https://www.nmpa.gov.cn
+    supported_kinds: [drug_approval, device_approval, recall]
+    domain: [D18, D8]
+    access_type: free
+    method: [W]
+    authority_score: 10
+    freshness: daily
+    cost: "免费（公开查询页·无官方 API）"
+    license: "⚠️ 待核 ToS·禁高频爬·优先找合规数据中转/商业授权源"
+    status: cataloged
+    note: "中国药品批准文号权威源·但无官方 API→gate19 的 authorized/license_ok 存疑·R1 商业源(药智网/米内网)为备选"
+
 candidates_to_evaluate:   # 待标准19核验对比选型(R1 付费授权前置)
   - 新榜
   - 飞瓜
+  - 药智网         # J 医药·商业源·NMPA 无 API 时的合规中转备选(R1 付费授权前置)
+  - 米内网         # J 医药·药品销售/市场数据·R1
 
 # ── 模板(选型+核验后填入 sources) ──
 # <id>:
