@@ -48,16 +48,31 @@ ssh probe-a-ts "curl -s -X POST http://127.0.0.1:8001/api/v1/selftest | \
 
 ---
 
-## 三、🔴 M1 公开档上线前必决：匿名层 SSO 豁免
+## 三、匿名层 SSO 豁免（方案 A · 分级实施 2026-06-13）
 
-**当前 `location /api` 整体挂 `auth_request /__sso_verify`** → 匿名请求 `/api/v1/health` 返 302 跳登录。
+元东方裁定方案 A：public 端点显式豁免 SSO。**实施中发现端点性质须分级**——零成本只读端点可直接公开，触发付费计算的 invoke 须先加限流。
 
-但 M1 设计（三层深度线）要求**匿名用户能看 public 结论**（评级 + headline·premium=0）。二者冲突，上线前须裁定其一：
+### ✅ 已落地（2026-06-13 · 备份 probe.metafoclaw.com.bak.20260613-120117）
 
-- **方案 A（推荐·最小改动）**：nginx 对 public 端点显式豁免 SSO——`location = /api/v1/health`、`location = /api/v1/manifest`、以及 invoke 的 anon 档路径 `auth_request off`；其余（preview/paid）仍走 SSO。守 nginx-01「JWT 公开路径必须显式注册」。
-- **方案 B**：M1 先做"登录可见"，匿名公开层延后——牺牲拉新漏斗，但零 nginx 改动。
+nginx 加两个 `location =` exact-match 豁免块（优先级高于 `location /api` 前缀）：
 
-> 决策记录待补；改 nginx 属高 blast（公网主路由）→ 走 R-CL 必须级 + 元东方授权。
+```nginx
+location = /api/v1/health   { proxy_pass http://127.0.0.1:8001; proxy_set_header Host $host; }
+location = /api/v1/manifest { proxy_pass http://127.0.0.1:8001; proxy_set_header Host $host; }
+```
+
+验证（公网视角）：health 200 · manifest 200 · selftest 302 · invoke 302 · / 302 · nginx -t 通过。
+理由：health/manifest = GET 只读零成本，安全公开；app 层 `sso.verify(None)→Principal("anon")` 端到端匿名安全。
+
+### ⬜ 剩余 M1 项：anon invoke + 限流（成本护栏）
+
+M1 公开档完整体验（匿名粘贴链接 → 看 public 评级）需开放 invoke 给匿名。但 **invoke 触发真实 LLM/数据源调用产生成本**——直接对匿名全开 = 无限流成本水龙头（任何人可烧 LLM 预算）。开放前必须先具备：
+
+1. **per-IP 限流**（nginx `limit_req` 或 app 层）——匿名调用频次硬上限
+2. **匿名走极速版**（flash·单模型·低成本·speed-depth-tiering）——非深度全验
+3. **app 已就绪**：`verify(None)→anon→redact_by_tier→public 深度`（评级+headline·premium=0）链路完整
+
+> 改 nginx 属高 blast（公网主路由）→ 守 R-CL 必须级。本次仅放零成本端点·invoke 限流作独立 M1 子项。
 
 ---
 
