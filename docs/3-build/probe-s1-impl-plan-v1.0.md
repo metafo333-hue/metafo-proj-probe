@@ -45,8 +45,8 @@
 | 2 | **数据源准入门口径** | 文档化裁定：`qualified`（采购边界·主门）· `gate_passed`（gate19 官方授权·更高合规备选·非阻塞）；`get_adapter` 对 active 源校验一致 | `registry.py` 注释 + `gate19-and-dedup` 文档 | 口径单一、无"两套门"歧义 | ✅ **已完成**（registry.py 双口径注释+实现核验）|
 | 3 | **`_chat` 透出 usage** | `_chat` 返 `(text, usage)`，调用方累计 usage → 喂 cost | `llm.py` + `l0.deep_probe` + `pipeline` | cost_event 有真 token 数 | ✅ **已完成**（`_chat_with_usage` 返 (text, usage_dict) 核验）|
 | 4 | **governor 统一取数入口** | 先在 pipeline/l0 凿出**唯一取数函数**（现在 article/doc 走 extractors、video/social 走 registry 两条岔路），governor 才有挂载点接管"禁绕过" | `l0` / `pipeline` + 新建 `governor.py` | 取数走唯一入口·可被治理 | ✅ **已完成**（governor.py `fetch_one(url, kind)` 核验·2026-06-12 建）|
-| 5 | **metering 埋点** | 包装 llm/api 出口埋 cost_event（cost-metering 设计落码） | 新建 `metering.py` | 每次调用成本可见 | 🚧 **半成偏离**：metering.py 已建但写 JSONL；设计（W2-10/R28）要求 PG `probe_cost_events` 表——S1 内迁 PG |
-| 6 | **字段错位 / redact 死代码** | deep_probe 产七段 s1-s7 字段 → 用 `redact_by_tier`；或删 redact_by_tier 统一用 `apply_depth_line` | `l0` / `guards.py` | 单一裁剪函数·字段对齐 | 🚧 **半成**：`redact_by_tier` 已是主管线唯一裁剪（pipeline L138）✅；但 `apply_depth_line` 未删（selftest.py L43-45 仍调）——D2 裁定要求废弃·待 selftest 改写后删 |
+| 5 | **metering 埋点** | 包装 llm/api 出口埋 cost_event（cost-metering 设计落码） | 新建 `metering.py` | 每次调用成本可见 | 🚧 **JSONL 已工作·PG 迁移待决**：metering.py 已建并跑 JSONL（M1 可用·成本已记录）；设计（W2-10/R28）要求 PG `probe_cost_events` 表。**实情**：probe app 当前零 PG 接线·venv 未装 psycopg → 迁 PG = 引入首个 PG 依赖（pip+DDL·半不可逆）。**非 M1 阻塞**（M1 免费档 premium=0 无计费）·服务 M2 付费计费精度 → 列为 M2 前置·不抢 M1 |
+| 6 | **字段错位 / redact 死代码** | deep_probe 产七段 s1-s7 字段 → 用 `redact_by_tier`；删废弃的 `apply_depth_line` | `l0` / `guards.py` | 单一裁剪函数·字段对齐 | ✅ **LIVE（2026-06-13 probe-a 部署）**：`apply_depth_line` 已删·selftest 三档检查改走七段 redact_by_tier·重启后 selftest 11/11 不退化（备份 guards/selftest .bak.20260613-115146）|
 
 > 新三文档（API 调取治理三件套：risk-checklist / cost-metering / data-dynamic-governance）的完整落码 = 上表 #3/#4/#5，它们要编排的 `governor.py`/`metering.py` 现不存在，需先凿挂载点（#4）才有落点。
 
