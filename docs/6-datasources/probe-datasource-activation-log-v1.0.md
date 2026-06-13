@@ -281,5 +281,35 @@ passed=11/11  gate=🟢🟢 准入
 
 ---
 
+## 八、2026-06-13 行业源补缺（跨境外贸 + 法风控 · keyless 红利批）
+
+> 触发：按行业分类补高价值源。先采零授权 keyless（最高 ROI），再碰注册门。
+> 配套调研：[跨境源地图](../4-research/industry-crossborder-trade-sourcemap-v1.0.md) · [法风控源地图](../4-research/industry-legal-risk-diligence-sourcemap-v1.0.md) · [跨境接入清单](probe-crossborder-adapter-checklist-v1.0.md)
+
+### 8.1 新增 3 个 keyless live 源（全部 Mac 实测真数据 · ledger v8→v9·live 48→51）
+
+| 源 | 域 | 赛道 | 接入方式 | 实测验证 |
+|----|----|------|---------|---------|
+| **wits**（World Bank 关税） | D14/D11 | 跨境F | keyless SDMX-JSON | chn/usa 关税 29 品类组 ✅ · **probe 首个关税源** |
+| **un_comtrade**（联合国贸易流） | D11/D14 | 跨境F | keyless preview(≤500条) | China 2022 出口 $3.59T + 美国进口 224 伙伴 ✅ · 权威分 10 |
+| **shodan_internetdb**（暴露资产） | D8/D12 | 法风控C | keyless | 1.1.1.1→8 暴露端口 ✅ · 资产侦察 |
+
+> 里程碑：**海关贸易流闸2 达标**——wits + un_comtrade 两独立 live 源可跨源印证。
+
+### 8.2 本批未拿下（诚实标注）
+
+| 源 | 卡点 | 处置 |
+|----|------|------|
+| Eurostat Comext | dissemination API time 参数 4 次未攻克 | 暂缓·UN Comtrade 已覆盖 EU 贸易流 |
+| US Census Trade | 强制需 key（返 Missing Key） | 降 B1 待注册 |
+| OpenOwnership | Cloudflare 403 bot 拦 | 待 probe-a 代理 |
+
+### 8.3 下一批（B1·需注册免费 key·R8 邮箱授权已有）
+
+UK Companies House（即时批准）/ WTO Timeseries（自动批准）/ US Census Trade（邮件激活）——
+keyless 路径已采尽，余下须过注册门，部分或撞验证码需元东方手动。
+
+---
+
 > 台账真源：本文件  
 > 关联文档：[probe-api-integration-schedule-v1.0.md](probe-api-integration-schedule-v1.0.md) · [probe-master-solution-v2.md](../probe-master-solution-v2.md) · [3-build/probe-s1-impl-plan-v1.0.md](../3-build/probe-s1-impl-plan-v1.0.md)

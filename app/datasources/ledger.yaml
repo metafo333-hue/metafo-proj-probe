@@ -269,6 +269,51 @@ sources:
     license: "公开数据 · 数据来源 ECB（欧洲中央银行）"
     status: live                          # 无需 key
 
+  wits:
+    vendor: World Bank WITS (World Integrated Trade Solution)
+    api_base: https://wits.worldbank.org/API/V1/SDMX/V21/datasource/tradestats-tariff
+    module: app.datasources.public.wits
+    supported_kinds: [tariff, trade]
+    domain: [D14, D11]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: weekly
+    cost: "免费（keyless · 整合 UNCTAD TRAINS 关税 + UN Comtrade 贸易流）"
+    license: "CC BY 4.0（World Bank Open License）"
+    caveat: "WITS 服务较慢 timeout=60s；返回 SDMX-JSON · reporter/partner 用 ISO3 小写"
+    status: live                          # 无需 key · Mac 实测 chn/usa 关税 29 品类组 200 ✅（2026-06-13）· probe 首个关税数据源
+
+  un_comtrade:
+    vendor: UN Comtrade (United Nations Statistics Division)
+    api_base: https://comtradeapi.un.org/public/v1/preview
+    module: app.datasources.public.un_comtrade
+    supported_kinds: [trade, customs]
+    domain: [D11, D14]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: weekly
+    cost: "免费（keyless preview · 单次≤500条；超出需注册 subscription key 升 P1）"
+    license: "CC BY 4.0（UN Comtrade 官方开放数据）"
+    caveat: "reporter/partner 用 UN M49 数字码（156=中国 842=美国 0=世界）· preview partnerDesc 为 null 仅返码"
+    status: live                          # 无需 key · Mac 实测 China 2022 出口 $3.59T + USA 进口 224 伙伴 200 ✅（2026-06-13）· 贸易流第二独立源（配 wits 满足闸2）
+
+  shodan_internetdb:
+    vendor: Shodan InternetDB (free tier)
+    api_base: https://internetdb.shodan.io
+    module: app.datasources.public.shodan_internetdb
+    supported_kinds: [asset, exposure, security]
+    domain: [D8, D12]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: weekly
+    cost: "免费（被动暴露资产快查 · 深扫需 Shodan 完整版付费 P3）"
+    license: "Shodan 免费端点 · 仅返被动扫描公开暴露信息"
+    caveat: "仅 IPv4（域名经 lookup_domain 先 DNS 解析）· 未收录 IP 返空"
+    status: live                          # 无需 key · Mac 实测 1.1.1.1→8 暴露端口 200 ✅（2026-06-13）· 法风控资产侦察第N源
+
   defillama:
     vendor: DeFi Llama
     api_base: https://api.llama.fi
