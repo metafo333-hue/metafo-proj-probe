@@ -80,6 +80,8 @@ M1 公开档完整体验（匿名粘贴链接 → 看 public 评级）已开放�
 验证（匿名视角）：落地页 / 200（标题"元探 MetaProbe · 情报引擎"）· health/manifest/invoke 200 · selftest 仍 302。
 **M1 公开档访问链至此全通**：匿名访问 probe.metafoclaw.com → 看落地页 → 粘贴链接 → 走 anon invoke（限流）→ public 深度结论。
 
+> ⚠️ **2026-06-13 端到端实测修正**：以上是**访问链路（基础设施层）全通**，非产品可用。实测发现**部署的 index.html 是纯营销落地页**（0 个 input/form·"开始核查"按钮 href="#" 死链）——**匿名访客无法从网页发起核查**。M1「公开档能用」的最大缺口 = **交互 UI 未建**（input→invoke→public 结果渲染）。API 层已就绪（anon invoke 200·返 public 深度），缺的是前端输入界面接线。probe-ui-v4.5.html 是设计稿·非上线活应用。
+
 ### ⚠️ 残留风险（已知·非阻塞·建议 M2 前补）
 
 per-IP 限流挡散户、**挡不住分布式刷**；app 侧**无全局每日 LLM 预算熔断**（cost-metering §五 设计未实现）。上线初期规模小 + deepseek 便宜 + metering JSONL 全记录可观测，可接受；M2 前建议补 app 层每日预算天花板（全局熔断）。
