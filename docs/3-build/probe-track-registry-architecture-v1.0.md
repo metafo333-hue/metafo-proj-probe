@@ -96,7 +96,7 @@ tracks:
 
 ---
 
-## 3. 八条赛道注册表（当前全量）
+## 3. 十条赛道注册表（当前全量）
 
 | id | 中文 / 英文 | type | tier | weight | status | primary_intent | owned/shared 信息域 | 商业模式 |
 |----|-----------|------|------|--------|--------|----------------|--------------------|---------|
@@ -109,9 +109,10 @@ tracks:
 | **G-deal** | **元惠 / MetaDeal** | vertical | **flagship** | 85 | incubating | 省钱 | owned D15（促销+价格+券）· shared D9（本地生活地域适配） | CPS 返利分佣 + 付费深探 |
 | **H-task** | **元任（待签发）/ MetaTask** | vertical | **flagship** | 80 | incubating | 搞钱 | owned D16 · shared D6（创作类任务） | CPS 拉新分佣 + 任务情报订阅 |
 | **I-aideal** | **元智惠（待签发）/ MetaAIDeal** | vertical | **flagship** | 82 | incubating | AI资源 | owned D17（AI优惠与扶持）· shared D12（技术情报） | CPS/联盟 + 情报订阅 + **自用降本** |
+| **J-pharma** | **医药（待签发）/ —** | vertical | **flagship** | 72 | incubating | 医药情报 | owned D18（药械情报）· shared D8/D10/D11/D14 | 按件交付（高客单·合规敏感·verify_profile=pharma-compliance-gate） |
 
 > 🔴 **D 域真源对齐（R0.8 修正 2026-06-10）**：`ledger.yaml` 真源中 **D9 = 地域/受众适配**（非电商价格）。G 元惠的价格/促销/券数据全归**新域 D15**，shared D9 仅用于本地生活的地域适配；H 任务 shared D6（账号画像，喂创作类任务）。D15/D16 定义与对接见 [数据源分批次调研对接计划 §1](../4-research/datasource-research-onboarding-batch-plan-v1.0.md)。
-> ⚠️ 各 track 的 `owned/shared` 域映射真源=ledger.yaml tracks 段；本表为设计示意，以 ledger v5 实际 D1-D17 枚举为准。
+> ⚠️ 各 track 的 `owned/shared` 域映射真源=ledger.yaml tracks 段；本表为设计示意，以 ledger v9 实际 D1-D18 枚举为准（J-pharma 行真值同步自 ledger v9 tracks 段）。
 
 > 命名（商业命名轨·英文+中文俗名双名登记 asset-registry）：F 金融、**G MetaDeal/元惠（已定）**、**H MetaTask/元任（待元典录→实为商业轨签发）**。G、H 同属「羊毛/搞钱」大类（**省钱 ↔ 搞钱**）。
 
@@ -247,7 +248,7 @@ compliance:
 
 ### 8.3 信息域 D15 / D16 落真源（洞③·消除悬空引用）
 
-**问题深度**：G 引用 `D15`、H 引用 `D16`，需在 `ledger.yaml` `domains:` 中确认已落定义。（真源 ledger.yaml v5 已收录 D1-D17，域映射真源=ledger.yaml tracks 段）**落 `tracks:` 段前须核验 ledger v5 中 D15/D16 定义完整。**
+**问题深度**：G 引用 `D15`、H 引用 `D16`，需在 `ledger.yaml` `domains:` 中确认已落定义。（真源 ledger.yaml v9 已收录 D1-D18，域映射真源=ledger.yaml tracks 段）**落 `tracks:` 段前须核验 ledger v9 中 D15/D16 定义完整。**
 
 | 域 | 代号 | 域语义 | 代表真实源（举例·待 4-research 核实） | 合规 | 喂哪些赛道 |
 |----|------|--------|--------------------------------------|------|-----------|
@@ -311,17 +312,63 @@ incubating(孵化/设计) → building(在建·过合规门) → active(上线) 
 
 ---
 
+## 9. 赛道旗舰权威源铁律（v1.2 · 引擎核心 = 源头数据）
+
+> 立规背景（2026-06-13 元东方定调）：**probe 引擎的核心是源头数据**。数据够丰富、准确、真实，AI 才能精准分析、给出可信答案；源头不强，再好的模型也是无米之炊。故每个赛道的数据源不是「有就行」，而是必须有**权威旗舰整合源**压舱。
+
+### 9.1 铁律
+
+**每个赛道（A–J 及未来新增）必须至少有 1 个「权威旗舰整合源」。**
+
+旗舰源定义（三条全满足）：
+
+| 维度 | 要求 |
+|------|------|
+| **权威** | 行业公认 / 官方 / 头部数据商，`authority_score ≥ 8` |
+| **覆盖** | 行业级整合（一家覆盖该行业主体品类，非单点小源），优先「整合行业数据的 API 提供方」 |
+| **可调用** | 有可程序化调用的 API（REST/SDK），非仅网页 |
+
+- **免费/付费均可**，但付费的行业整合型权威源**优先**（覆盖与稳定性通常远超免费拼凑）；付费走 R1 报价授权。
+- 旗舰源在 ledger `sources` 标 `flagship_source: true`；赛道 `_matrix.yaml` 的 `flagship_source_candidates` 记候选。
+
+### 9.2 准入约束
+
+- **无旗舰源的赛道禁止升 `status: active`**（可停在 incubating/building，但 `_matrix.yaml` 须显式标「缺旗舰源」缺口）。
+- 旗舰源缺位 = SOP 第 9 自检门「数据源」项不通过。
+- 免费官方源（如 openFDA/PubMed）可作旗舰源，但若覆盖不足该行业主体，须再配 1 个付费整合源补全（如医药 openFDA 覆盖美 FDA，中国药品须药智网/米内网补）。
+
+### 9.3 各赛道旗舰源（✅ 2026-06-13 5 路扇出深调定稿 · 详见 [深调报告](../6-datasources/probe-flagship-sources-research-v1.0.md)）
+
+> 调研口径：每赛道找「整合该行业数据的权威 API 提供方」；付费源接入走 R1，含 key 走 R8。
+
+| 赛道 | 首选旗舰源 | 次选/补充 | 模式 |
+|------|-----------|----------|------|
+| A 自媒体 | 新榜有数（全平台/新榜指数）| 蝉妈妈（直播电商）| 付费·商务 |
+| B 商业市场 | 天眼查开放平台（300维/征信备案）| 剑鱼标讯（招投标）| 付费 ¥1500/万次 |
+| C 尽调风控 | 企查查开放平台（167接口/UBO）| OpenSanctions（首选国际合规·自托管/490万实体/376数据集）· World-Check（仅跨境专项可选）| 付费 ¥0.1–6/次 |
+| D 调研知识 | Statista Connect（100万统计）| IBISWorld + OpenAlex（学术免费）| 付费+免费 |
+| E 真伪核查 | Google Fact Check（免费/IFCN）| GDELT（免费）+ GPTZero | 多数免费 |
+| F 金融财经 | Wind 万得（机构）/ Tushare（MVP）| 东财 Choice / AKShare | 付费分层 |
+| G 元惠 | 维易淘宝客 API（六平台含抖音）| 大淘客 + 慢慢买（历史价）| 付费 ¥158/月 |
+| H 任务 | ⚠️ 无行业整合源 | 猪八戒 + 自建采集 + 积分墙 | 混合·须自建 |
+| I AI优惠 | OpenRouter（400+模型）| HuggingFace Hub（开源SSOT）| 免费tier+PAYG |
+| J 医药 | Cortellis（全球·含NMPA）+ 摩熵医药（中国最深）| openFDA等 4 免费源 | 付费 $5–20万/年 |
+
+> 🔑 三点结论：① **E/I/D学术/J免费层 零成本即达权威覆盖**，优先接；② **B 与 C 共享工商源**（企查查/天眼查），一次采购两赛道共用；③ **H 任务无整合旗舰源**（平台数据封闭+无聚合商业模式），须自建采集管线，为该赛道固有难点；④ **C 国际合规层首选 OpenSanctions**（自托管 yente·€1500/月级 替代 World-Check $11万/年·**降本 80%+**），World-Check 降级为「跨境专项可选」（仅高端跨境客户触发）。
+
+---
+
 ## 附：待办
 
 **🔴 落 `ledger.yaml` 前必做的硬前提（v1.1 新增·缺一不可）**
 - A. **D15/D16 落真源**（§8.3）：先在 `domains:` 定义促销与优惠 D15、任务与激励 D16，消除悬空引用。
 - B. **三合规门建档**（§8.1）：finance-8gate / deal-compliance-gate / **task-compliance-gate**（灰产防火墙），过赛道准入合规门五问。
-- C. **primary_intent 边界声明**（§8.2）：八赛道各声明意图终点，落串台裁定表，避免双算。
+- C. **primary_intent 边界声明**（§8.2）：十赛道各声明意图终点，落串台裁定表，避免双算。
 
 **常规待办**
 1. **命名登记**：MetaDeal/元惠（已定）+ MetaTask/元任（待定）写入 `asset-registry`，商业命名轨双名两字段。
-2. **落 `ledger.yaml`**：加 `tracks:` 段，把 §3 八条注册条目（含 status/weight/compliance/audience）填入。
-3. **§5.1 业务域表升级**：design-v1 §5.1 升为「9 赛道注册表」视图；A–E 补 `capabilities[]` 映射既有子场景（§8.6）。
+2. **落 `ledger.yaml`**：加 `tracks:` 段，把 §3 十条注册条目（含 status/weight/compliance/audience）填入。
+3. **§5.1 业务域表升级**：design-v1 §5.1 升为「10 赛道注册表」视图；A–E 补 `capabilities[]` 映射既有子场景（§8.6）。
 4. **`--mfc-flagship` token**：在 `tokens-brand.css` 定义旗舰色。
 5. **weight 打分卡入治理**（§8.4）：新赛道 weight 必须走四维评分，禁拍脑袋。
 6. **真实平台盘点**：元惠 / 任务 各 8 端口真实平台清单，按 §7 落镜像层 1-inventory（需扇出调研，另起）。

@@ -90,14 +90,12 @@ probe 不是「单一付费聚合商的二道贩子」，而是 **开源免费�
 
 ---
 
-## 七、真源同步待办（M1/M2/M3 传播 · 下一轮单独执行）
+## 七、真源同步状态（M1/M2/M3 · ✅ 2026-06-13 已传播 · 逐个三源验证通过）
 
-> 本文已声明统一口径；以下真源文件仍含旧态，需单独一轮逐个改 + 三源验证（**不在本步批量改**）：
-
-- ⬜ M1：`docs/3-build/probe-track-registry-architecture-v1.0.md` §3 — 标题「八条→十条」，补 I-aideal / J-pharma 两行（含 schema 字段）
-- ⬜ M1：`metafoclaw-git/.../_coverage-map.md` 已含 10 赛道（一致，无需改）
-- ⬜ M3：track-registry §9.3 C 行 + coverage map C 行 — World-Check 标注「跨境专项可选」，OpenSanctions 升首选
-- ⬜ M2：核对 ledger.yaml `domains:` 段确为 D1–D18 共 18 域（一致则仅登记，不改）
+- ✅ **M1**：track-registry §3 标题「八条→十条」+ 补 **J-pharma 行**（真值同步自 ledger v9 tracks 段：weight 72/incubating/owned D18/shared D8·D10·D11·D14/verify_profile=pharma-compliance-gate）。**实补 1 行**——I-aideal 原已在表（§3a §七初稿"补 I/J 两行"为臆测，实读真源纠正）；连带纠 `ledger v5→v9` / `D1-D17→D1-D18` / 「9 赛道注册表→10」等 6 处同源计数漂移。
+- ✅ **M3**：track-registry §9.3 C 行 + `metafoclaw-git/.../_coverage-map.md` C 行 —— World-Check 降级「跨境专项可选」，**OpenSanctions 升国际合规首选**（490 万实体/376 数据集/降本 80%+）；§9.3 三点结论补 ④。
+- ✅ **M2**：ledger.yaml `domains:` 实测 **D1–D18 共 18 域**（D18=医药·v6 新增）一致 → 仅登记，无需改。
+- 注：**ledger.yaml 本轮零改动**——J-pharma track 与 D18 域早已是 ledger v9 真值，本轮是展示层（track-registry/coverage）回填对齐真源，方向正确（改展示不改真源）。
 
 ---
 
