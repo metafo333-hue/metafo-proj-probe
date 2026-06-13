@@ -74,6 +74,12 @@ M1 公开档完整体验（匿名粘贴链接 → 看 public 评级）已开放�
 - **app 链路**：`verify(无token)→Principal("anon")→_audit_tier 返 free→4 闸无 opus×5→redact_by_tier public 深度`（评级+headline·premium=0）
 - **成本性质**：A 线（无深探词）零 LLM；B 线（含评级等）走 free 档极速版（deep_probe 3 + 4 闸 ≈ 7 次 deepseek 调用·$0.01-0.02/次·per-IP 限流封顶）
 
+### ✅ 落地页公开（2026-06-13·元东方授权·备份 .bak.root.20260613-121545）
+
+`location /` 移除 `auth_request`——落地页静态壳公开（SPA 模型：静态壳公开·数据访问由 /api 分级控）。
+验证（匿名视角）：落地页 / 200（标题"元探 MetaProbe · 情报引擎"）· health/manifest/invoke 200 · selftest 仍 302。
+**M1 公开档访问链至此全通**：匿名访问 probe.metafoclaw.com → 看落地页 → 粘贴链接 → 走 anon invoke（限流）→ public 深度结论。
+
 ### ⚠️ 残留风险（已知·非阻塞·建议 M2 前补）
 
 per-IP 限流挡散户、**挡不住分布式刷**；app 侧**无全局每日 LLM 预算熔断**（cost-metering §五 设计未实现）。上线初期规模小 + deepseek 便宜 + metering JSONL 全记录可观测，可接受；M2 前建议补 app 层每日预算天花板（全局熔断）。
