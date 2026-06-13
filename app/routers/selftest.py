@@ -39,10 +39,17 @@ def _signals() -> dict:
         legal_passes = True
     except guards.GuardError:
         legal_passes = False
-    full = {"rating": "B", "headline": "h", "structure": "s", "competitors": "c", "recreation": "r"}
-    anon = guards.apply_depth_line(full, "anon")
-    free = guards.apply_depth_line(full, "free")
-    paid = guards.apply_depth_line(full, "paid")
+    # 七段报告 schema · 走唯一裁剪函数 redact_by_tier（D2 裁定·apply_depth_line 已废弃删除）
+    full = {
+        "s1_first_screen":     {"rating": "B", "headline": "h", "decision_tip": "tip"},
+        "s3_content_breakdown": {"structure_formula": "s", "aigc_flag": False},
+        "s4_competitor_matrix": {"competitors": "c"},
+        "s5_recreation_paths":  {"priority": "借路", "priority_reason": "r", "aigc_flag": False},
+        "s6_risk_compliance":   {"risk_level": "中", "detail": "d"},
+    }
+    anon = guards.redact_by_tier(full, "anon")
+    free = guards.redact_by_tier(full, "free")
+    paid = guards.redact_by_tier(full, "paid")
     return {
         "manifest_complete": all(md.get(k) for k in
                                  ("name", "subdomain", "industry", "angle", "pricing_tier", "solves")),
@@ -51,9 +58,10 @@ def _signals() -> dict:
         "aigc_type_guard": _rejects({"deliverable": {}, "meta": {"aigc_flag": "yes"}, "cost": {"base": 0}}),
         "c4_no_passthrough": _rejects({"deliverable": {}, "meta": {"aigc_flag": True, "raw_passthrough": True},
                                        "cost": {"base": 0}}),
-        "depth_anon_safe": "competitors" not in anon and "locked_sections" in anon,
-        "depth_free_safe": bool(free.get("structure")) and "competitors" not in free,
-        "depth_paid_full": paid.get("competitors") == "c",
+        "depth_anon_safe": "s4_competitor_matrix" not in anon and "locked_sections" in anon,
+        "depth_free_safe": bool(free.get("s3_content_breakdown", {}).get("structure_formula"))
+                           and free.get("s4_competitor_matrix", {}).get("locked") is True,
+        "depth_paid_full": paid.get("s4_competitor_matrix", {}).get("competitors") == "c",
         "billing_public_free": billing.cost_public()["premium_data"] == 0.0,
         "billing_deep_paid": billing.cost_deep(True)["premium_data"] > 0,
         "billing_no_silent": billing.cost_deep(False)["premium_data"] == 0.0,
