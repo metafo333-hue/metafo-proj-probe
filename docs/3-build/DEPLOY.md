@@ -80,7 +80,9 @@ M1 公开档完整体验（匿名粘贴链接 → 看 public 评级）已开放�
 验证（匿名视角）：落地页 / 200（标题"元探 MetaProbe · 情报引擎"）· health/manifest/invoke 200 · selftest 仍 302。
 **M1 公开档访问链至此全通**：匿名访问 probe.metafoclaw.com → 看落地页 → 粘贴链接 → 走 anon invoke（限流）→ public 深度结论。
 
-> ⚠️ **2026-06-13 端到端实测修正**：以上是**访问链路（基础设施层）全通**，非产品可用。实测发现**部署的 index.html 是纯营销落地页**（0 个 input/form·"开始核查"按钮 href="#" 死链）——**匿名访客无法从网页发起核查**。M1「公开档能用」的最大缺口 = **交互 UI 未建**（input→invoke→public 结果渲染）。API 层已就绪（anon invoke 200·返 public 深度），缺的是前端输入界面接线。probe-ui-v4.5.html 是设计稿·非上线活应用。
+> ✅ **2026-06-13 M1 公开档端到端真 LIVE**（产品可用·非仅访问链）：落地页加 hero 核查输入区（input→POST invoke→轮询 task→渲染 public 结果），E2E 实测匿名粘 wikipedia 链接 → 渲染「标题 + 正文预览 + 📡信源 + 置信90% + 🔓登录升级钩子」。
+> 配套修复（端到端实测逼出）：① task_id 随机化闭 IDOR（防匿名枚举他人结果）② systemd --workers 1（进程内 task store 跨 worker 一致）③ nginx 豁免 /api/v1/task/ 轮询 ④ article 抓取改 httpx 经 mihomo 代理（海外站可达·wikipedia 3.1s·原 trafilatura 直连 30s 挂死）。
+> 落地页源（含输入 UI）= `运营报告/probe-landing-v1.0.html`（1484 行·已与 probe-a 部署版同步）。
 
 ### ⚠️ 残留风险（已知·非阻塞·建议 M2 前补）
 
