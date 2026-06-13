@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body
 
-from app.core import sso, tasks
+from app.core import budget, sso, tasks
 from app.l0 import find_url
 from app.services import pipeline
 
@@ -27,6 +27,11 @@ def invoke(bg: BackgroundTasks, payload: dict[str, Any] = Body(...)) -> dict:
 
     # SSO：校验母体 short-lived user_token（匿名→免费档）
     principal = sso.verify(req.get("user_token"), req.get("billing_context"))
+
+    # M1 匿名防刷：全局每日额度兜底（nginx per-IP 限流挡散户·此挡分布式总量）
+    if principal.is_anonymous() and not budget.allow_anon():
+        return {"code": 4290, "data": None,
+                "msg": "今日免费核查额度已满，请登录或明日再试"}
 
     # 起异步 task
     tid = tasks.new_task()
