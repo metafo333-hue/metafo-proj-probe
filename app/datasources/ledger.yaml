@@ -789,8 +789,8 @@ sources:
     freshness: daily
     cost: "免费（CC0 公有领域）"
     license: "CC0（Wikidata 数据完全公有领域）"
-    caveat: "Mac 当前 IP 触发 429 限速（多次密集调用后被限）· 服务本身正常 · 建议 probe-a 稳定运行 · 模块 SPARQL 语法已验证（entity_facts/search_person/search_company 均有效）· 需 polite 延迟 ≥1s"
-    status: cataloged     # 需 probe-a 代理验证（Mac IP 被限速，非服务故障）
+    caveat: "限速难点：Mac 自有 IP 触发 429；probe-a 经 mihomo 走境外节点后仍 429（共享出口 IP 被 Wikidata Query Service 限速·2026-06-13 probe-a 实测确认·UA 非因素）。live SPARQL 在共享代理节点不可行 → 须改 CC0 bulk dump（dumps.wikimedia.org · 完全免费可商用）或专用干净出口 IP。模块 SPARQL 语法本身有效（entity_facts/search_company）。"
+    status: cataloged     # 2026-06-13 probe-a 实测:proxy 节点亦 429 → live SPARQL 不可行·待改 bulk dump 方案
   deps_dev:
     vendor: Google Open Source Insights (deps.dev)
     api_base: https://api.deps.dev/v3alpha
