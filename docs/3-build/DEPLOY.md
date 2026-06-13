@@ -64,15 +64,19 @@ location = /api/v1/manifest { proxy_pass http://127.0.0.1:8001; proxy_set_header
 验证（公网视角）：health 200 · manifest 200 · selftest 302 · invoke 302 · / 302 · nginx -t 通过。
 理由：health/manifest = GET 只读零成本，安全公开；app 层 `sso.verify(None)→Principal("anon")` 端到端匿名安全。
 
-### ⬜ 剩余 M1 项：anon invoke + 限流（成本护栏）
+### ✅ anon invoke + 限流（2026-06-13 落地·元东方裁定 A线+限流B线）
 
-M1 公开档完整体验（匿名粘贴链接 → 看 public 评级）需开放 invoke 给匿名。但 **invoke 触发真实 LLM/数据源调用产生成本**——直接对匿名全开 = 无限流成本水龙头（任何人可烧 LLM 预算）。开放前必须先具备：
+M1 公开档完整体验（匿名粘贴链接 → 看 public 评级）已开放，配 per-IP 限流成本护栏：
 
-1. **per-IP 限流**（nginx `limit_req` 或 app 层）——匿名调用频次硬上限
-2. **匿名走极速版**（flash·单模型·低成本·speed-depth-tiering）——非深度全验
-3. **app 已就绪**：`verify(None)→anon→redact_by_tier→public 深度`（评级+headline·premium=0）链路完整
+- **限流 zone**：`/etc/nginx/conf.d/probe-ratelimit.conf` · `limit_req_zone $binary_remote_addr zone=probe_anon:10m rate=6r/m`（每 10 秒 1 次·per-IP）
+- **invoke 块**：`location = /api/v1/invoke` SSO 豁免 + `limit_req zone=probe_anon burst=3 nodelay` + `limit_req_status 429`（备份 .bak.invoke.20260613-120745）
+- **验证**：匿名首调 200 · 连发 burst 后 429 · health 200 · 根 302（SSO 未动）
+- **app 链路**：`verify(无token)→Principal("anon")→_audit_tier 返 free→4 闸无 opus×5→redact_by_tier public 深度`（评级+headline·premium=0）
+- **成本性质**：A 线（无深探词）零 LLM；B 线（含评级等）走 free 档极速版（deep_probe 3 + 4 闸 ≈ 7 次 deepseek 调用·$0.01-0.02/次·per-IP 限流封顶）
 
-> 改 nginx 属高 blast（公网主路由）→ 守 R-CL 必须级。本次仅放零成本端点·invoke 限流作独立 M1 子项。
+### ⚠️ 残留风险（已知·非阻塞·建议 M2 前补）
+
+per-IP 限流挡散户、**挡不住分布式刷**；app 侧**无全局每日 LLM 预算熔断**（cost-metering §五 设计未实现）。上线初期规模小 + deepseek 便宜 + metering JSONL 全记录可观测，可接受；M2 前建议补 app 层每日预算天花板（全局熔断）。
 
 ---
 
