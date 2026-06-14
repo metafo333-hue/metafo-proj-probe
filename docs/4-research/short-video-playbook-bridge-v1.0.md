@@ -77,7 +77,13 @@
 | 数据源清单（tikhub/yt-dlp/oEmbed...） | 07 §四 · track-A · `ledger.yaml` | **`app/datasources/ledger.yaml`**（probe 代码真源） | 07/track-A 均引用 ledger，禁手抄源清单 |
 | 部署归属（probe-a 机6） | 07 §八 · `server-roles.md` | **`server-roles.md`**（机6 probe 采集节点） | 07 引用 server-roles |
 
-> ⚠️ **未解漂移提示**：05 的可得性数字自述"调研遭限流·部分未对抗验证"，combo-deep-probe TikHub adapter 已实测对接（2026-06-14）。两者一致性需 probe-a 真实 key 实跑核验后，回填本表 + track-A，方可标"已确证"。
+> ✅ **核验记录（2026-06-14 · TikHub 真实 key 实测）**：05 的可得性矩阵核心论断已**实证**。
+> - **key 状态**：probe-prod key 已配置入 vault（`~/vault/credentials/api/tikhub-key.txt` chmod 600），`get_user_info` 返回 code 200 验证有效（账号 06-13 注册·本次找回控制权 + 邮箱验证 + 密码重置）。
+> - **实测样本**：bilibili `BV1QuEz65EsF`（热门页真实视频）→ `/api/v1/bilibili/web/fetch_one_video` code 200·返回 81 字段。
+> - **结果（实证 05 的"公开 vs 黑盒"边界）**：✅ ⑦元数据(title/pubdate/desc) · ✅ ③互动(stat.view 播放量/danmaku/reply/favorite) · ✅ ④作者(owner.mid/name) **均返回**；❌ ②完播率/留存 · ❌ ⑤流量来源 · ❌ ⑥转化/GMV **均不返回**——与 05 预测完全一致。
+> - **combo-deep-probe"已实测"声称证实属实**：dashboard 使用日志显示 06-13 已有真实 douyin 调用（hybrid/video_data·fetch_one_video），就是用此账号。
+> - **成本**：核验仅耗免费额度 ~$0.001，付费余额 $20 未动。
+> - ⚠️ **仍待补**：douyin（05 称播放量前台无→估算）/ tiktok / xiaohongshu 逐平台字段实测未做（需各平台真实 URL）；本次以 bilibili 确证结构边界。⚠️ **$20 付费余额来源待元东方确认（疑 06-13 已 R1 充值）**。
 
 ---
 
