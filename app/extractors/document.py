@@ -14,6 +14,8 @@ from app.extractors.base import Extractor
 class DocumentExtractor(Extractor):
     kind = "doc"
     lib = "markitdown"
+    import_name = "markitdown"
+    license = "MIT"
 
     def extract(self, url: str) -> dict[str, Any]:
         # GitHub 仓库主页 → raw README 快路径
