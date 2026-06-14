@@ -28,7 +28,8 @@ class Extractor(ABC):
     # ── 类级 manifest（供健康看板 / MetaFlow 能力过滤 / CI 合规扫）────────────
     import_name: str = ""     # 健康检查用的 import 名(留空则取 lib);多库用主库名
     license: str = ""         # 库许可证(商用合规可查·如 Apache-2.0 / MIT)
-    requires_gpu: bool = False # 是否需 GPU(audio/image 提取器→True·调度到 ufo)
+    requires_gpu: bool = False # 是否需 GPU(调度偏好)
+    prefer_remote: bool = False # 重 ML→True：probe-a(禁ML·server-roles 机6)路由到 ufo 提取服务
     version: str = "1.0.0"
     _WORKING: bool = True      # False = 停用不删代码(yt-dlp 范式·保留可 grep)
 

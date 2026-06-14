@@ -70,7 +70,15 @@ def extract_public(url: str) -> dict[str, Any]:
         from app.extractors import get_extractor
         ex = get_extractor(kind)
         if ex is not None:
-            d = ex.extract(url)
+            d = None
+            # 重 ML 提取器（prefer_remote）在 probe-a 不本地跑 → 调 ufo 提取服务
+            # （server-roles 机6 禁 ML）。env PROBE_EXTRACT_SERVICE_URL 未配则回落本地。
+            if getattr(ex, "prefer_remote", False):
+                from app.extractors.remote import call_remote, remote_enabled
+                if remote_enabled():
+                    d = call_remote(kind, url)
+            if d is None:
+                d = ex.extract(url)
             if d.get("failed"):
                 return {"kind": kind, "failed": True,
                         "extractor": ex.lib, "reason": d.get("reason", "")}

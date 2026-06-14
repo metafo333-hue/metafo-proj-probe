@@ -25,7 +25,8 @@ class ImageExtractor(Extractor):
     lib = "rapidocr-onnxruntime"
     import_name = "rapidocr_onnxruntime"
     license = "Apache-2.0"
-    requires_gpu = False  # ONNX CPU 推理
+    requires_gpu = False   # ONNX CPU 推理
+    prefer_remote = True   # ML 任务→probe-a 路由到 ufo 提取服务（server-roles 机6 禁 ML）
 
     def extract(self, url: str) -> dict[str, Any]:
         try:

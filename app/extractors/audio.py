@@ -31,7 +31,8 @@ class AudioExtractor(Extractor):
     lib = "faster-whisper"
     import_name = "faster_whisper"
     license = "MIT"
-    requires_gpu = False  # CPU(int8) 可跑·GPU 更快（调度偏好,非硬性）
+    requires_gpu = False   # CPU(int8) 可跑·GPU 更快（调度偏好,非硬性）
+    prefer_remote = True   # ML 任务→probe-a 路由到 ufo 提取服务（server-roles 机6 禁 ML）
 
     def extract(self, url: str) -> dict[str, Any]:
         try:
