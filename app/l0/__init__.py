@@ -19,6 +19,9 @@ _VIDEO = re.compile(r"(douyin\.com|iesdouyin\.com|bilibili\.com|b23\.tv|"
                     r"youtube\.com|youtu\.be|kuaishou\.com)")
 _SOCIAL = re.compile(r"(xiaohongshu\.com|xhslink\.com|weibo\.(com|cn)|m\.weibo\.cn|twitter\.com|x\.com)")
 _DOC = re.compile(r"(\.pdf($|\?)|github\.com|arxiv\.org|readthedocs)")
+# 直链公开音频/图片（非平台·非反爬）→ 走 extractors 本地 ASR/OCR（合规：等同抓公开网页文件）
+_AUDIO = re.compile(r"\.(mp3|wav|m4a|aac|flac|ogg|opus)($|\?)")
+_IMAGE = re.compile(r"\.(jpe?g|png|webp|bmp|tiff?|gif)($|\?)")
 _URL_RE = re.compile(r"https?://[^\s一-鿿]+")
 
 
@@ -35,12 +38,20 @@ def find_url(instruction: str | None, context: dict | None,
 
 
 def classify(url: str) -> str:
-    """链接归类 article/doc/video/social(纯正则 · 不爬取)。"""
+    """链接归类 article/doc/video/social/audio/image(纯正则 · 不爬取)。
+
+    平台域名优先(video/social→datasources)；其后才判直链文件后缀(audio/image/doc→extractors)，
+    确保"抖音视频链接"不会因含 .mp4 误入本地提取层(平台数据须走授权 API)。
+    """
     u = (url or "").lower()
     if _VIDEO.search(u):
         return "video"
     if _SOCIAL.search(u):
         return "social"
+    if _AUDIO.search(u):
+        return "audio"
+    if _IMAGE.search(u):
+        return "image"
     if _DOC.search(u):
         return "doc"
     return "article"
@@ -54,8 +65,8 @@ def extract_public(url: str) -> dict[str, Any]:
     """
     kind = classify(url)
 
-    # 路径①：技术合规开源库直接嵌入（公开内容）
-    if kind in ("article", "doc"):
+    # 路径①：技术合规开源库直接嵌入（公开内容 · 含直链音频/图片本地 ASR/OCR）
+    if kind in ("article", "doc", "audio", "image"):
         from app.extractors import get_extractor
         ex = get_extractor(kind)
         if ex is not None:
