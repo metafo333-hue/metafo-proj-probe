@@ -2,6 +2,7 @@
 
 > 2026-06-08 建立分类目录骨架 · 对齐镜像层 `metafoclaw-git/docs/engines/probe/` 范式（源↔镜结构一致，投影最简）
 > SSOT：本目录（`probe/docs/`）= **authoring 源** · 镜像层 = 投影（治理规则见 [records/ssot-governance](records/probe-ssot-governance-v1.md)）
+> **定位 archetype**：F 前台产品(终端用户·公网+SSO·有主页) · exposure=public-sso · public_entry=True · 真源 docs/site/engines/engines.json
 
 ---
 
@@ -10,6 +11,7 @@
 **① 数值/术语冲突先查** → [records/probe-ssot-master-reconciliation-v1.0.md](records/probe-ssot-master-reconciliation-v1.0.md)（**SSOT 事实仲裁总册** · 域17/赛道9/闸8/阶段/命名 + 阶段换算表 + 门闸对照表 + L1-L4↔四引擎映射 + 矛盾处置 + 编排接口缺口）
 **② 工程执行入口** → [probe-master-solution-v2.md](probe-master-solution-v2.md)（总册·把分散文档收敛成一份，含完整文档地图）
 **③ 愿景宪法** → [0-charter/probe-vision-from-dialogue-v1.0.md](0-charter/probe-vision-from-dialogue-v1.0.md)（愿景唯一真源）
+**④ 能做什么(对外能力面)** → [probe-capability-catalog-v1.0.md](probe-capability-catalog-v1.0.md)（能力类别清单·按判断意图重组·输入→交付映射·引用 design-v1 §5 不重定义）
 
 ---
 
