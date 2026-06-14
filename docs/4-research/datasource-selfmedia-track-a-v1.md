@@ -194,3 +194,13 @@ developers.google.com/youtube/v3 · github.com/googleapis/google-api-python-clie
 - ⚠️ pending/授权第三方：首轮 6 + 微博商业数据API + Copyleaks/Originality(AI检测付费) + 喜马拉雅
 - ❌ rejected：首轮 16 类 + 微博逆向3库 + 小宇宙逆向 + 蝉妈妈(判违法)/飞瓜灰区
 - 🟢 新形态护城河：**播客 RSS（合规等级最高 ✅✅）** + AI 内容检测（自媒体情报新维度）
+
+---
+
+## 十、关联 · 需求侧认知体系（结合桥接）
+
+本文档是自媒体 A 的**供给侧**（哪些源合规可得）。其**需求侧**（采什么信号/为什么采/爆款解码维度）来自跨引擎共享的「短视频认知体系」，两者经桥接文档显式咬合：
+
+- **桥接映射**：[short-video-playbook-bridge-v1.0.md](short-video-playbook-bridge-v1.0.md)（需求→供给七维字段映射 + SSOT 去重对账 + 引擎消费关系）
+- **需求侧认知真源**（绝对路径·主工作区工作素材）：`/Users/metafo/Downloads/metafoclaw/运营报告/short-video-playbook/short-video-master-guide.md`
+- **采集组件实现**：`/Users/metafo/Downloads/metafoclaw/combo-deep-probe/`（07 组合深探·独立 git 仓·VideoDataPacket 7维 schema 真源）
