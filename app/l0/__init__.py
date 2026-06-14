@@ -22,6 +22,7 @@ _DOC = re.compile(r"(\.pdf($|\?)|github\.com|arxiv\.org|readthedocs)")
 # 直链公开音频/图片（非平台·非反爬）→ 走 extractors 本地 ASR/OCR（合规：等同抓公开网页文件）
 _AUDIO = re.compile(r"\.(mp3|wav|m4a|aac|flac|ogg|opus)($|\?)")
 _IMAGE = re.compile(r"\.(jpe?g|png|webp|bmp|tiff?|gif)($|\?)")
+_SUBTITLE = re.compile(r"\.(srt|vtt|ass|ssa)($|\?)")
 _URL_RE = re.compile(r"https?://[^\s一-鿿]+")
 
 
@@ -48,6 +49,8 @@ def classify(url: str) -> str:
         return "video"
     if _SOCIAL.search(u):
         return "social"
+    if _SUBTITLE.search(u):
+        return "subtitle"
     if _AUDIO.search(u):
         return "audio"
     if _IMAGE.search(u):
@@ -66,7 +69,7 @@ def extract_public(url: str) -> dict[str, Any]:
     kind = classify(url)
 
     # 路径①：技术合规开源库直接嵌入（公开内容 · 含直链音频/图片本地 ASR/OCR）
-    if kind in ("article", "doc", "audio", "image"):
+    if kind in ("article", "doc", "audio", "image", "subtitle"):
         from app.extractors import get_extractor
         ex = get_extractor(kind)
         if ex is not None:
