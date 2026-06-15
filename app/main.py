@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app import config
-from app.routers import invoke, manifest, selftest, task
+from app.routers import invoke, manifest, selftest, task, selfmedia
 
 app = FastAPI(title="probe · 链接情报", version=config.CONTRACT_VERSION)
 
@@ -16,6 +16,7 @@ app.include_router(invoke.router)
 app.include_router(manifest.router)
 app.include_router(selftest.router)
 app.include_router(task.router)
+app.include_router(selfmedia.router)  # 自媒体采集面(方案B 独立验证面·断层1接线)
 
 
 @app.get("/api/v1/health")
