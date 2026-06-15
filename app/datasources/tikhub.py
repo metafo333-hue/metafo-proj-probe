@@ -58,14 +58,20 @@ class TikHubAdapter(DataSourceAdapter):
         if plat is None:
             return {}                              # 非五平台 → 本适配器不处理
         c = self._get_client()
-        try:
-            if plat == "xiaohongshu":
-                raw = c.xiaohongshu_web.get_note_info_v2(share_text=url)
-            else:  # douyin / bilibili / kuaishou / weibo → 通用解析
-                raw = c.hybrid_parsing.video_data(url=url)
-        except Exception as e:
-            return {"_error": f"{type(e).__name__}: {str(e)[:160]}"}
-        return self._normalize(raw, plat, url)
+        import time as _t
+        last_err = None
+        for _attempt in range(3):  # TikHub 建议失败重试·容间歇性取数失败(命门一健壮性)
+            try:
+                if plat == "xiaohongshu":
+                    raw = c.xiaohongshu_web.get_note_info_v2(share_text=url)
+                else:  # douyin / bilibili / kuaishou / weibo → 通用解析
+                    raw = c.hybrid_parsing.video_data(url=url)
+                return self._normalize(raw, plat, url)
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {str(e)[:160]}"
+                if _attempt < 2:
+                    _t.sleep(1.0 * (_attempt + 1))
+        return {"_error": last_err, "_retried": 3}
 
     def _normalize(self, raw: Any, plat: str, url: str) -> dict[str, Any]:
         """第三方原始数据 → 标准化元数据（原料进结论出：只取元数据，不直吐全量原文）。
