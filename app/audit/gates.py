@@ -935,7 +935,7 @@ def run_audit(
         "tier":           tier,
         "trace":          trace,
         "prompt_version": "v1.0",
-        "model_versions": {"default": "stub"},
+        "model_versions": {"default": _backend.name},
         "gate_results":   {},
     }
 
