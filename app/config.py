@@ -18,8 +18,5 @@ COOKIE_DOMAIN = ".metafoclaw.com"
 STORAGE_DIR = os.getenv("PROBE_STORAGE_DIR", "/tmp/probe-storage")
 RESULT_TTL_HOURS = int(os.getenv("PROBE_RESULT_TTL_HOURS", "24"))
 
-# PG（probe-a 本机 probe_collect · 成本明细 metering 落库 · 未配置则 metering 回落 JSONL）
-PG_DSN = os.getenv("PROBE_PG_DSN", "")
-
 # 契约
 CONTRACT_VERSION = "1"

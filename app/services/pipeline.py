@@ -152,7 +152,7 @@ def _deep(url: str, principal, task_id: str, t0: float) -> dict:
                       aigc=True, geo=True,
                       extra={"conclusion_block": {
                           "headline": report["headline"],
-                          "key_points": [report["structure"]],
+                          "key_points": [report.get("structure_formula","")],
                           "brand_anchor": "probe.metafoclaw.com"}}),
         "cost": billing.cost_deep(False) if is_stub else billing.cost_deep(principal.is_paid),
     }

@@ -1,8 +1,6 @@
-"""metering · 成本埋点（S1 施工件 · 断层#5）。
+"""metering · 成本埋点（S1 施工件）。
 
-记录每次 LLM/数据源调用的 token 消耗和估算成本。
-落库策略（守 R28：业务数据入 PG）：
-    PG 主写（probe_cost_events）→ 失败/未配置时回落 JSONL（不阻塞主流程）。
+记录每次 LLM 调用的 token 消耗和估算成本，写入本地 JSONL 日志。
 调用方：
     from app.services.metering import record, summarize
 
@@ -17,60 +15,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-# 成本日志路径（PG 不可达时的回落兜底）
+# 成本日志路径（probe-a 生产时改为 /var/log/probe/metering.jsonl）
 _LOG_PATH = Path(os.getenv("PROBE_METERING_LOG", "/tmp/probe_metering.jsonl"))
-
-# PG DSN（probe-a 本机 probe_collect · vault 注入 · 未配置则纯 JSONL）
-_PG_DSN = os.getenv("PROBE_PG_DSN", "")
-
-
-def _pg_insert(event: dict[str, Any]) -> bool:
-    """写一条 cost_event 到 probe_cost_events。成功 True，任何失败 False（调用方回落 JSONL）。"""
-    if not _PG_DSN:
-        return False
-    try:
-        import psycopg  # 延迟导入：未装/未配置不影响 JSONL 路径
-    except ImportError:
-        return False
-    try:
-        with psycopg.connect(_PG_DSN, connect_timeout=3) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO probe_cost_events
-                      (call_id, task_id, user_id, surface, source_id, kind,
-                       units, unit_cost, cost_real, cost_cny, billed, status,
-                       cache_hit, retry_seq, fallback_of, url_hash, latency_ms)
-                    VALUES
-                      (%(call_id)s, %(task_id)s, %(user_id)s, %(surface)s, %(source_id)s, %(kind)s,
-                       %(units)s, %(unit_cost)s, %(cost_real)s, %(cost_cny)s, %(billed)s, %(status)s,
-                       %(cache_hit)s, %(retry_seq)s, %(fallback_of)s, %(url_hash)s, %(latency_ms)s)
-                    """,
-                    {
-                        "call_id":     event.get("call_id", event.get("task_id", "") + ":" + event.get("operation", "")),
-                        "task_id":     event.get("task_id"),
-                        "user_id":     event.get("user_id"),
-                        "surface":     event.get("surface", "llm"),
-                        "source_id":   event.get("provider", event.get("source_id")),
-                        "kind":        event.get("operation", event.get("kind")),
-                        "units":       json.dumps({"prompt_tokens": event.get("prompt_tokens", 0),
-                                                   "completion_tokens": event.get("completion_tokens", 0)}),
-                        "unit_cost":   event.get("unit_cost", 0),
-                        "cost_real":   event.get("cost_usd", 0),
-                        "cost_cny":    event.get("cost_cny", 0),
-                        "billed":      event.get("billed", 0),
-                        "status":      event.get("status", "success"),
-                        "cache_hit":   event.get("cache_hit", False),
-                        "retry_seq":   event.get("retry_seq", 0),
-                        "fallback_of": event.get("fallback_of"),
-                        "url_hash":    event.get("url_hash"),
-                        "latency_ms":  event.get("latency_ms"),
-                    },
-                )
-            conn.commit()
-        return True
-    except Exception:
-        return False  # PG 任何异常 → 回落 JSONL，不抛、不阻塞主流程
 
 # 每千 token 成本（美分 · cc-sonnet · 2026-06 参考价）
 _PRICE_PER_1K: dict[str, dict[str, float]] = {
@@ -129,14 +75,12 @@ def record(
     if extra:
         event.update(extra)
 
-    # 落库：PG 主写（R28）→ 失败回落 JSONL（不阻塞主流程）
-    if not _pg_insert(event):
-        try:
-            _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with _LOG_PATH.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(event, ensure_ascii=False) + "\n")
-        except Exception:
-            pass  # 写日志失败不影响主流程
+    try:
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # 写日志失败不影响主流程
 
     return event
 

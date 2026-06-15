@@ -1,8 +1,8 @@
-"""OpenCorporates API · 需 OPENCORPORATES_TOKEN env · 付费层（免费层已取消 2026-06）· ODbl。
+"""OpenCorporates API · 可选 OPENCORPORATES_TOKEN env · 免费（有限额度）· ODbl。
 
 端点：
   search  https://api.opencorporates.com/v0.4/companies/search?q=...
-合规：OpenCorporates 官方 API，需付费 token（Essentials £2,250/年起）；无 token 返回 {"error":"Invalid Api Token"}。
+合规：OpenCorporates 官方 API，无 token 时有限频调用，有 token 更高限额。
 失败返回空，不抛出。
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import httpx
 META: dict[str, Any] = {
     "id": "opencorporates",
     "domain": ["D11", "D4"],
-    "access_type": "paid_with_key",
+    "access_type": "free_with_key",
     "method": ["O"],
     "kinds": ["company", "search"],
     "needs_key": True,
