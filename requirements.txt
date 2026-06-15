@@ -9,6 +9,8 @@ trafilatura>=2.0.0     # 公开网页正文（article）
 markitdown>=0.1.0      # 文档/PDF/Office→Markdown（doc）
 # 五平台数据层（TikHub 官方 SDK·商业采购·探只调接口）
 tikhub>=2.1.0          # 覆盖抖音/小红书/微博/B站/快手 · 需 PROBE_TIKHUB_KEY（R8+R1）
+# metering 成本落库（断层#5·R28 业务数据入 PG·未配 PROBE_PG_DSN 则回落 JSONL）
+psycopg[binary]>=3.1
 # 测试
 pytest>=8.0
 httpx>=0.27

@@ -213,15 +213,15 @@ sources:
     module: app.datasources.public.opencorporates
     supported_kinds: [company, search]
     domain: [D11]                         # v4 归类修正:企业工商归D11(原误标D4)
-    access_type: free_with_key
+    access_type: paid_with_key            # 免费层 2026-06 取消 · 仅付费
     method: [O]
     authority_score: 8
     freshness: weekly
-    cost: "免费（有限额度）· 有 OPENCORPORATES_TOKEN 提升限额"
-    license: "ODbl (Open Database License)"
+    cost: "付费 · Essentials £2,250/年起（免费层已于 2026-06 取消）· 商用主体不可白嫖（免费档仅限记者/NGO/公益学者/个人）"
+    license: "ODbl（数据源自公开注册处 · 可直接接上游官方源绕过本聚合层）"
     needs_key: true
     key_env: OPENCORPORATES_TOKEN
-    status: live                          # 无 token 低限额可用；有 token 更高配额
+    status: rejected                      # 2026-06-13 退役 · 免费替代组合:edgar(美上市·公有领域)+companies_house(英全量·OGL可商用)+gleif(全球LEI+母子公司Level2·CC0)+wikidata(通用实体·CC0) · 仅"非英美·非上市·无LEI中小企业全球统一注册"缺口残留(需逐国官方open registry或针对性付费·不必买全量订阅) · 依据 deep-research 报告(2026-06-13)
 
   virustotal:
     vendor: VirusTotal (Google)
@@ -268,6 +268,68 @@ sources:
     cost: "免费（明示 free to use for any purpose）"
     license: "公开数据 · 数据来源 ECB（欧洲中央银行）"
     status: live                          # 无需 key
+
+  wits:
+    vendor: World Bank WITS (World Integrated Trade Solution)
+    api_base: https://wits.worldbank.org/API/V1/SDMX/V21/datasource/tradestats-tariff
+    module: app.datasources.public.wits
+    supported_kinds: [tariff, trade]
+    domain: [D14, D11]
+    access_type: free
+    method: [O]
+    authority_score: 9
+    freshness: weekly
+    cost: "免费（keyless · 整合 UNCTAD TRAINS 关税 + UN Comtrade 贸易流）"
+    license: "CC BY 4.0（World Bank Open License）"
+    caveat: "WITS 服务较慢 timeout=60s；返回 SDMX-JSON · reporter/partner 用 ISO3 小写"
+    status: live                          # 无需 key · Mac 实测 chn/usa 关税 29 品类组 200 ✅（2026-06-13）· probe 首个关税数据源
+
+  un_comtrade:
+    vendor: UN Comtrade (United Nations Statistics Division)
+    api_base: https://comtradeapi.un.org/public/v1/preview
+    module: app.datasources.public.un_comtrade
+    supported_kinds: [trade, customs]
+    domain: [D11, D14]
+    access_type: free
+    method: [O]
+    authority_score: 10
+    freshness: weekly
+    cost: "免费（keyless preview · 单次≤500条；超出需注册 subscription key 升 P1）"
+    license: "CC BY 4.0（UN Comtrade 官方开放数据）"
+    caveat: "reporter/partner 用 UN M49 数字码（156=中国 842=美国 0=世界）· preview partnerDesc 为 null 仅返码"
+    status: live                          # 无需 key · Mac 实测 China 2022 出口 $3.59T + USA 进口 224 伙伴 200 ✅（2026-06-13）· 贸易流第二独立源（配 wits 满足闸2）
+
+  shodan_internetdb:
+    vendor: Shodan InternetDB (free tier)
+    api_base: https://internetdb.shodan.io
+    module: app.datasources.public.shodan_internetdb
+    supported_kinds: [asset, exposure, security]
+    domain: [D8, D12]
+    access_type: free
+    method: [O]
+    authority_score: 8
+    freshness: weekly
+    cost: "免费（被动暴露资产快查 · 深扫需 Shodan 完整版付费 P3）"
+    license: "Shodan 免费端点 · 仅返被动扫描公开暴露信息"
+    caveat: "仅 IPv4（域名经 lookup_domain 先 DNS 解析）· 未收录 IP 返空"
+    status: live                          # 无需 key · Mac 实测 1.1.1.1→8 暴露端口 200 ✅（2026-06-13）· 法风控资产侦察第N源
+
+  companies_house:
+    vendor: UK Companies House (official registry)
+    api_base: https://api.company-information.service.gov.uk
+    module: app.datasources.public.companies_house
+    supported_kinds: [company, officers, registry]
+    domain: [D11]
+    access_type: free_with_key
+    method: [O]
+    authority_score: 9
+    freshness: realtime
+    cost: "免费（注册免费 key · app probe-intel · key 在 vault probe.env）"
+    license: "Open Government Licence v3.0（官方允许商用）"
+    caveat: "HTTP Basic 认证 key 作用户名密码空 · 未配 COMPANIES_HOUSE_API_KEY 返空"
+    needs_key: true
+    key_env: COMPANIES_HOUSE_API_KEY
+    status: live                          # key 已激活入 vault · Mac 实测 Monzo Bank 搜索/档案/董事 200 ✅（2026-06-13）· 海外企业第二独立源（配 gleif 满足闸2）
 
   defillama:
     vendor: DeFi Llama
@@ -406,16 +468,16 @@ sources:
     vendor: GLEIF (Global Legal Entity Identifier Foundation)
     api_base: https://api.gleif.org/api/v1
     module: app.datasources.public.gleif
-    supported_kinds: [company, lei]
+    supported_kinds: [company, lei, relationship, parent, children]
     domain: [D11]
     access_type: free
     method: [O]
     authority_score: 10
     freshness: daily
     cost: "免费（G20 授权公开基础设施）"
-    license: "CC0 / 公开基础数据（GLEIF 官方 API）"
-    caveat: "JSON:API 格式；法人名搜索含匹配；LEI 为 20 位标准编码"
-    status: live                          # 无需 key
+    license: "CC0 / 公开基础数据（GLEIF 官方 API · 可商用）"
+    caveat: "JSON:API 格式；法人名搜索含匹配；LEI 为 20 位标准编码。母子公司关系(Level 2)经 get_relationships(lei) 取直接/最终母公司+直接子公司·404=无关系报告(合法空)·免费替代 OpenCorporates 公司层级能力(覆盖会计合并口径·母公司须持LEI且已报关系)"
+    status: live                          # 无需 key · 母子公司关系 Mac 实测 Apple 子公司链 200 ✅（2026-06-13）
 
   github_intel_rss:
     vendor: mnfst/awesome-free-llm-apis (CC0) + mlcontests.github.io (GPL-3.0)

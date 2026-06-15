@@ -921,7 +921,9 @@ def run_audit(
     if tier not in TIER_GATES:
         tier = "free"
 
-    _backend = backend or StubBackend()
+    # S1·断层#1 收口：默认走 get_backend()——有 PROBE_LITELLM_KEY 即真模型,
+    # 无 key 自动回落 stub;LiteLLMBackend 单次调用失败也降级中性值,不抛异常
+    _backend = backend or get_backend()
     active_gate_ids = TIER_GATES[tier]
 
     trace = AuditTrace(job_id=job_id)
@@ -933,7 +935,7 @@ def run_audit(
         "tier":           tier,
         "trace":          trace,
         "prompt_version": "v1.0",
-        "model_versions": {"default": "stub"},
+        "model_versions": {"default": _backend.name},
         "gate_results":   {},
     }
 

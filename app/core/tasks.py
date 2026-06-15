@@ -6,17 +6,16 @@ MVP：进程内 task store（dict）+ FastAPI BackgroundTasks。
 """
 from __future__ import annotations
 
-import time
+import secrets
 from typing import Any, Callable
 
-# MVP 进程内存储（单 worker 限定；生产换 Redis）
+# MVP 进程内存储（单 worker 限定·systemd --workers 1；生产换 Redis）
 _TASKS: dict[str, dict[str, Any]] = {}
-_SEQ = [0]
 
 
 def new_task() -> str:
-    _SEQ[0] += 1
-    tid = f"t_{int(time.time())}_{_SEQ[0]}"
+    # 不可猜 token（闭 IDOR：task 轮询对匿名公开·task_id 不可枚举防越权读他人结果）
+    tid = "t_" + secrets.token_urlsafe(24)
     _TASKS[tid] = {
         "status": "pending", "progress": 0,
         "deliverable": None, "meta": None, "cost": None, "error": None,

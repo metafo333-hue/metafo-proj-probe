@@ -23,7 +23,7 @@ _PUBLIC_DOMAINS: dict[str, str] = {
     "github.com":         "github_src",
     "edgar.sec.gov":      "edgar",
     "efts.sec.gov":       "edgar",
-    "opencorporates.com": "opencorporates",
+    # opencorporates 已退役（2026-06-13 · 付费层£2,250/年·免费层取消）→ 免费替代 edgar/companies_house/gleif/wikidata
     "virustotal.com":     "virustotal",
     "osv.dev":            "osv",
 }
@@ -164,9 +164,6 @@ def _dispatch(mod: Any, src_id: str, url: str) -> Any:
             return None
         result = mod.company_filings(cik)
         return result
-
-    if src_id == "opencorporates":
-        return mod.get_company(url)
 
     if src_id == "virustotal":
         return mod.lookup_url(url)

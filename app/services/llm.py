@@ -19,6 +19,13 @@ _DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 _QWEN_KEY     = os.getenv("BAILIAN_API_KEY", "")
 
 _PROVIDERS = [
+    # 硅基流动优先(DeepSeek-V3·低成本+代金券·元东方 2026-06-15 决策)
+    {
+        "name": "siliconflow",
+        "base": lambda: "https://api.siliconflow.cn/v1",
+        "model": "deepseek-ai/DeepSeek-V3",
+        "key": lambda: os.getenv("SILICONFLOW_API_KEY", ""),
+    },
     # LiteLLM proxy 优先（ufo2 Tailscale 内网 · cc-sonnet）
     {
         "name": "litellm",
