@@ -1,4 +1,4 @@
-"""account_report 确定性报告生成器 · 离线 · @芊妤真数据 fixture · $0 · 零网络。"""
+"""account_report v2 确定性报告生成器 · 离线 · @芊妤真数据 fixture · $0 · 零网络。"""
 import unittest
 
 from app.services.account_report import build_report
@@ -15,28 +15,31 @@ AUDIT = {"source_reliability": "C", "confidence_level": "Low", "evidence_strengt
 class TestAccountReport(unittest.TestCase):
     def test_has_all_sections(self):
         r = build_report(QIANYU_V, QIANYU_A, AUDIT)
-        for must in ("综合分析报告", "一句话结论", "满足你问的", "高于你期望", "创作处方", "数据可信度"):
+        for must in ("账号诊断报告", "一句话先说重点", "你现在是什么情况",
+                     "最该解决", "优势", "具体怎么做", "接下来会怎样", "可信"):
             self.assertIn(must, r, f"报告缺段:{must}")
 
-    def test_multidim_reference(self):
+    def test_plain_language_no_raw_jargon(self):
+        # 说人话:不能直接甩"垂直度0.5/爆款比"等术语给用户看
         r = build_report(QIANYU_V, QIANYU_A, AUDIT)
-        self.assertIn("0.73", r)        # 8/(10+1)≈0.73 倍
-        self.assertIn("账号常态", r)
-        self.assertIn("52", r)          # 自己的爆款样本
+        self.assertNotIn("垂直度 0.5", r)   # 已翻译成"太杂"
+        self.assertIn("太杂", r)
+        self.assertIn("和你平时差不多", r)  # 8赞 vs 均值10 → 大白话
+
+    def test_uses_real_specifics(self):
+        # 价值感:引用真实标签/数字,像真看了她的号
+        r = build_report(QIANYU_V, QIANYU_A, AUDIT)
+        self.assertIn("女性智慧", r)        # 真实标签
+        self.assertIn("52", r)              # 自己的爆款样本
 
     def test_anti_copy_value(self):
-        # 价值对齐北极星:处方是"放大你的真东西",不是教抄
-        self.assertIn("不抄别人", build_report(QIANYU_V, QIANYU_A, AUDIT))
+        self.assertIn("比抄别人靠谱", build_report(QIANYU_V, QIANYU_A, AUDIT))
 
-    def test_honesty_blackbox_and_singlesource(self):
+    def test_honesty(self):
         r = build_report(QIANYU_V, QIANYU_A, AUDIT)
-        self.assertIn("不编", r)         # 黑盒维诚实标(不冒充)
-        self.assertIn("单一来源", r)     # 单源诚实
-
-    def test_satisfy_plus_exceed(self):
-        r = build_report(QIANYU_V, QIANYU_A, AUDIT)
-        self.assertIn("满足", r)
-        self.assertIn("未来可能发生", r)  # 高于期望层
+        self.assertIn("绝不瞎编", r)
+        self.assertIn("只看了你一个号", r)
+        self.assertIn("真实公开数据", r)
 
 
 if __name__ == "__main__":
