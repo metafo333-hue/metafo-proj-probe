@@ -8,7 +8,7 @@
 
 用法:
   函数:  from scripts.report_to_docx import export_docx; export_docx(result, "out.docx")
-  CLI :  python scripts/report_to_docx.py "<抖音链接>" [out.docx]   # 会跑采集(调TikHub付费)
+  CLI :  python scripts/report_to_docx.py "<抖音链接>" [out.docx]   # 会跑采集(调授权数据接口·计费)
 """
 from __future__ import annotations
 
@@ -135,6 +135,104 @@ def _account_rows(a: dict):
     return rows
 
 
+def _make_charts(result: dict, tmpdir: str) -> list:
+    """动态图表:根据实际数据选择画哪些(数据不足的图不画·诚实不硬凑)。返回[(标题,png路径)]。
+      图1 这条vs账号水平(有avg+like) · 图2 演化趋势(works≥4) · 图3 高赞vs低赞互动(works≥6)。"""
+    import os
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager as fm
+    for fp in ("/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/STHeiti Medium.ttc"):
+        if os.path.exists(fp):
+            plt.rcParams["font.sans-serif"] = [fm.FontProperties(fname=fp).get_name()]
+            break
+    plt.rcParams["axes.unicode_minus"] = False
+    B, O, L = "#1E3A8A", "#FF7A1A", "#93C5FD"
+    charts = []
+    v, a = result.get("video", {}) or {}, result.get("account", {}) or {}
+    works = [w for w in (result.get("works") or []) if isinstance(w, dict)]
+
+    like, avg, mx = v.get("like"), a.get("avg_like"), a.get("max_like")
+    if avg and like is not None:
+        fig, ax = plt.subplots(figsize=(5.4, 1.9))
+        vals = [like or 0, avg or 0, mx or 0]
+        bars = ax.barh(["这条视频", "账号平均", "账号最高"], vals, color=[O, B, L])
+        ax.invert_yaxis()
+        for b, val in zip(bars, vals):
+            ax.text(b.get_width(), b.get_y() + b.get_height() / 2, f" {val}", va="center", fontsize=9)
+        ax.set_title("这条视频在账号里的位置(点赞)", fontsize=11, color=B)
+        ax.spines[["top", "right"]].set_visible(False)
+        p = os.path.join(tmpdir, "c1.png"); fig.savefig(p, dpi=130, bbox_inches="tight"); plt.close(fig)
+        charts.append(("这条 vs 账号水平", p))
+
+    timed = sorted([w for w in works if w.get("create_time")], key=lambda w: w["create_time"])
+    if len(timed) >= 4:
+        ys = [w.get("like", 0) or 0 for w in timed]
+        fig, ax = plt.subplots(figsize=(5.4, 2.1))
+        ax.plot(range(1, len(ys) + 1), ys, marker="o", color=B, linewidth=2)
+        ax.fill_between(range(1, len(ys) + 1), ys, color=B, alpha=0.08)
+        ax.set_title("作品点赞趋势(按发布先后·早→近)", fontsize=11, color=B)
+        ax.spines[["top", "right"]].set_visible(False)
+        p = os.path.join(tmpdir, "c2.png"); fig.savefig(p, dpi=130, bbox_inches="tight"); plt.close(fig)
+        charts.append(("L2 演化趋势", p))
+
+    if len(works) >= 6:
+        sw = sorted(works, key=lambda w: w.get("like", 0) or 0, reverse=True)
+        seg = max(1, len(sw) // 3)
+        top, bot = sw[:seg], sw[-seg:]
+        def m(ws, k):
+            return sum((w.get(k, 0) or 0) for w in ws) / len(ws) if ws else 0
+        cats = ["点赞", "评论", "收藏", "转发"]
+        tv = [m(top, "like"), m(top, "comment"), m(top, "collect"), m(top, "share")]
+        bv = [m(bot, "like"), m(bot, "comment"), m(bot, "collect"), m(bot, "share")]
+        fig, ax = plt.subplots(figsize=(5.4, 2.1))
+        x = range(len(cats)); ww = 0.38
+        ax.bar([i - ww / 2 for i in x], [t + 0.1 for t in tv], ww, label="高赞作品", color=O)
+        ax.bar([i + ww / 2 for i in x], [b + 0.1 for b in bv], ww, label="低赞作品", color=L)
+        ax.set_xticks(list(x)); ax.set_xticklabels(cats, fontsize=9)
+        ax.set_yscale("log")
+        ax.set_title("高赞 vs 低赞 作品的互动结构", fontsize=11, color=B)
+        ax.legend(fontsize=8); ax.spines[["top", "right"]].set_visible(False)
+        p = os.path.join(tmpdir, "c3.png"); fig.savefig(p, dpi=130, bbox_inches="tight"); plt.close(fig)
+        charts.append(("高赞 vs 低赞 互动", p))
+
+    return charts
+
+
+def validate_report(result: dict, md: str = None) -> dict:
+    """Word 报告动态验收(根据实际情况判断该有什么·非死 checklist)。
+    返回 {pass, items:[(项, 达标)], gaps:[...]}。条件项仅在适用时才纳入验收。"""
+    md = md if md is not None else result.get("report_md", "")
+    v, a = result.get("video", {}) or {}, result.get("account", {}) or {}
+    works = [w for w in (result.get("works") or []) if isinstance(w, dict)]
+    sig = a.get("signature", "") or ""
+    blob = sig + " ".join(a.get("hashtags") or [])
+    is_biz = any(k in blob for k in ("供货", "直供", "源头", "工厂", "厂", "批发", "代工", "OEM"))
+    has_claims = any(k in sig for k in ("年", "非遗", "传承", "龙头", "认证", "省级", "专利", "获奖"))
+
+    items = []
+    def chk(name, applicable, ok):
+        if applicable:
+            items.append((name, bool(ok)))
+
+    # 固定铁律(总适用)
+    chk("诚实·黑盒数据标注「拿不到」", True, ("拿不到" in md or "未公开" in md))
+    chk("涉密·不暴露具体数据源", True, ("tikhub" not in md.lower()))
+    chk("真实性·标注公开真值", True, ("真实" in md or "公开真" in md))
+    # 条件项(根据实际情况)
+    chk("L2 多条规律(有≥4条作品时)", len(works) >= 4, "藏着的规律" in md)
+    chk("L2 诚实标注(没拿到逐条时)", len(works) < 4, "没拿到" in md)
+    chk("L3 账号判断·生命周期", a.get("follower") is not None, "整体判断" in md)
+    chk("商业号叙事(B2B不套生活记录)", is_biz, ("生活记录" not in md and "人生纠结" not in md))
+    chk("②事实核查(有资质声称时)", has_claims, "晒证据" in md)
+    chk("⑥合规提示(有资质声称时)", has_claims, ("虚假宣传" in md or "版权" in md))
+    chk("无裸数字(关键数字带对比坐标)", v.get("like") is not None, ("平时" in md or "对比" in md or "vs" in md))
+
+    gaps = [n for n, ok in items if not ok]
+    return {"pass": not gaps, "items": items, "gaps": gaps}
+
+
 def export_docx(result: dict, out_path: str, *, date: str = "") -> str:
     """account_chain 结果 {ok, report_md, video, account, audit} → 专业 Word。"""
     if not result.get("ok"):
@@ -167,15 +265,30 @@ def export_docx(result: dict, out_path: str, *, date: str = "") -> str:
     _cn(sr); sr.italic = True; sr.font.size = Pt(11); sr.font.color.rgb = GREY
     _hrule(doc)
     meta = doc.add_paragraph()
-    for label, val in [("分析对象", f"@{nick}"), ("数据来源", "TikHub 授权采集（抖音公开数据）"),
+    for label, val in [("分析对象", f"@{nick}"), ("数据来源", "合法授权渠道 · 平台公开数据"),
                        ("分析引擎", "probe account_chain"), ("生成日期", date or "—")]:
         rl = meta.add_run(f"{label}："); _cn(rl); rl.bold = True; rl.font.size = Pt(10); rl.font.color.rgb = INK2
         rv = meta.add_run(f"{val}    "); _cn(rv); rv.font.size = Pt(10)
 
     # 一、采集数据
-    _heading(doc, "一、采集数据概览（TikHub 真值 · 无一编造）", BLUE, 15)
+    _heading(doc, "一、采集数据概览（平台公开真值 · 无一编造）", BLUE, 15)
     _heading(doc, "目标视频", INK, 12.5, 2); _table(doc, _video_rows(video))
     _heading(doc, "账号画像（含兄弟视频聚合）", INK, 12.5, 2); _table(doc, _account_rows(account))
+
+    # 动态图表(根据实际数据选择画哪些·数据不足不插·诚实不硬凑)
+    import tempfile
+    _charts = []
+    try:
+        _charts = _make_charts(result, tempfile.mkdtemp(prefix="probe_chart_"))
+    except Exception:
+        _charts = []   # 图表失败不阻塞报告生成(降级·正文照出)
+    if _charts:
+        _heading(doc, "可视化（按数据自动生成）", INK, 12.5, 2)
+        for ctitle, cpath in _charts:
+            pp = doc.add_paragraph(); pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            pp.add_run().add_picture(cpath, width=Cm(13.5))
+            cap = doc.add_paragraph(); cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            rc = cap.add_run(ctitle); _cn(rc); rc.font.size = Pt(9); rc.italic = True; rc.font.color.rgb = GREY
 
     # 二、诊断报告
     _heading(doc, "二、诊断报告（说人话 · 照着做）", BLUE, 15)
@@ -184,13 +297,13 @@ def export_docx(result: dict, out_path: str, *, date: str = "") -> str:
     # 三、声明
     _heading(doc, "三、数据来源与可信度声明", BLUE, 15)
     q = doc.add_paragraph(); _shade(q, "EFF6FF"); q.paragraph_format.left_indent = Cm(0.4)
-    _runs(q, "本报告由 probe 引擎 account_chain 链路自动生成：抖音链接 → TikHub 授权采集 → L1单条/L2多条找规律/L3账号判断 → ②事实核查+⑥合规 → 八闸可信度担保 → 确定性规则生成（零 LLM 编造）。")
+    _runs(q, "本报告由 probe 引擎自动生成：合法授权渠道采集平台公开数据 → L1单条 / L2多条找规律 / L3账号判断 → ②事实核查 + ⑥合规 → 可信度担保 → 确定性规则生成（零 LLM 编造）。")
     sr_, cl_, es_ = audit.get("source_reliability", "?"), audit.get("confidence_level", "?"), audit.get("evidence_strength", "?")
     for line in [
-        "**数字真实性**：粉丝/点赞/作品/标签/规律全部为 TikHub 采集的抖音公开真值，未经编造或估算。",
-        f"**可信度档位**：source_reliability={sr_} · confidence={cl_} · evidence={es_}。",
-        "**样本边界**：单账号、单数据源，未跨竞品交叉验证；完播率/流量来源/转化等黑盒数据不可得，诚实标注「拿不到」。",
-        "**合规**：只走 TikHub 授权源，不自建破签名爬虫（probe 数据来源铁律）。",
+        "**数字真实性**：粉丝/点赞/作品/标签/规律全部为平台**公开真值**，经合法授权渠道采集，未经编造或估算。",
+        f"**可信度档位**：来源可靠度={sr_} · 置信度={cl_} · 证据强度={es_}。",
+        "**安全与合法机制**：仅通过**合法授权的数据接口**采集公开数据，**不自建、不破解、不绕过平台防护**；采集与处理符合平台规则及数据安全规范，敏感字段脱敏处理。",
+        "**样本边界**：单账号、单渠道，未跨源交叉验证；完播率/流量来源/转化等平台未公开数据不可得，诚实标注「拿不到」而非编造。",
     ]:
         _runs(doc.add_paragraph(style="List Bullet"), line)
 

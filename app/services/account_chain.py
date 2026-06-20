@@ -129,5 +129,8 @@ def run_from_video_url(url: str, tikhub_key: str | None = None) -> dict[str, Any
     }
 
     # 4. 确定性报告(传逐条兄弟视频 works_sample → 报告做 L2 多条找规律)
-    report_md = build_report(video, account, audit, works=rd.get("works_sample"))
-    return {"ok": True, "report_md": report_md, "video": video, "account": account, "audit": audit}
+    works = rd.get("works_sample")
+    report_md = build_report(video, account, audit, works=works)
+    # works 一并返回 → 供 Word 导出做动态图表(L2 趋势/互动对比)
+    return {"ok": True, "report_md": report_md, "video": video,
+            "account": account, "audit": audit, "works": works}
