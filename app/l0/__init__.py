@@ -18,6 +18,7 @@ from app.datasources import registry
 _VIDEO = re.compile(r"(douyin\.com|iesdouyin\.com|bilibili\.com|b23\.tv|"
                     r"youtube\.com|youtu\.be|kuaishou\.com)")
 _SOCIAL = re.compile(r"(xiaohongshu\.com|xhslink\.com|weibo\.(com|cn)|m\.weibo\.cn|twitter\.com|x\.com)")
+_WECHAT_MP = re.compile(r"(mp\.weixin\.qq\.com|weixin\.qq\.com/s/)")
 _DOC = re.compile(r"(\.pdf($|\?)|github\.com|arxiv\.org|readthedocs)")
 # 直链公开音频/图片（非平台·非反爬）→ 走 extractors 本地 ASR/OCR（合规：等同抓公开网页文件）
 _AUDIO = re.compile(r"\.(mp3|wav|m4a|aac|flac|ogg|opus)($|\?)")
@@ -49,6 +50,8 @@ def classify(url: str) -> str:
         return "video"
     if _SOCIAL.search(u):
         return "social"
+    if _WECHAT_MP.search(u):
+        return "wechat_article"   # 公众号文章 → JZL 取数（微信鉴权拦外部爬取·不走 trafilatura）
     if _SUBTITLE.search(u):
         return "subtitle"
     if _AUDIO.search(u):
@@ -61,12 +64,38 @@ def classify(url: str) -> str:
 
 
 def extract_public(url: str) -> dict[str, Any]:
-    """A 线取数 · 分两条合规路径：
+    """A 线取数 · 分三条合规路径：
 
     - article/doc（公开网页/文档）→ extractors 技术合规开源库直接嵌入（铁律③），真出数据；
+    - wechat_article（公众号文章）→ JZL 商业 API（微信需登录·trafilatura 必失败·只走 JZL）；
     - video/social（五平台）→ datasources 第三方授权 API；无已核验源 → needs_authorized_api 占位。
     """
     kind = classify(url)
+
+    # 路径①-B：微信公众号文章 → JZL 商业 API（必须先于 extractors 判断）
+    if kind == "wechat_article":
+        adapter = registry.get_adapter(kind)
+        if adapter is None:
+            return {"kind": kind, "needs_authorized_api": True,
+                    "note": "微信公众号文章取数须 JZL key（PROBE_JZL_KEY）"}
+        data = adapter.fetch_metadata(url, kind)
+        if data.get("_needs_key"):
+            return {"kind": kind, "needs_authorized_api": True, "adapter": adapter.source_id,
+                    "note": "已接 jzl_wechat_channels · 待配 PROBE_JZL_KEY"}
+        if data.get("_error"):
+            return {"kind": kind, "failed": True,
+                    "extractor": adapter.source_id, "reason": data["_error"]}
+        if not data or not data.get("text"):
+            return {"kind": kind, "failed": True, "extractor": adapter.source_id}
+        return {
+            "kind": kind,
+            "title": data.get("title", ""),
+            "text": data.get("text", ""),
+            "extractor": adapter.source_id,
+            "sources": [url],
+            "metadata": data.get("metadata"),
+            "cost_hint": adapter.cost_hint(),
+        }
 
     # 路径①：技术合规开源库直接嵌入（公开内容 · 含直链音频/图片本地 ASR/OCR）
     if kind in ("article", "doc", "audio", "image", "subtitle"):
@@ -167,9 +196,9 @@ def deep_probe(url: str, public: dict) -> dict[str, Any]:
         # D1 真相核查
         "fact_check": d1,
         "fact_sources": [{"title": r.get("title"), "url": r.get("url")} for r in fact_results[:3]],
-        # D5/D6 占位（需 TikHub key）
+        # D5/D6：抖音等五平台占位；微信公众号已有 JZL 数据
         "competitors": "竞品横评（待 TikHub key 接入五平台数据）",
-        "publisher": "发布者画像（待 TikHub key 接入账号数据）",
+        "publisher": public.get("metadata", {}) or "发布者画像（待平台 API key 接入）",
         "_wordcount": wordcount,
     }
 

@@ -92,6 +92,43 @@ sources:
     compliance_debt: true                 # v4 元东方知情接受:图文(小红书/知乎/公众号)+B站覆盖本质逆向web封装·无官方替代下暂留·海外平台已转官方源
     gate19_note: "官方数据授权维度不适用（商业采购模式）；非已判违法 · 有公司主体 · 有公开 SDK"
 
+  jzl_wechat_channels:
+    vendor: "极致了数据(jzl.com / dajiala.com)"
+    api_base: https://www.dajiala.com/fbmain/monitor/v3
+    module: app.datasources.jzl_channels
+    supported_kinds: [video, social, article]
+    methods: |
+      Phase 1 已集成:
+        wxvideo(v2_name)       视频号视频列表  ¥0.2/页(15条)    multipart/form-data
+        wx_account/search      公众号账号搜索  ¥0.2/账号         JSON body
+        principal_info(ghid)   公众号主体信息  FREE               JSON body
+        history_by_ghid(ghid)  文章历史+阅读量 ¥0.2/页(10篇)    内嵌 Read/Zan
+        read_zan(url)          实时阅读量      ¥0.04/篇          GET 查询参数
+        article_detail(url)    文章全文        ¥0.045/篇         JSON body
+        article_comment2(url)  文章热评+地理   ¥0.06/篇          JSON body
+        get_remain_money       余额查询        FREE               JSON body
+    domain: [D1, D2, D5, D6, D7]
+    access_type: paid_with_key
+    method: [O]
+    authority_score: 6
+    freshness: realtime
+    cost: |
+      wx_account/search: ¥0.2/账号; principal_info: FREE; history_by_ghid: ¥0.2/页;
+      read_zan: ¥0.04/篇; article_detail: ¥0.045/篇; article_comment2: ¥0.06/篇;
+      wxvideo: ¥0.2/页15条; 单账号完整画像估算 ≈ ¥0.4-0.8
+    license: "商业授权 · 正规数据平台 · probe 只调公开接口"
+    boundary: "只调公开元数据·不调违法接口·微信公众号+视频号公开信息"
+    caveat: |
+      ❌ play_count(播放量) — wxvideo 端点永久缺口(平台侧不公开)
+      ❌ 视频号粉丝数 — wxvideo 端点未返回
+      ✅ 公众号粉丝数 — wx_account/search.fans 字段已覆盖
+      ⚠️ v2_name 发现 — wx_account/search 返回 ghid 非 v2_name；VideoFinderInfo 实测空
+    caveat2: "v2_name(视频号)发现依赖人工映射表或待测客服确认；公众号账号发现已通过 wx_account/search 解决"
+    env_key: PROBE_JZL_KEY
+    status: active        # 2026-06-20 PROBE_JZL_KEY 已注入 probe-a /opt/probe-app/env/.env · probe.service 已重启
+    verified: "2026-06-20 · 新华社账号实测 · feeds_count=46810 · 15条视频·字段全覆盖 · contact完整字段已确认"
+    gate19_note: "商业采购模式；已实测数据真实；合规边界=只采公开视频元数据"
+
   # ── Wave 1 · 免费官方源（live） ────────────────────────────────────────
   wikipedia:
     vendor: Wikimedia Foundation
