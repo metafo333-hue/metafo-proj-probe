@@ -117,7 +117,7 @@ def _analyze_works(works: list, avg_like: int) -> dict | None:
 
 def build_report(video: dict[str, Any], account: dict[str, Any],
                  audit: dict[str, Any], works: list | None = None,
-                 av_md: str | None = None) -> str:
+                 av_md: str | None = None, compare_md: str | None = None) -> str:
     nick = account.get("nickname") or "你"
     fol = account.get("follower") or 0
     avg = account.get("avg_like") or 0
@@ -314,6 +314,11 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
         P("- 变现走「精准」不是「泛流量」:1000 个对的客户 > 10 万泛粉,把内容当获客工具、盯询单转化。")
     P("")
     sec += 1
+
+    # —— L4 竞品圈对比(跨账号·有竞品数据则插·三圈参照的竞品圈) ——
+    if compare_md:
+        P(compare_md)
+        P("")
 
     # —— ②核查 + ⑥合规(说法核实 / 合规提示·有声称时出) ——
     claims = [k for k in ("年", "非遗", "传承", "龙头", "认证", "省级", "国家级", "专利", "获奖", "冠军", "第一", "唯一") if k in sig]

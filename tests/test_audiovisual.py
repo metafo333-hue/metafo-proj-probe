@@ -2,12 +2,14 @@
 
 只测确定性逻辑:JSON 解析容错 / 低 conf 过滤 / 渲染说人话+诚实声明。
 真实调用(analyze_audiovisual 调 Qwen3-Omni)走手测 `python -m app.services.audiovisual <url>`。
+analyze_by_layers 真实调用同理走手测:SILICONFLOW_API_KEY=xxx python -m app.services.audiovisual <url> layers
 """
 import unittest
 
 from app.services.audiovisual import (
     _parse_six_layer, _fld, render_av_section, LAYERS,
     fetch_video_as_data_uri, analyze_douyin_video,
+    _parse_reasoning_layer, _merge_perception_reasoning, analyze_by_layers,
 )
 
 # —— fixture: 一份合法六层(mov_bbb 实测形态) ——
@@ -101,6 +103,106 @@ class TestAudiovisual(unittest.TestCase):
     def test_layers_constant(self):
         for k in ("auditory", "visual", "text", "narrative", "persona", "psychology"):
             self.assertIn(k, LAYERS)
+
+
+
+# ──────────────────────────────────────────────────────────────
+# 生产形态 analyze_by_layers 的离线单元测试
+# ──────────────────────────────────────────────────────────────
+
+# 感知层 fixture（Qwen3-Omni 产出·只含 auditory/visual/text/evidence_ts）
+PERCEPTION_SIX = {
+    "auditory": SIX["auditory"],
+    "visual": SIX["visual"],
+    "text": SIX["text"],
+    "evidence_ts": SIX["evidence_ts"],
+}
+
+# 推理层 fixture（DeepSeek-V3 产出·只含 narrative/persona/psychology）
+REASONING_SIX = {
+    "narrative": SIX["narrative"],
+    "persona": SIX["persona"],
+    "psychology": SIX["psychology"],
+}
+
+import json as _json
+
+
+class TestAnalyzeByLayers(unittest.TestCase):
+
+    # ── _parse_reasoning_layer 解析容错 ──
+    def test_parse_reasoning_plain_json(self):
+        out = _parse_reasoning_layer(_json.dumps(REASONING_SIX))
+        self.assertIsNotNone(out)
+        self.assertIn("narrative", out)
+
+    def test_parse_reasoning_fenced(self):
+        wrapped = "分析完毕:\n```json\n" + _json.dumps(REASONING_SIX) + "\n```"
+        out = _parse_reasoning_layer(wrapped)
+        self.assertIsNotNone(out)
+        self.assertIn("persona", out)
+
+    def test_parse_reasoning_garbage_returns_none(self):
+        self.assertIsNone(_parse_reasoning_layer("无法分析"))
+        self.assertIsNone(_parse_reasoning_layer(""))
+        self.assertIsNone(_parse_reasoning_layer(None))
+
+    def test_parse_reasoning_missing_all_three_rejected(self):
+        # 缺 narrative/persona/psychology 三层 = 无效
+        self.assertIsNone(_parse_reasoning_layer('{"auditory":{"bgm_style":{"v":"x","conf":1}}}'))
+
+    def test_parse_reasoning_partial_accepted(self):
+        # 只有一层也接受（宽容·推理层可能部分输出）
+        partial = {"narrative": REASONING_SIX["narrative"]}
+        out = _parse_reasoning_layer(_json.dumps(partial))
+        self.assertIsNotNone(out)
+
+    # ── _merge_perception_reasoning 合并 ──
+    def test_merge_produces_all_six_keys(self):
+        merged = _merge_perception_reasoning(PERCEPTION_SIX, REASONING_SIX)
+        for k in LAYERS:
+            self.assertIn(k, merged)
+        self.assertIn("evidence_ts", merged)
+
+    def test_merge_preserves_auditory(self):
+        merged = _merge_perception_reasoning(PERCEPTION_SIX, REASONING_SIX)
+        self.assertEqual(merged["auditory"], SIX["auditory"])
+
+    def test_merge_preserves_narrative(self):
+        merged = _merge_perception_reasoning(PERCEPTION_SIX, REASONING_SIX)
+        self.assertEqual(merged["narrative"], SIX["narrative"])
+
+    def test_merge_empty_reasoning_tolerant(self):
+        # 推理层全空 → 容错填空 dict，不崩
+        merged = _merge_perception_reasoning(PERCEPTION_SIX, {})
+        self.assertEqual(merged["narrative"], {})
+        self.assertEqual(merged["persona"], {})
+        self.assertEqual(merged["psychology"], {})
+
+    def test_merge_evidence_ts_from_perception(self):
+        merged = _merge_perception_reasoning(PERCEPTION_SIX, REASONING_SIX)
+        self.assertEqual(merged["evidence_ts"], ["00:00-00:03"])
+
+    # ── 合并产物可直接复用 render_av_section ──
+    def test_merged_renderable(self):
+        merged = _merge_perception_reasoning(PERCEPTION_SIX, REASONING_SIX)
+        md = render_av_section(merged)
+        self.assertIn("听觉", md)
+        self.assertIn("视觉", md)
+        self.assertIn("共鸣点", md)  # psychology.resonance
+        self.assertIn("00:00-00:03", md)
+
+    # ── analyze_by_layers 无 key → 立即返回错误 ──
+    def test_analyze_by_layers_no_key(self):
+        import os
+        orig = os.environ.pop("SILICONFLOW_API_KEY", None)
+        try:
+            out = analyze_by_layers("https://example.com/test.mp4", sf_key=None)
+            self.assertFalse(out["ok"])
+            self.assertIn("SILICONFLOW_API_KEY", out["error"])
+        finally:
+            if orig is not None:
+                os.environ["SILICONFLOW_API_KEY"] = orig
 
 
 if __name__ == "__main__":

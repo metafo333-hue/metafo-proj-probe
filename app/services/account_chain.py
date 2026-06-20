@@ -16,6 +16,7 @@ from app.audit.gates import run_audit
 from app.services.account_audit_bridge import account_to_claims_sources
 from app.services.account_report import build_report
 from app.services.audiovisual import analyze_douyin_video, render_av_section
+from app.services.competitor_compare import compare_accounts
 
 _MOBILE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
               "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
@@ -63,10 +64,12 @@ _PLATFORM_CN = {
 
 
 def run_from_video_url(url: str, tikhub_key: str | None = None, *,
-                       with_audiovisual: bool = True) -> dict[str, Any]:
+                       with_audiovisual: bool = True,
+                       competitor_urls: list[str] | None = None) -> dict[str, Any]:
     """主入口:抖音视频链接 → {ok, report_md, video, account, audit, works, six_layer}。
 
     with_audiovisual=True 且有 SILICONFLOW_API_KEY 时,下载视频走 Qwen3-Omni 产视听六层并插入报告。
+    competitor_urls 给定时,各采竞品账号 → L4 竞品圈对比段插入报告(三圈参照·竞品不递归采竞品)。
     """
     # 平台门（实测驱动）：probe 现状 TikHub 仅抖音·非抖音友好报错·不浪费付费调用
     platform = _detect_platform(url)
@@ -142,9 +145,21 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
             av_six = av_out.get("six_layer")
             av_md = render_av_section(av_six)
 
-    # 5. 确定性报告(传逐条兄弟视频 works_sample → L2 多条找规律;av_md → L1 视听六层段)
+    # 4.7 L4 竞品圈对比(有竞品链接则各采账号 → 对比段·竞品不递归采竞品/不跑视听省钱)
+    compare_md = None
+    if competitor_urls:
+        comp_accts = []
+        for cu in competitor_urls:
+            cr = run_from_video_url(cu, tikhub_key, with_audiovisual=False)
+            if cr.get("ok") and cr.get("account"):
+                comp_accts.append(cr["account"])
+        if comp_accts:
+            compare_md = compare_accounts(account, comp_accts)
+
+    # 5. 确定性报告(works→L2 规律;av_md→L1 视听六层;compare_md→L4 竞品圈)
     works = rd.get("works_sample")
-    report_md = build_report(video, account, audit, works=works, av_md=av_md)
+    report_md = build_report(video, account, audit, works=works,
+                             av_md=av_md, compare_md=compare_md)
     # works/six_layer 一并返回 → 供 Word 导出做动态图表 + 视听六层呈现
     return {"ok": True, "report_md": report_md, "video": video,
             "account": account, "audit": audit, "works": works, "six_layer": av_six}

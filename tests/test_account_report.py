@@ -151,6 +151,17 @@ class TestAccountReport(unittest.TestCase):
         self.assertNotIn("看+听", r)               # 不插无关段
         self.assertIn("账号诊断报告", r)            # 报告正常
 
+    # ---- L4 竞品圈段(compare_md)插入 ----
+    def test_compare_md_inserted(self):
+        cmp = "## 同行里你站在哪(和 2 个同类号比)\n- **平均点赞**:你排**第 2**"
+        r = build_report(MOYU_V, MOYU_A, AUDIT, works=MOYU_WORKS, compare_md=cmp)
+        self.assertIn("同行里你站在哪", r)
+
+    def test_no_compare_md_safe(self):
+        r = build_report(MOYU_V, MOYU_A, AUDIT, works=MOYU_WORKS)  # 不传 compare_md
+        self.assertNotIn("同行里你站在哪", r)
+        self.assertIn("账号诊断报告", r)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

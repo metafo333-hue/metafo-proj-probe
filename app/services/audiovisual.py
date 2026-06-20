@@ -199,6 +199,216 @@ def render_av_section(six: dict | None, *, min_conf: float = 0.45) -> str:
     return "\n".join(lines)
 
 
+# ─────────────────────────────────────────────────────────────
+# 生产形态：按层拆 prompt · 两阶段调用
+# 方案来源：运营报告/probe-audiovisual-sixlayer-model-selection-v1.0.md §四
+#
+# 设计：
+#   ① 感知调用 → 听觉+视觉+文本（需真看真听，Qwen3-Omni 多模态核心价值）
+#   ② 推理调用 → 叙事+人设+心理（基于①的感知证据做语义推理，纯文本即可）
+#
+# 约束解码：硅基 response_format 仅支持 type=text，不支持 json_schema/json_object
+# （已查 https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions 文档
+#  以及 /cn/capabilities/json-output 返回 404，文档例中只见 type:text）。
+# 降级方案：prompt 强约束 + 多行 schema 模板 + _parse_six_layer 容错解析。
+# ─────────────────────────────────────────────────────────────
+
+# 感知层 prompt（听觉+视觉+文本·需真看真听）
+_PERCEPTION_PROMPT = """你是短视频视听分析专家。仔细观看并聆听这个视频，只输出 JSON，不要任何额外文字或解释。
+
+分析以下三层，每个字段输出 {"v":"判断值","conf":0.0到1.0置信度}。
+听不清/看不清/不确定给低 conf(<0.5)，不要硬编。
+
+严格按此结构输出:
+{"auditory":{"bgm_style":{"v":"","conf":0},"bgm_mood":{"v":"","conf":0},"speech_pace":{"v":"","conf":0},"sound_fx":{"v":"","conf":0}},"visual":{"quality":{"v":"","conf":0},"color":{"v":"","conf":0},"composition":{"v":"","conf":0},"transition":{"v":"","conf":0},"edit_pace":{"v":"","conf":0}},"text":{"summary":{"v":"","conf":0}},"evidence_ts":[]}
+
+字段说明:
+- auditory.bgm_style: 配乐风格
+- auditory.bgm_mood: 配乐情绪
+- auditory.speech_pace: 语速(快|中|慢|无口播)
+- auditory.sound_fx: 音效设计
+- visual.quality: 画面质感
+- visual.color: 主色调
+- visual.composition: 构图
+- visual.transition: 转场手法
+- visual.edit_pace: 剪辑节奏(快|中|慢)
+- text.summary: 字幕或口播要点(一句话)
+- evidence_ts: 关键时间段列表(如["00:03-00:07"])"""
+
+# 推理层 prompt 模板（叙事+人设+心理·基于感知证据·纯文本推理）
+_REASONING_PROMPT_TPL = """你是短视频内容分析专家。以下是对一段视频的感知层分析结果（听觉/视觉/文本）：
+
+{perception_json}
+
+基于以上感知证据，对该视频做语义推理分析。只输出 JSON，不要任何额外文字或解释。
+每个字段输出 {{"v":"判断值","conf":0.0到1.0置信度}}，无法推断的给低 conf(<0.5)。
+
+严格按此结构输出:
+{{"narrative":{{"hook":{{"v":"","conf":0}},"structure":{{"v":"","conf":0}},"pacing":{{"v":"","conf":0}}}},"persona":{{"on_screen":{{"v":"","conf":0}},"style":{{"v":"","conf":0}},"camera":{{"v":"","conf":0}}}},"psychology":{{"emotion_arc":{{"v":"","conf":0}},"resonance":{{"v":"","conf":0}},"hook_point":{{"v":"","conf":0}}}}}}
+
+字段说明:
+- narrative.hook: 开头钩子
+- narrative.structure: 叙事结构
+- narrative.pacing: 信息节奏
+- persona.on_screen: 是否有人出镜(有|无)
+- persona.style: 风格
+- persona.camera: 镜头语言
+- psychology.emotion_arc: 情绪曲线
+- psychology.resonance: 共鸣点
+- psychology.hook_point: 记忆点"""
+
+
+def _call_sf_text(prompt: str, key: str, *, timeout: int = 120, max_tokens: int = 600) -> str | None:
+    """调硅基纯文本模型（推理层·DeepSeek-V3 成本更低·感知层不用本函数）。
+
+    返回 content 字符串，失败返回 None。
+    注：推理层只需文字理解，不需多模态，用 DeepSeek-V3-0324 省成本。
+    """
+    import urllib.error
+    # 推理层用 DeepSeek-V3（纯文本·便宜）；感知层仍走 Qwen3-Omni（多模态必须）
+    TEXT_MODEL = "deepseek-ai/DeepSeek-V3-0324"
+    payload = {
+        "model": TEXT_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.3,
+    }
+    try:
+        req = urllib.request.Request(
+            SF_ENDPOINT, data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            resp = json.load(r)
+    except urllib.error.HTTPError as e:
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+    return (((resp.get("choices") or [{}])[0]).get("message") or {}).get("content")
+
+
+def _call_sf_vision(video_url: str, prompt: str, key: str, *,
+                    timeout: int = 150, max_tokens: int = 800,
+                    max_frames: int = 16, fps: int = 2) -> str | None:
+    """调硅基 Qwen3-Omni（多模态·感知层专用）。返回 content 字符串，失败返回 None。"""
+    payload = {
+        "model": SF_MODEL,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "video_url",
+             "video_url": {"url": video_url, "max_frames": max_frames, "fps": fps}},
+        ]}],
+        "max_tokens": max_tokens,
+        "temperature": 0.3,
+        # 注：硅基 response_format 仅支持 type:text，不支持 json_schema/json_object
+        # 故不传 response_format，靠 prompt 强约束 + _parse_six_layer 容错解析降级。
+    }
+    try:
+        req = urllib.request.Request(
+            SF_ENDPOINT, data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            resp = json.load(r)
+    except Exception:  # noqa: BLE001
+        return None
+    return (((resp.get("choices") or [{}])[0]).get("message") or {}).get("content")
+
+
+def _merge_perception_reasoning(perception: dict, reasoning: dict) -> dict:
+    """合并感知层和推理层结果，产出和 analyze_audiovisual 相同的 six_layer dict 结构。
+
+    感知层必须含 auditory/visual/text/evidence_ts；
+    推理层必须含 narrative/persona/psychology。
+    缺失层用空 dict 填充（容错·不阻断）。
+    """
+    return {
+        "auditory": perception.get("auditory") or {},
+        "visual": perception.get("visual") or {},
+        "text": perception.get("text") or {},
+        "narrative": reasoning.get("narrative") or {},
+        "persona": reasoning.get("persona") or {},
+        "psychology": reasoning.get("psychology") or {},
+        "evidence_ts": perception.get("evidence_ts") or [],
+    }
+
+
+def analyze_by_layers(video_url: str, sf_key: str | None = None, *,
+                      max_frames: int = 16, fps: int = 2,
+                      timeout: int = 150) -> dict:
+    """生产形态：按层拆 prompt · 两阶段调用 · 对抗层间稀释。
+
+    ① 感知调用（Qwen3-Omni 多模态）→ auditory + visual + text + evidence_ts
+    ② 推理调用（DeepSeek-V3 纯文本，把①结果作上下文）→ narrative + persona + psychology
+
+    返回格式和 analyze_audiovisual 完全相同：
+        {ok:True, six_layer:dict, usage:{"perception":..., "reasoning":...}}
+    或  {ok:False, error:str, [perception_raw], [reasoning_raw]}
+
+    合并后的 six_layer 可直接传入 render_av_section 复用渲染逻辑。
+
+    约束解码：硅基不支持 json_schema，降级为 prompt 强约束 + 容错解析（诚实标注）。
+    """
+    key = _sf_key(sf_key)
+    if not key:
+        return {"ok": False, "error": "缺 SILICONFLOW_API_KEY(走 vault)"}
+
+    # ── ① 感知调用 ──────────────────────────────────────────────
+    perception_raw = _call_sf_vision(
+        video_url, _PERCEPTION_PROMPT, key,
+        timeout=timeout, max_tokens=800, max_frames=max_frames, fps=fps)
+    if not perception_raw:
+        return {"ok": False, "error": "感知层调用失败(Qwen3-Omni 无响应)"}
+
+    # 感知层解析：最低门 auditory+visual（_parse_six_layer 已有此检验）
+    perception = _parse_six_layer(perception_raw)
+    if perception is None:
+        return {"ok": False, "error": "感知层 JSON 解析失败", "perception_raw": perception_raw[:400]}
+
+    # ── ② 推理调用 ──────────────────────────────────────────────
+    # 把感知结果序列化作推理上下文（只传感知层，不传视频 URL）
+    perception_ctx = json.dumps(
+        {k: perception.get(k) for k in ("auditory", "visual", "text", "evidence_ts")},
+        ensure_ascii=False, indent=2)
+    reasoning_prompt = _REASONING_PROMPT_TPL.format(perception_json=perception_ctx)
+
+    reasoning_raw = _call_sf_text(reasoning_prompt, key, timeout=120, max_tokens=600)
+    if not reasoning_raw:
+        return {"ok": False, "error": "推理层调用失败(DeepSeek-V3 无响应)",
+                "perception_raw": perception_raw[:400]}
+
+    # 推理层解析：接受 narrative/persona/psychology 任意组合（宽容）
+    reasoning = _parse_reasoning_layer(reasoning_raw)
+    if reasoning is None:
+        return {"ok": False, "error": "推理层 JSON 解析失败",
+                "perception_raw": perception_raw[:400], "reasoning_raw": reasoning_raw[:400]}
+
+    six = _merge_perception_reasoning(perception, reasoning)
+    return {
+        "ok": True,
+        "six_layer": six,
+        "usage": {"perception": "Qwen3-Omni(感知·多模态)", "reasoning": "DeepSeek-V3(推理·纯文本)"},
+    }
+
+
+def _parse_reasoning_layer(content: str | None) -> dict | None:
+    """从推理层输出抠 JSON(容错)。最低需 narrative/persona/psychology 之一。"""
+    if not content:
+        return None
+    m = (re.search(r"```(?:json)?\s*(\{.*\})\s*```", content, re.S)
+         or re.search(r"(\{.*\})", content, re.S))
+    if not m:
+        return None
+    try:
+        d = json.loads(m.group(1))
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(d, dict):
+        return None
+    # 最低门：含推理三层之一
+    if not any(k in d for k in ("narrative", "persona", "psychology")):
+        return None
+    return d
+
+
 if __name__ == "__main__":  # 自检/手测:python -m app.services.audiovisual <video_url>
     import sys
     url = sys.argv[1] if len(sys.argv) > 1 else "https://www.w3schools.com/html/mov_bbb.mp4"
