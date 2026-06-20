@@ -77,6 +77,47 @@ def analyze_audiovisual(video_url: str, sf_key: str | None = None, *,
     return {"ok": True, "six_layer": six, "usage": resp.get("usage")}
 
 
+_DL_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+          "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+
+
+def fetch_video_as_data_uri(play_urls, *, max_mb: int = 20, timeout: int = 30) -> dict:
+    """抖音 play_addr 直链(CDN 防盗链) → 本地带 UA 下载 → base64 data URI(中转喂 Omni)。
+
+    实测(2026-06-20):抖音 CDN 直链硅基服务器直接拉会 HTTP 500(防盗链)·必须本地中转。
+    play_urls=候选直链列表(逐个试到成功);>max_mb 返回 too_big(生产走临时 URL 非 base64)。
+    """
+    import base64
+    for url in (play_urls or []):
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": _DL_UA, "Referer": "https://www.douyin.com/"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = r.read()
+        except Exception:  # noqa: BLE001 — 逐个直链试错,失败换下一个
+            continue
+        if not data:
+            continue
+        mb = len(data) / 1024 / 1024
+        if mb > max_mb:
+            return {"ok": False, "too_big": True,
+                    "error": f"视频 {mb:.1f}MB > {max_mb}MB·base64 过大·生产走临时 URL 方案"}
+        b64 = base64.b64encode(data).decode()
+        return {"ok": True, "data_uri": f"data:video/mp4;base64,{b64}", "size_mb": round(mb, 2)}
+    return {"ok": False, "error": "所有直链下载失败(防盗链/链接过期)"}
+
+
+def analyze_douyin_video(play_urls, sf_key: str | None = None, **kw) -> dict:
+    """抖音直链列表 → 下载中转 → 视听六层(一步到位)。"""
+    dl = fetch_video_as_data_uri(play_urls)
+    if not dl.get("ok"):
+        return dl
+    out = analyze_audiovisual(dl["data_uri"], sf_key, **kw)
+    if out.get("ok"):
+        out["video_size_mb"] = dl["size_mb"]
+    return out
+
+
 def _parse_six_layer(content: str | None) -> dict | None:
     """从模型输出抠 JSON(容错 ```json``` 包裹 / 前后噪声)。最低需 听觉+视觉 两层。"""
     if not content:

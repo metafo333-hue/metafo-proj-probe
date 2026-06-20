@@ -116,7 +116,8 @@ def _analyze_works(works: list, avg_like: int) -> dict | None:
 
 
 def build_report(video: dict[str, Any], account: dict[str, Any],
-                 audit: dict[str, Any], works: list | None = None) -> str:
+                 audit: dict[str, Any], works: list | None = None,
+                 av_md: str | None = None) -> str:
     nick = account.get("nickname") or "你"
     fol = account.get("follower") or 0
     avg = account.get("avg_like") or 0
@@ -189,6 +190,11 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     if biz:
         P("> 提醒:生意号别只盯点赞——**询单、私信、进店**才是真目标。点赞低不等于没效果,要看后端转化。")
     P("")
+
+    # —— 这条视频「看+听」六层拆解(L1·视听理解·有则插) ——
+    if av_md:
+        P(av_md)
+        P("")
 
     # —— 二、多条找规律(L2·核心) ——
     sec = 2

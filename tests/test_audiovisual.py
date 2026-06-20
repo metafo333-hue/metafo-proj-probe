@@ -7,6 +7,7 @@ import unittest
 
 from app.services.audiovisual import (
     _parse_six_layer, _fld, render_av_section, LAYERS,
+    fetch_video_as_data_uri, analyze_douyin_video,
 )
 
 # —— fixture: 一份合法六层(mov_bbb 实测形态) ——
@@ -85,6 +86,16 @@ class TestAudiovisual(unittest.TestCase):
     def test_render_empty_safe(self):
         self.assertEqual(render_av_section(None), "")
         self.assertEqual(render_av_section({}), "")
+
+    # ---- 下载中转边界(离线·不触网) ----
+    def test_fetch_empty_urls(self):
+        out = fetch_video_as_data_uri([])
+        self.assertFalse(out["ok"])
+
+    def test_analyze_douyin_empty_urls_no_omni_call(self):
+        # 无直链 → 下载失败 → 不应调 Omni(返回下载失败)
+        out = analyze_douyin_video([])
+        self.assertFalse(out["ok"])
 
     # ---- schema 常量对齐 ----
     def test_layers_constant(self):

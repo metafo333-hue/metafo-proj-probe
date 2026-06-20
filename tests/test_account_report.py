@@ -139,6 +139,18 @@ class TestAccountReport(unittest.TestCase):
     def test_missing_fields_robust(self):
         self.assertGreater(len(build_report({"title": "x"}, {"nickname": "y"}, {})), 100)
 
+    # ---- 视听六层段(L1·av_md)插入 ----
+    def test_av_md_inserted(self):
+        av = "### 这条视频「看+听」拆出来的东西\n- **听觉**：配乐轻快流行（90%）"
+        r = build_report(MOYU_V, MOYU_A, AUDIT, works=MOYU_WORKS, av_md=av)
+        self.assertIn("看+听", r)
+        self.assertIn("配乐轻快流行", r)
+
+    def test_no_av_md_safe(self):
+        r = build_report(MOYU_V, MOYU_A, AUDIT, works=MOYU_WORKS)  # 不传 av_md
+        self.assertNotIn("看+听", r)               # 不插无关段
+        self.assertIn("账号诊断报告", r)            # 报告正常
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

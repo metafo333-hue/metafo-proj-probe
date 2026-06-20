@@ -15,6 +15,7 @@ from typing import Any
 from app.audit.gates import run_audit
 from app.services.account_audit_bridge import account_to_claims_sources
 from app.services.account_report import build_report
+from app.services.audiovisual import analyze_douyin_video, render_av_section
 
 _MOBILE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
               "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
@@ -61,8 +62,12 @@ _PLATFORM_CN = {
 }
 
 
-def run_from_video_url(url: str, tikhub_key: str | None = None) -> dict[str, Any]:
-    """主入口:抖音视频链接 → {ok, report_md, video, account, audit}。"""
+def run_from_video_url(url: str, tikhub_key: str | None = None, *,
+                       with_audiovisual: bool = True) -> dict[str, Any]:
+    """主入口:抖音视频链接 → {ok, report_md, video, account, audit, works, six_layer}。
+
+    with_audiovisual=True 且有 SILICONFLOW_API_KEY 时,下载视频走 Qwen3-Omni 产视听六层并插入报告。
+    """
     # 平台门（实测驱动）：probe 现状 TikHub 仅抖音·非抖音友好报错·不浪费付费调用
     platform = _detect_platform(url)
     if platform != "douyin":
@@ -128,9 +133,18 @@ def run_from_video_url(url: str, tikhub_key: str | None = None) -> dict[str, Any
         "evidence_strength": cl.get("evidence_strength"),
     }
 
-    # 4. 确定性报告(传逐条兄弟视频 works_sample → 报告做 L2 多条找规律)
+    # 4.5 视听六层(L1·真"看+听"视频·走硅基 Qwen3-Omni·下载中转·失败不阻塞主报告)
+    av_md, av_six = None, None
+    if with_audiovisual and os.getenv("SILICONFLOW_API_KEY"):
+        play_urls = ((detail.get("video") or {}).get("play_addr") or {}).get("url_list") or []
+        av_out = analyze_douyin_video(play_urls)
+        if av_out.get("ok"):
+            av_six = av_out.get("six_layer")
+            av_md = render_av_section(av_six)
+
+    # 5. 确定性报告(传逐条兄弟视频 works_sample → L2 多条找规律;av_md → L1 视听六层段)
     works = rd.get("works_sample")
-    report_md = build_report(video, account, audit, works=works)
-    # works 一并返回 → 供 Word 导出做动态图表(L2 趋势/互动对比)
+    report_md = build_report(video, account, audit, works=works, av_md=av_md)
+    # works/six_layer 一并返回 → 供 Word 导出做动态图表 + 视听六层呈现
     return {"ok": True, "report_md": report_md, "video": video,
-            "account": account, "audit": audit, "works": works}
+            "account": account, "audit": audit, "works": works, "six_layer": av_six}
