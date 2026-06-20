@@ -64,6 +64,22 @@ _PLATFORM_CN = {
 }
 
 
+def fetch_douyin_hot_topics(tikhub_key: str | None, limit: int = 8) -> list[str] | None:
+    """TikHub 抖音热榜(app/v3) → 当前平台热点词(供 L0 蹭热点参考·失败 None 不阻塞)。"""
+    key = tikhub_key or os.getenv("TIKHUB_API_KEY") or os.getenv("PROBE_TIKHUB_KEY")
+    if not key:
+        return None
+    try:
+        _ensure_combo()
+        from combo_deep_probe.adapters.tikhub_adapter import tikhub_get
+        raw = tikhub_get("/api/v1/douyin/app/v3/fetch_hot_search_list", {}, key)
+        tl = (((raw.get("data") or {}).get("data") or {}).get("trending_list")) or []
+        words = [w.get("word") for w in tl if isinstance(w, dict) and w.get("word")]
+        return words[:limit] or None
+    except Exception:  # noqa: BLE001 — 热点是 L0 增强·失败不阻塞主报告
+        return None
+
+
 def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                        with_audiovisual: bool = True,
                        competitor_urls: list[str] | None = None) -> dict[str, Any]:
@@ -157,10 +173,12 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         if comp_accts:
             compare_md = compare_accounts(account, comp_accts)
 
-    # 4.8 L0 环境层(赛道大环境·种子平台规则+粉丝分层·趋势/热点待数据源时诚实标)
+    # 4.8 L0 环境层(赛道大环境·种子平台规则+粉丝分层+TikHub 热榜热点·趋势待半自动)
     _blob = " ".join(account.get("hashtags") or []) + (account.get("signature") or "")
     _track_name, _ = _track(_blob)
-    l0 = build_l0_environment(account, track=_track_name, is_business=_is_business(_blob))
+    _hot = fetch_douyin_hot_topics(key)   # 当前平台热点(失败 None·L0 诚实标)
+    l0 = build_l0_environment(account, track=_track_name, is_business=_is_business(_blob),
+                              hot_topics=_hot)
     l0_md = render_l0_section(l0)
 
     # 5. 确定性报告(works→L2 规律;av_md→L1 视听六层;compare_md→L4 竞品;l0_md→L0 环境)

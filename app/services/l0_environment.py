@@ -1,5 +1,9 @@
 """L0 环境层 · 确定性框架(规则驱动·能拿就填·拿不到诚实标)。
 
+规则覆盖：若 data/l0_platform_rules.json 存在则由 _load_rules_override() 加载。
+覆盖规则来自 scripts/l0_rules_fetch.py（定期抓取官方公开规则页），
+不存在时自动回退到本文件下方种子常量（向后兼容·现有测试不受影响）。
+
 分析框架"粒度轴 L0 环境层"——账号所在赛道大盘/平台规则/热点,
 "先看这号是不是踩中环境风口,防把环境红利当本事"。
 
@@ -15,7 +19,16 @@ MVP 边界(诚实):
 """
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
+
+# 数据目录（相对本文件往上两级 = repo root/data/）
+_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+_RULES_OVERRIDE_FILE = _DATA_DIR / "l0_platform_rules.json"
 
 # —— 种子:官方明规则(可落库·源 trust.douyin.com / 视频号运营规范 / 2026-03 AI标注新规) ——
 _AI_LABEL_RULE = "AI 生成内容须显著标注（2026-03 新规·未标注会限流 50-80% 甚至下架）"
@@ -118,13 +131,53 @@ def render_l0_section(l0: dict | None) -> str:
                  "**宁可告诉你「没接到」也不瞎编**。")
     L.append("")
 
-    # 热点(有则关联)
+    # 热点(当前平台热榜·通用·诚实标非赛道专属)
     ht = macro.get("hot_topics_related") or []
     if ht:
-        L.append("**当前和你相关的热点**")
-        L.append(f"- {'、'.join(str(t) for t in ht[:5])}")
+        L.append("**当前平台热点（可蹭·但先看跟你赛道搭不搭）**")
+        L.append(f"- {'、'.join(str(t) for t in ht[:6])}")
+        L.append("- 注：这是当前抖音热榜（实时拉取），不是你赛道专属——能自然结合的才蹭，硬蹭反而违和。")
         L.append("")
 
     L.append("> 环境数据来自合规授权渠道（国内不出境）。平台规则是官方明文；"
              "赛道趋势属半自动补充，**平台算法的具体权重是黑盒，谁说得精确都是猜的**，不作硬结论。")
     return "\n".join(L)
+
+
+# ── 可选规则覆盖（由 scripts/l0_rules_fetch.py 产出·不破坏现有接口） ─────────────
+
+def _load_rules_override() -> dict | None:
+    """加载 data/l0_platform_rules.json（由 l0_rules_fetch.py 定期更新）。
+
+    返回值结构（与种子对齐）：
+        {
+            "ai_label":       str,            # 覆盖 _AI_LABEL_RULE
+            "forbidden_zones": list[str],     # 覆盖 _FORBIDDEN_COMMON
+            "music":          str,            # 覆盖 _MUSIC_RULE
+            "fetched_at":     str,            # ISO 时间戳（调试用）
+            "fetch_coverage": str,            # "N/M 目标成功"
+        }
+
+    若文件不存在/损坏/schema 不符，返回 None（调用方使用种子）。
+    设计为幂等：每次调用重新读文件（cron 更新后下一次调用即生效·无缓存）。
+    """
+    if not _RULES_OVERRIDE_FILE.exists():
+        return None
+    try:
+        with open(_RULES_OVERRIDE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        plat = data.get("platform", {})
+        # 校验最低 schema：至少有 forbidden_zones
+        if not plat.get("forbidden_zones"):
+            _log.warning("l0_platform_rules.json 缺少 forbidden_zones，忽略覆盖文件")
+            return None
+        return {
+            "ai_label": plat.get("ai_label") or _AI_LABEL_RULE,
+            "forbidden_zones": list(plat["forbidden_zones"]),
+            "music": plat.get("music") or _MUSIC_RULE,
+            "fetched_at": data.get("fetched_at", ""),
+            "fetch_coverage": data.get("fetch_coverage", ""),
+        }
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        _log.warning("l0_platform_rules.json 解析失败: %s，回退种子", e)
+        return None
