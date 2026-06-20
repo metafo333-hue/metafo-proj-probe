@@ -1,12 +1,18 @@
-"""微信公众号情报链 · 对标 account_chain.py 的微信专属编排。
+"""微信视频号+公众号情报链 · 对标 account_chain.py 的微信专属编排。
 
-两个入口:
-  run_from_article_url(url)  → 文章 URL → 全文 + 传播指标 + 发布者画像 + 历史热文
-  run_from_account_name(keyword) → 账号名搜索 → 账号画像 + 历史文章 + 主体信息
+主线（视频号·重点）:
+  run_from_video_channel(v2_name)            → 视频列表情报（¥0.2/页·15条）
+  run_from_account_to_video_channel(keyword) → 公众号名→ghid→v2_name→视频（¥0.9/次）
+
+辅线（公众号·降权处理）:
+  run_from_article_url(url)       → 文章全文 + 传播指标 + 发布者画像 + 历史热文
+  run_from_account_name(keyword)  → 账号名搜索 → 账号画像 + 历史文章 + 主体信息
 
 成本参考:
-  文章链:  article_detail(¥0.045) + read_zan(¥0.04) + principal_info(FREE) + history_by_ghid(¥0.2) ≈ ¥0.285/次
-  账号链:  wx_account/search(¥0.2) + principal_info(FREE) + history_by_ghid(¥0.2/页) ≈ ¥0.40/次
+  视频号直链:  wxvideo(¥0.2/页·15条)
+  视频号发现链: wx_account/search(¥0.2) + history_by_ghid+get_finder(¥0.5) + wxvideo(¥0.2) ≈ ¥0.9
+  文章链:      article_detail(¥0.045) + read_zan(¥0.04) + history_by_ghid(¥0.2) ≈ ¥0.285/次
+  账号链:      wx_account/search(¥0.2) + history_by_ghid(¥0.2/页) ≈ ¥0.40/次
 
 合规边界: 只调 JZL 授权 API · 不爬微信 DOM · 凭据经 env PROBE_JZL_KEY 注入。
 """
@@ -23,7 +29,153 @@ def _adapter() -> JZLChannelsAdapter:
 
 
 # ─────────────────────────────────────────────────────────────
-# 入口1: 文章 URL → 全量情报包
+# 主线：视频号 v2_name → 视频列表情报（重点处理）
+# ─────────────────────────────────────────────────────────────
+
+def run_from_video_channel(
+    v2_name: str,
+    max_pages: int = 1,
+) -> dict[str, Any]:
+    """视频号 v2_name → 近期视频列表情报包。
+
+    Args:
+        v2_name: 视频号唯一 ID（格式 v2_xxx@finder）
+        max_pages: 翻页数（1=最近15条，每多1页+¥0.2）
+
+    Returns:
+        {ok, v2_name, account, videos, total_fetched, pages_fetched, cost_rmb, report_md}
+    """
+    if not os.getenv("PROBE_JZL_KEY"):
+        return {"ok": False, "error": "缺 PROBE_JZL_KEY（走 vault 注入）"}
+    if not v2_name or not v2_name.startswith("v2_"):
+        return {"ok": False, "error": f"无效 v2_name（需 v2_xxx@finder 格式）: {v2_name!r}"}
+
+    ad = _adapter()
+    result = ad.fetch_account_videos(v2_name, max_pages=max_pages)
+
+    if result.get("_needs_key"):
+        return {"ok": False, "error": "缺 PROBE_JZL_KEY"}
+    if result.get("_error"):
+        return {"ok": False, "error": result["_error"]}
+
+    videos = result.get("videos") or []
+    account = result.get("account") or {}
+    report = _build_video_channel_report(v2_name, account, videos)
+
+    return {
+        "ok": True,
+        "v2_name": v2_name,
+        "account": account,
+        "videos": videos,
+        "total_fetched": len(videos),
+        "feeds_count": result.get("feeds_count"),
+        "cost_rmb": round(0.2 * max_pages, 3),
+        "report_md": report,
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# 主线桥接：公众号名 → ghid → v2_name → 视频列表
+# ─────────────────────────────────────────────────────────────
+
+def run_from_account_to_video_channel(
+    keyword: str,
+    max_video_pages: int = 1,
+) -> dict[str, Any]:
+    """公众号名搜索 → 绑定视频号 → 近期视频列表。
+
+    三步桥接链（成本约 ¥0.9/次）:
+      wx_account/search(¥0.2) → history_by_ghid+get_finder=1(¥0.5) → wxvideo(¥0.2/页)
+
+    根因修复: get_finder=1 才返回 VideoFinderInfo.user_name (v2_name)，
+    之前测试为空的原因是漏了该参数。
+    """
+    if not os.getenv("PROBE_JZL_KEY"):
+        return {"ok": False, "error": "缺 PROBE_JZL_KEY（走 vault 注入）"}
+
+    ad = _adapter()
+
+    # 1. 按公众号名搜索 → ghid
+    search = ad.fetch_account_search(keyword)
+    if search.get("_needs_key"):
+        return {"ok": False, "error": "缺 PROBE_JZL_KEY"}
+    accounts = search.get("accounts", [])
+    if not accounts:
+        return {"ok": False, "error": f"公众号搜索无结果: {keyword!r}"}
+
+    best = accounts[0]
+    ghid = best.get("ghid", "")
+    account_name = best.get("name", "")
+    if not ghid:
+        return {"ok": False, "error": f"账号 {account_name!r} 无 ghid"}
+
+    # 2. ghid + get_finder=1 → v2_name
+    finder = ad.fetch_v2_name_by_ghid(ghid)
+    if finder.get("_needs_key"):
+        return {"ok": False, "error": "缺 PROBE_JZL_KEY"}
+    if finder.get("_error"):
+        return {
+            "ok": False,
+            "error": finder["_error"],
+            "account_name": account_name,
+            "ghid": ghid,
+            "hint": "该公众号可能未绑定视频号",
+        }
+
+    v2_name = finder["v2_name"]
+
+    # 3. v2_name → 视频列表
+    result = run_from_video_channel(v2_name, max_pages=max_video_pages)
+    if not result.get("ok"):
+        return result
+
+    return {
+        **result,
+        "discovered_via": "account_search→ghid→VideoFinderInfo",
+        "account_name": account_name,
+        "ghid": ghid,
+        "cost_rmb": round(0.2 + 0.5 + 0.2 * max_video_pages, 3),
+    }
+
+
+def _build_video_channel_report(v2_name: str, account: dict, videos: list[dict]) -> str:
+    nickname = account.get("nickname") or v2_name
+    signature = account.get("signature") or ""
+    region = account.get("region") or ""
+    auth_prof = account.get("auth_profession") or ""
+
+    lines = [f"# 视频号内容情报 · {nickname}\n"]
+    if signature:
+        lines.append(f"**简介**: {signature}")
+    if region or auth_prof:
+        lines.append(f"**地区/认证**: {region} {auth_prof}".strip())
+    lines.append(f"\n**共获取视频**: {len(videos)} 条\n")
+
+    if not videos:
+        lines.append("（无数据·v2_name 可能无权限或账号不存在）")
+        lines.append("\n---")
+        lines.append("*数据来源: 极致了数据(jzl.com) · 播放量平台不公开*")
+        return "\n".join(lines)
+
+    lines.append("| # | 标题 | 点赞 | 评论 | 收藏 | 转发 | 时长(s) |")
+    lines.append("|---|------|------|------|------|------|--------|")
+    for i, v in enumerate(videos[:20], 1):
+        title = (v.get("title") or "（无标题）")[:38]
+        like = v.get("like_count") if v.get("like_count") is not None else "—"
+        cmt = v.get("comment_count") if v.get("comment_count") is not None else "—"
+        fav = v.get("fav_count") if v.get("fav_count") is not None else "—"
+        fwd = v.get("forward_count") if v.get("forward_count") is not None else "—"
+        dur = v.get("duration_sec") or "—"
+        lines.append(f"| {i} | {title} | {like} | {cmt} | {fav} | {fwd} | {dur} |")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("*数据来源: 极致了数据(jzl.com) · 仅采公开元数据 · 播放量平台侧不公开*")
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────
+# 辅线：公众号文章 URL → 全量情报包
 # ─────────────────────────────────────────────────────────────
 
 def run_from_article_url(

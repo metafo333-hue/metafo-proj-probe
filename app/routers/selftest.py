@@ -35,6 +35,13 @@ def _signals() -> dict:
     except Exception:
         l0_ok = False
     try:
+        from app import l0 as _l0
+        wechat_channels_classify = _l0.classify(
+            "https://channels.weixin.qq.com/sns/appmsg/video?v=v2_test123@finder"
+        ) == "wechat_channels"
+    except Exception:
+        wechat_channels_classify = False
+    try:
         guards.check_response({"deliverable": {}, "meta": {"aigc_flag": False}, "cost": {"base": 0.002}})
         legal_passes = True
     except guards.GuardError:
@@ -65,6 +72,7 @@ def _signals() -> dict:
         "billing_public_free": billing.cost_public()["premium_data"] == 0.0,
         "billing_deep_paid": billing.cost_deep(True)["premium_data"] > 0,
         "billing_no_silent": billing.cost_deep(False)["premium_data"] == 0.0,
+        "wechat_channels_classify": wechat_channels_classify,
     }
 
 
@@ -81,6 +89,7 @@ def _contract_checks(sig: dict) -> list[tuple[str, bool]]:
         ("免费档 premium=0", sig["billing_public_free"]),
         ("付费深探 premium>0", sig["billing_deep_paid"]),
         ("未付费深探不收 premium", sig["billing_no_silent"]),
+        ("视频号 URL classify→wechat_channels", sig["wechat_channels_classify"]),
     ]
 
 

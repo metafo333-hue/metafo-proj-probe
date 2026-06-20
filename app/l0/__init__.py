@@ -18,6 +18,7 @@ from app.datasources import registry
 _VIDEO = re.compile(r"(douyin\.com|iesdouyin\.com|bilibili\.com|b23\.tv|"
                     r"youtube\.com|youtu\.be|kuaishou\.com)")
 _SOCIAL = re.compile(r"(xiaohongshu\.com|xhslink\.com|weibo\.(com|cn)|m\.weibo\.cn|twitter\.com|x\.com)")
+_WECHAT_CHANNELS = re.compile(r"channels\.weixin\.qq\.com")
 _WECHAT_MP = re.compile(r"(mp\.weixin\.qq\.com|weixin\.qq\.com/s/)")
 _DOC = re.compile(r"(\.pdf($|\?)|github\.com|arxiv\.org|readthedocs)")
 # 直链公开音频/图片（非平台·非反爬）→ 走 extractors 本地 ASR/OCR（合规：等同抓公开网页文件）
@@ -50,6 +51,8 @@ def classify(url: str) -> str:
         return "video"
     if _SOCIAL.search(u):
         return "social"
+    if _WECHAT_CHANNELS.search(u):
+        return "wechat_channels"  # 视频号主页/视频 → JZL wxvideo 端点（主线·重点处理）
     if _WECHAT_MP.search(u):
         return "wechat_article"   # 公众号文章 → JZL 取数（微信鉴权拦外部爬取·不走 trafilatura）
     if _SUBTITLE.search(u):
@@ -72,8 +75,8 @@ def extract_public(url: str) -> dict[str, Any]:
     """
     kind = classify(url)
 
-    # 路径①-B：微信公众号文章 → JZL 商业 API（必须先于 extractors 判断）
-    if kind == "wechat_article":
+    # 路径①-B：微信专属内容 → JZL 商业 API（视频号主线·公众号辅线·先于 extractors）
+    if kind in ("wechat_channels", "wechat_article"):
         adapter = registry.get_adapter(kind)
         if adapter is None:
             return {"kind": kind, "needs_authorized_api": True,

@@ -9,15 +9,17 @@
   文章全文     POST /article_detail           ¥0.045/次       JSON body
   文章热评     POST /article_comment2         ¥0.06/次        JSON body
   余额查询     POST /get_remain_money         FREE            JSON body
+  v2_name发现  POST /history_by_ghid+get_finder=1  ¥0.5/次  JSON body (VideoFinderInfo.user_name)
+  视频号关键词  POST /wxvideo type=4           ¥0.5/次        JSON body (60账号+50视频)
 
 字段覆盖确认:
   ✅ fans(粉丝数)         — wx_account/search 唯一来源
   ✅ read/zan/looking      — read_zan 端点（实时）；history_by_ghid 内嵌(翻页时)
   ✅ 文章全文 content      — article_detail
   ✅ 公司主体信息          — principal_info（免费）
+  ✅ v2_name 发现         — history_by_ghid+get_finder=1 → VideoFinderInfo.user_name
   ❌ play_count(播放量)   — wxvideo 端点永久缺口（平台侧不公开）
   ❌ 视频号粉丝数          — wxvideo 端点未返回
-  ⚠️ v2_name 发现        — wx_account/search 只返 ghid；VideoFinderInfo 实测空
 
 auth 两种格式:
   视频号端点    : multipart/form-data 字段 key=<key> verifycode=
@@ -32,6 +34,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 import urllib.parse
 from codecs import encode
 from typing import Any
@@ -39,11 +42,25 @@ from typing import Any
 from app.datasources.base import DataSourceAdapter
 
 
+def _extract_v2_from_channels_url(url: str) -> str:
+    """从视频号 URL 的查询参数或路径中提取 v2_name（v2_xxx@finder 格式）。"""
+    parsed = urllib.parse.urlparse(url)
+    params = urllib.parse.parse_qs(parsed.query)
+    for key in ("v", "id", "username"):
+        vals = params.get(key, [])
+        if vals and vals[0].startswith("v2_") and "@finder" in vals[0]:
+            return vals[0]
+    m = re.search(r"(v2_[A-Za-z0-9]+@finder)", url)
+    if m:
+        return m.group(1)
+    return ""
+
+
 class JZLChannelsAdapter(DataSourceAdapter):
     source_id = "jzl_wechat_channels"
     vendor = "极致了数据(jzl.com / dajiala.com)"
     qualified = True              # 正规商业 API 采购·不自建爬取
-    supported_kinds = ("video", "social", "article", "wechat_article")
+    supported_kinds = ("wechat_article", "wechat_channels")
 
     _HOST = "www.dajiala.com"
     _BASE = "/fbmain/monitor/v3"
@@ -56,14 +73,25 @@ class JZLChannelsAdapter(DataSourceAdapter):
     # ──────────────────────────────────────────────────────────────────
 
     def fetch_metadata(self, url: str, kind: str) -> dict[str, Any]:
-        """url 传 v2_name(视频号) 或 mp.weixin.qq.com 文章 URL。
-        kind='wechat_article' → 文章全文 + 实时阅读量组合（¥0.085/篇）。
+        """url 传 v2_name / 视频号主页 URL / 公众号文章 URL。
+
+        kind='wechat_channels' → 视频号视频列表（¥0.2/15条 · 主线·重点处理）。
+        kind='wechat_article'  → 公众号文章全文 + 实时阅读量（¥0.085/篇 · 辅线）。
         """
         if not self._key:
             return {"_needs_key": True}
+        # 视频号：直接传 v2_name 字符串（不含 http）
         if url.startswith("v2_") and "@finder" in url:
             raw = self._post_form("/wxvideo", {"v2_name": url, "type": "1", "last_buffer": ""})
             return self._normalize_video_page(raw, url)
+        # 视频号：channels.weixin.qq.com 主页 / 视频链接
+        if kind == "wechat_channels" or "channels.weixin.qq.com" in url:
+            v2_name = _extract_v2_from_channels_url(url)
+            if not v2_name:
+                return {"_error": f"无法从 channels URL 提取 v2_name: {url[:80]}"}
+            raw = self._post_form("/wxvideo", {"v2_name": v2_name, "type": "1", "last_buffer": ""})
+            return self._normalize_video_page(raw, v2_name)
+        # 公众号文章（辅线）
         if kind == "wechat_article" or "mp.weixin.qq.com" in url:
             return self._fetch_wechat_article(url)
         return {}
@@ -226,6 +254,59 @@ class JZLChannelsAdapter(DataSourceAdapter):
             "article_url": article_url,
             "page": page,
         }
+
+    # ──────────────────────────────────────────────────────────────────
+    # 视频号：v2_name 发现（根因修复：必须加 get_finder=1）
+    # ──────────────────────────────────────────────────────────────────
+
+    def fetch_v2_name_by_ghid(self, ghid: str) -> dict[str, Any]:
+        """通过公众号 ghid 获取绑定的视频号 v2_name。¥0.5/次。
+
+        调用 history_by_ghid 时加 get_finder=1，才会返回 VideoFinderInfo。
+        不加该参数时 VideoFinderInfo 为空——这是之前测试得到空结果的根因。
+        返回: {v2_name, nickname, ghid} 或 {_error}
+        """
+        if not self._key:
+            return {"_needs_key": True}
+        raw = self._post_json("/history_by_ghid", {"ghid": ghid, "get_finder": 1})
+        finder = raw.get("VideoFinderInfo") or {}
+        v2_name = finder.get("user_name", "")
+        nickname = finder.get("nickname", "")
+        if not v2_name:
+            return {"_error": f"该公众号({ghid})未绑定视频号或 VideoFinderInfo 为空"}
+        return {"v2_name": v2_name, "nickname": nickname, "ghid": ghid}
+
+    def fetch_channel_by_keyword(self, keyword: str) -> dict[str, Any]:
+        """关键词搜索视频号。¥0.5/次。
+
+        POST /wxvideo type=4 + JSON body。返回最多 60 个匹配视频号账号。
+        两路来源合并: v2_info_list（账号详情）+ video_object_list（视频关联账号）。
+        """
+        if not self._key:
+            return {"_needs_key": True}
+        raw = self._post_json("/wxvideo", {"type": 4, "keywords": keyword})
+        channels: list[dict] = []
+        for item in (raw.get("v2_info_list") or []):
+            contact = item.get("contact") or {}
+            ext = contact.get("ext_info") or {}
+            channels.append({
+                "v2_name": contact.get("username", ""),
+                "nickname": contact.get("nickname", ""),
+                "signature": contact.get("signature", ""),
+                "ip_region": ext.get("ip_region", "") if isinstance(ext, dict) else "",
+            })
+        seen = {c["v2_name"] for c in channels}
+        for v in (raw.get("video_object_list") or []):
+            v2 = v.get("username", "")
+            if v2 and v2 not in seen:
+                channels.append({
+                    "v2_name": v2,
+                    "nickname": v.get("nickname", ""),
+                    "signature": "",
+                    "ip_region": "",
+                })
+                seen.add(v2)
+        return {"keyword": keyword, "channels": channels, "total": len(channels)}
 
     # ──────────────────────────────────────────────────────────────────
     # 视频号：视频列表分页（原有功能）
