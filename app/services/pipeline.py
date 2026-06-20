@@ -56,6 +56,38 @@ def process(req: dict, principal, task_id: str) -> dict[str, Any]:
     return _public(url, task_id, t0)
 
 
+def process_brief(brief, route_decision, principal, task_id: str) -> dict[str, Any]:
+    """脊柱路径：按 route_decision.path 走（替代 _is_deep 关键词二分）。
+    首版映射：A→_public · B/D→_deep · C→_discover_stub（W5 填实四路径 handler）。"""
+    t0 = time.perf_counter()
+    path = route_decision.path.value if route_decision else brief.path.value
+    url = (brief.subject.resolved_url if brief.subject else None) \
+        or find_url(brief.instruction, brief.context, brief.attachments)
+    if path in ("B", "D"):
+        if not url:
+            raise ValueError(f"{path} 路径需 URL（subject 未解析）")
+        return _deep(url, principal, task_id, t0)
+    if path == "C":
+        return _discover_stub(brief, route_decision, task_id, t0)
+    # A 原创放大
+    if not url:
+        raise ValueError("A 路径需 URL")
+    return _public(url, task_id, t0)
+
+
+def _discover_stub(brief, route_decision, task_id: str, t0: float) -> dict:
+    """C 选题发现 · 首版占位（W5 接 L2 发现层 + 四路径 handler）。"""
+    return {
+        "deliverable": {
+            "type": "notice", "kind": "discover", "depth": guards.DEPTH_PUBLIC,
+            "content": "选题灵感（C 路径）发现层 W5 实现 · 当前占位返回。",
+            "_path": "C", "_circles": route_decision.circles if route_decision else [],
+        },
+        "meta": _meta([], [], 0.0, t0, aigc=False, extra={"path": "C", "stub": True}),
+        "cost": billing.cost_public(),
+    }
+
+
 def _public(url: str, task_id: str, t0: float) -> dict:
     """A 线公开提取（免费档）。"""
     data = extract_public(url)

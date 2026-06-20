@@ -41,8 +41,34 @@ def resolve_douyin(url: str) -> str | None:
         return None
 
 
+def _detect_platform(url: str) -> str:
+    """识别链接平台（probe 现状仅支持抖音·其余友好报错·实测驱动 2026-06-18）。"""
+    u = (url or "").lower()
+    if "douyin.com" in u or "iesdouyin" in u:
+        return "douyin"
+    if "weixin.qq.com/sph" in u or "channels.weixin" in u or "/sph/" in u:
+        return "wechat_channels"
+    if "kuaishou" in u or "kwai" in u:
+        return "kuaishou"
+    if "xiaohongshu" in u or "xhslink" in u:
+        return "xiaohongshu"
+    return "unknown"
+
+
+_PLATFORM_CN = {
+    "wechat_channels": "微信视频号", "kuaishou": "快手",
+    "xiaohongshu": "小红书", "unknown": "未识别平台",
+}
+
+
 def run_from_video_url(url: str, tikhub_key: str | None = None) -> dict[str, Any]:
     """主入口:抖音视频链接 → {ok, report_md, video, account, audit}。"""
+    # 平台门（实测驱动）：probe 现状 TikHub 仅抖音·非抖音友好报错·不浪费付费调用
+    platform = _detect_platform(url)
+    if platform != "douyin":
+        return {"ok": False, "platform": platform,
+                "error": f"暂仅支持抖音链路（TikHub 抖音源）·{_PLATFORM_CN.get(platform, platform)}待接入。"
+                         f"请提供抖音视频链接（www.douyin.com/video/... 或 v.douyin.com 短链）。"}
     _ensure_combo()
     from combo_deep_probe import build_account_probe
     from combo_deep_probe.adapters.tikhub_adapter import tikhub_get
@@ -102,6 +128,6 @@ def run_from_video_url(url: str, tikhub_key: str | None = None) -> dict[str, Any
         "evidence_strength": cl.get("evidence_strength"),
     }
 
-    # 4. 确定性报告
-    report_md = build_report(video, account, audit)
+    # 4. 确定性报告(传逐条兄弟视频 works_sample → 报告做 L2 多条找规律)
+    report_md = build_report(video, account, audit, works=rd.get("works_sample"))
     return {"ok": True, "report_md": report_md, "video": video, "account": account, "audit": audit}
