@@ -81,9 +81,9 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     from combo_deep_probe import build_account_probe
     from combo_deep_probe.adapters.tikhub_adapter import tikhub_get
 
-    key = tikhub_key or os.getenv("TIKHUB_API_KEY")
+    key = tikhub_key or os.getenv("TIKHUB_API_KEY") or os.getenv("PROBE_TIKHUB_KEY")
     if not key:
-        return {"ok": False, "error": "缺 TIKHUB_API_KEY(走 vault)"}
+        return {"ok": False, "error": "缺 TIKHUB_API_KEY/PROBE_TIKHUB_KEY(走 vault)"}
 
     aweme_id = resolve_douyin(url)
     if not aweme_id:

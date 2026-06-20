@@ -35,9 +35,10 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # ── 配置（仅从环境变量读，禁硬编码值）─────────────────────────────────────────
-_BASE_URL = os.getenv("LITELLM_BASE_URL", "")
-_API_KEY  = os.getenv("LITELLM_API_KEY", "")
-_MODEL    = os.getenv("LITELLM_MODEL", "qwen2.5-72b-instruct")
+# 键名对齐 probe-a 现有 env(PROBE_LITELLM_BASE/KEY·ufo2 LiteLLM)，fallback LITELLM_*(本地/CI 兼容)
+_BASE_URL = os.getenv("PROBE_LITELLM_BASE") or os.getenv("LITELLM_BASE_URL", "")
+_API_KEY  = os.getenv("PROBE_LITELLM_KEY") or os.getenv("LITELLM_API_KEY", "")
+_MODEL    = os.getenv("GATES_LITELLM_MODEL") or os.getenv("LITELLM_MODEL", "cc-haiku")
 _TIMEOUT  = 10  # 秒；闸级调用比业务层更短，防止 pipeline 阻塞
 
 
