@@ -117,7 +117,8 @@ def _analyze_works(works: list, avg_like: int) -> dict | None:
 
 def build_report(video: dict[str, Any], account: dict[str, Any],
                  audit: dict[str, Any], works: list | None = None,
-                 av_md: str | None = None, compare_md: str | None = None) -> str:
+                 av_md: str | None = None, compare_md: str | None = None,
+                 l0_md: str | None = None) -> str:
     nick = account.get("nickname") or "你"
     fol = account.get("follower") or 0
     avg = account.get("avg_like") or 0
@@ -318,6 +319,11 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     # —— L4 竞品圈对比(跨账号·有竞品数据则插·三圈参照的竞品圈) ——
     if compare_md:
         P(compare_md)
+        P("")
+
+    # —— L0 环境层(赛道大环境·平台规则+赛道定位·最外层·有则插) ——
+    if l0_md:
+        P(l0_md)
         P("")
 
     # —— ②核查 + ⑥合规(说法核实 / 合规提示·有声称时出) ——

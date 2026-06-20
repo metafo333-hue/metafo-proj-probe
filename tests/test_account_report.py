@@ -162,6 +162,17 @@ class TestAccountReport(unittest.TestCase):
         self.assertNotIn("同行里你站在哪", r)
         self.assertIn("账号诊断报告", r)
 
+    # ---- L0 环境层段(l0_md)插入 ----
+    def test_l0_md_inserted(self):
+        l0 = "## 你所在赛道的大环境（避坑 + 定位）\n- 平台高压线提醒"
+        r = build_report(MOYU_V, MOYU_A, AUDIT, works=MOYU_WORKS, l0_md=l0)
+        self.assertIn("赛道的大环境", r)
+
+    def test_no_l0_md_safe(self):
+        r = build_report(MOYU_V, MOYU_A, AUDIT, works=MOYU_WORKS)  # 不传 l0_md
+        self.assertNotIn("赛道的大环境", r)
+        self.assertIn("账号诊断报告", r)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

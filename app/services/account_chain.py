@@ -14,9 +14,10 @@ from typing import Any
 
 from app.audit.gates import run_audit
 from app.services.account_audit_bridge import account_to_claims_sources
-from app.services.account_report import build_report
+from app.services.account_report import build_report, _track, _is_business
 from app.services.audiovisual import analyze_douyin_video, render_av_section
 from app.services.competitor_compare import compare_accounts
+from app.services.l0_environment import build_l0_environment, render_l0_section
 
 _MOBILE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
               "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
@@ -156,10 +157,16 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         if comp_accts:
             compare_md = compare_accounts(account, comp_accts)
 
-    # 5. 确定性报告(works→L2 规律;av_md→L1 视听六层;compare_md→L4 竞品圈)
+    # 4.8 L0 环境层(赛道大环境·种子平台规则+粉丝分层·趋势/热点待数据源时诚实标)
+    _blob = " ".join(account.get("hashtags") or []) + (account.get("signature") or "")
+    _track_name, _ = _track(_blob)
+    l0 = build_l0_environment(account, track=_track_name, is_business=_is_business(_blob))
+    l0_md = render_l0_section(l0)
+
+    # 5. 确定性报告(works→L2 规律;av_md→L1 视听六层;compare_md→L4 竞品;l0_md→L0 环境)
     works = rd.get("works_sample")
     report_md = build_report(video, account, audit, works=works,
-                             av_md=av_md, compare_md=compare_md)
+                             av_md=av_md, compare_md=compare_md, l0_md=l0_md)
     # works/six_layer 一并返回 → 供 Word 导出做动态图表 + 视听六层呈现
     return {"ok": True, "report_md": report_md, "video": video,
             "account": account, "audit": audit, "works": works, "six_layer": av_six}
