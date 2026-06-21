@@ -46,6 +46,17 @@ TASK_SPEC = {
         "env": ("REPORT_POLISH_MODEL",),
         "fallback": "Qwen/Qwen3.5-122B-A10B",
     },
+    # 评论洞察:评论聚类/情感/意向识别,轻量结构化任务(短文本批量分类)→ 复用 gates 同档便宜国产模型
+    # 既降本(35B 均衡·非旗舰)又够用(聚类/分类判断力足).全国产·数据不出境.
+    "comment": {
+        "prefer": ["Qwen/Qwen3.5-35B-A3B", "Qwen/Qwen3-30B-A3B-Instruct-2507",
+                   "Qwen/Qwen3-14B", "Qwen/Qwen3-8B"],
+        "category": {"chat"},
+        "max_price_in": 0.7,
+        "strategy": "cheapest",
+        "env": ("COMMENT_MODEL", "COMMENT_LITELLM_MODEL"),
+        "fallback": "Qwen/Qwen3.5-35B-A3B",
+    },
     # 视听:视频含语音 → 必须全模态 Omni(VL 是纯视觉无听觉,不行);思维链版同价更深
     "vision": {
         "prefer": ["Qwen/Qwen3-Omni-30B-A3B-Thinking",

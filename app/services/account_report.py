@@ -127,7 +127,13 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
                  audit: dict[str, Any], works: list | None = None,
                  av_md: str | None = None, compare_md: str | None = None,
                  l0_md: str | None = None, business_md: str | None = None,
-                 attribution_md: str | None = None) -> str:
+                 attribution_md: str | None = None,
+                 # —— 11 缺口科学适应方案段(2026-06-22·全可选·None 则跳过·旧调用零影响)——
+                 segment_md: str | None = None, cold_start_md: str | None = None,
+                 audience_md: str | None = None, comment_md: str | None = None,
+                 homepage_md: str | None = None, trend_md: str | None = None,
+                 benchmark_md: str | None = None, risk_md: str | None = None,
+                 verify_md: str | None = None, action_md: str | None = None) -> str:
     nick = account.get("nickname") or "你"
     fol = account.get("follower") or 0
     avg = account.get("avg_like") or 0
@@ -184,6 +190,12 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
         P("**你的方向比较清晰,接下来把已经验证过的内容做深做透就好。**")
     P("")
 
+    # —— 对象层:认清身份(segment)+冷启动方向(0数据·最前·有则插)——
+    if segment_md:
+        P(segment_md); P("")
+    if cold_start_md:
+        P(cold_start_md); P("")
+
     # —— 一、现状 ——
     P("## 一、你现在是什么情况")
     P("")
@@ -211,6 +223,15 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
         P("> 提醒:生意号别只盯点赞——**询单、私信、进店**才是真目标。点赞低不等于没效果,要看后端转化。")
     P("")
 
+    # —— 输入层:受众画像匹配(内容↔粉丝)+评论区洞察(用户在说)·有则插 ——
+    if audience_md:
+        P(audience_md); P("")
+    if comment_md:
+        P(comment_md); P("")
+    # —— 转化承接:主页诊断(引流→主页→转化的承接端)·有则插 ——
+    if homepage_md:
+        P(homepage_md); P("")
+
     # —— 这条视频「看+听」六层拆解(L1·视听理解·有则插) ——
     if av_md:
         P(av_md)
@@ -220,6 +241,10 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     if attribution_md:
         P(attribution_md)
         P("")
+
+    # —— 闭环层:已验证建议生效情况(建议→回测→反哺·闭环飞轮·有则插)——
+    if verify_md:
+        P(verify_md); P("")
 
     # —— 二、多条找规律(L2·核心) ——
     sec = 2
@@ -344,10 +369,21 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     P("")
     sec += 1
 
+    # —— 趋势轨迹(在涨还是在衰·L2 导数延伸·有则插)——
+    if trend_md:
+        P(trend_md); P("")
+    # —— 同赛道对标坐标(你在赛道P几·先立坐标系再谈变现·有则插)——
+    if benchmark_md:
+        P(benchmark_md); P("")
+
     # === 商业转化诊断(战略主轴·赛道价值+变现路径+ROI+商业数据+精准转化·有则插) ===
     if business_md:
         P(business_md)
         P("")
+
+    # —— 风险下行预警(机会与风险物理隔离·致命置顶·紧跟商业段·有则插)——
+    if risk_md:
+        P(risk_md); P("")
 
     # —— L4 竞品圈对比(跨账号·有竞品数据则插·三圈参照的竞品圈) ——
     if compare_md:
@@ -372,6 +408,10 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
             P("- 价格、供货/效果承诺别夸大,留好证据。")
         P("")
         sec += 1
+
+    # —— 输出层:行动清单+优先级(明天就能做的2-3件·收尾强召唤·有则插)——
+    if action_md:
+        P(action_md); P("")
 
     # —— 可信度 ——
     P(f"## {_cn(sec)}、这份分析有多可信(实话实说)")

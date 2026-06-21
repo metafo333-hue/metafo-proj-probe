@@ -214,10 +214,84 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         render_conversion_section(account, video, works, av_six),
     ]))
 
-    # 5. 确定性报告(works→L2;av_md→L1视听;attribution_md→归因飞轮;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴)
+    # 4.10 11 缺口科学适应方案段(2026-06-22·确定性为主·全可选·单模块失败独立降级不影响整体报告)
+    import logging as _lg
+    _log = _lg.getLogger(__name__)
+    _signals = {**account, "max_single_views": account.get("max_like") or 0,
+                "works_count": account.get("aweme_count") or 0}
+    segment_md = cold_start_md = audience_md = comment_md = homepage_md = None
+    trend_md = benchmark_md = risk_md = verify_md = action_md = None
+    _seg = None
+    _risk_findings: list = []
+    try:  # 对象层:创作者分层 + 能力适配
+        from app.services import creator_segment as _cs
+        _seg = _cs.classify_segment(_signals)
+        try:
+            _seg.capability = _cs.build_capability_profile(_signals)
+        except Exception:  # noqa: BLE001
+            pass
+        segment_md = _cs.render_segment_section(_signals, result=_seg)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("creator_segment 降级: %s", _e)
+    try:  # 对象层:冷启动(仅 0 数据/起号期触发)
+        from app.services import cold_start as _coldmod
+        if _coldmod.route_mode(account) in ("cold_start", "hybrid"):
+            cold_start_md = _coldmod.render_cold_start_section(
+                account, getattr(_seg, "segment", None), target_track=_track_name)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("cold_start 降级: %s", _e)
+    try:  # 转化承接:主页诊断
+        from app.services import homepage_diagnose as _hp
+        homepage_md = _hp.render_homepage_section(
+            _hp.diagnose_homepage(account, works, _track_name), video)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("homepage_diagnose 降级: %s", _e)
+    try:  # 分析层:趋势轨迹(作品自带时间戳·单次即可)
+        from app.services import trend_analysis as _tr
+        trend_md = _tr.render_trend_section(works or [], industry=_track_name)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("trend_analysis 降级: %s", _e)
+    try:  # 标准层:同赛道对标(repo 默认经验兜底·灰度feed换 repo=·每次诊断脱敏沉淀自建库)
+        from app.services import benchmark as _bm
+        _repo = _bm.LocalAccumRepo()
+        benchmark_md = _bm.render_benchmark_section(account, _track_name, repo=_repo)
+        _bm.ingest_for_benchmark(account, _track_name, _repo)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("benchmark 降级: %s", _e)
+    try:  # 分析层:风险下行预警
+        from app.services import risk_alert as _ra
+        _risk_findings = _ra.scan_risks(account, video=video, works=works) or []
+        risk_md = _ra.render_risk_section(account, _risk_findings)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("risk_alert 降级: %s", _e)
+    try:  # 输出层:行动清单+优先级(合规命中→硬置顶整改项)
+        from app.services import action_planner as _ap
+        _diag = [{"code": "compliance_hit",
+                  "params": {"bad_term": "、".join((_f.get("evidence") or {}).get("hit_keywords") or []),
+                             "good_term": "合规说法"}}
+                 for _f in _risk_findings if _f.get("risk_type") == "ban_redline"]
+        action_md = _ap.render_action_section(
+            _ap.plan_actions(_diag, track=_track_name, account=account))
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("action_planner 降级: %s", _e)
+    try:  # 闭环层:已验证建议生效(本地积累·首诊为空·复诊渐显)
+        from app.services import verify_loop as _vl
+        verify_md = _vl.render_verify_section(sec_uid)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("verify_loop 降级: %s", _e)
+    # 输入层:评论洞察 + 受众画像 → 依赖灰度数据源/创作者授权·当前管线无 provider
+    #   接口已就绪(comment_insight.load_comments / audience_source.register_source)·
+    #   灰度 feed 接好后在此填 comment_md / audience_md·商业链不自建抓取(中性指针)
+
+    # 5. 确定性报告(works→L2;av_md→L1视听;attribution_md→归因飞轮;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴;+11缺口段)
     report_md = build_report(video, account, audit, works=works,
                              av_md=av_md, compare_md=compare_md, l0_md=l0_md,
-                             business_md=business_md, attribution_md=attribution_md)
+                             business_md=business_md, attribution_md=attribution_md,
+                             segment_md=segment_md, cold_start_md=cold_start_md,
+                             audience_md=audience_md, comment_md=comment_md,
+                             homepage_md=homepage_md, trend_md=trend_md,
+                             benchmark_md=benchmark_md, risk_md=risk_md,
+                             verify_md=verify_md, action_md=action_md)
 
     # 5.5 LLM 润色(内容方法论原则1真叙事感·REPORT_POLISH=1 启用·默认关·只重组不编造·失败降级原文)
     if os.getenv("REPORT_POLISH") == "1":
