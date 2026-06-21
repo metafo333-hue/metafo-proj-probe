@@ -157,7 +157,8 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     av_md, av_six = None, None
     if with_audiovisual and os.getenv("SILICONFLOW_API_KEY"):
         play_urls = ((detail.get("video") or {}).get("play_addr") or {}).get("url_list") or []
-        av_out = analyze_douyin_video(play_urls)
+        # max_frames=10/fps=1/timeout=180:大视频(30MB+)16帧会 Omni 超时·降帧平衡质量与速度(实测 8 帧通)
+        av_out = analyze_douyin_video(play_urls, max_frames=10, fps=1, timeout=180)
         if av_out.get("ok"):
             av_six = av_out.get("six_layer")
             av_md = render_av_section(av_six)

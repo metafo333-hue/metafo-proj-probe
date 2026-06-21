@@ -81,13 +81,15 @@ _DL_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
           "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
 
 
-def fetch_video_as_data_uri(play_urls, *, max_mb: int = 20, timeout: int = 30) -> dict:
+def fetch_video_as_data_uri(play_urls, *, max_mb: int = 40, timeout: int = 60) -> dict:
     """抖音 play_addr 直链(CDN 防盗链) → 本地带 UA 下载 → base64 data URI(中转喂 Omni)。
 
     实测(2026-06-20):抖音 CDN 直链硅基服务器直接拉会 HTTP 500(防盗链)·必须本地中转。
-    play_urls=候选直链列表(逐个试到成功);>max_mb 返回 too_big(生产走临时 URL 非 base64)。
+    play_urls=候选直链列表(含不同清晰度);**超 max_mb 不放弃·试下一个清晰度**(头部号高清视频可能 30MB+)·
+    全部超限才返回 too_big(生产走临时 URL 非 base64)。
     """
     import base64
+    too_big_min = None
     for url in (play_urls or []):
         try:
             req = urllib.request.Request(
@@ -100,10 +102,13 @@ def fetch_video_as_data_uri(play_urls, *, max_mb: int = 20, timeout: int = 30) -
             continue
         mb = len(data) / 1024 / 1024
         if mb > max_mb:
-            return {"ok": False, "too_big": True,
-                    "error": f"视频 {mb:.1f}MB > {max_mb}MB·base64 过大·生产走临时 URL 方案"}
+            too_big_min = mb if too_big_min is None else min(too_big_min, mb)
+            continue   # 太大·试下一个清晰度(可能有低清更小版)
         b64 = base64.b64encode(data).decode()
         return {"ok": True, "data_uri": f"data:video/mp4;base64,{b64}", "size_mb": round(mb, 2)}
+    if too_big_min is not None:
+        return {"ok": False, "too_big": True,
+                "error": f"各清晰度均 >{max_mb}MB(最小 {too_big_min:.1f}MB)·生产走临时 URL 方案"}
     return {"ok": False, "error": "所有直链下载失败(防盗链/链接过期)"}
 
 
