@@ -89,6 +89,48 @@ def _page_number(p):
     r2 = p.add_run(" 页"); _cn(r2); r2.font.size = Pt(9); r2.font.color.rgb = GREY
 
 
+def _page_break(doc):
+    from docx.enum.text import WD_BREAK
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+
+def _toc(doc):
+    """Word 目录域(打开文档右键「更新域」生成·覆盖一二三主线导航)。"""
+    p = doc.add_paragraph()
+    r = p.add_run(); fb = OxmlElement("w:fldChar"); fb.set(qn("w:fldCharType"), "begin"); r._r.append(fb)
+    it = OxmlElement("w:instrText"); it.set(qn("xml:space"), "preserve"); it.text = 'TOC \\o "1-1" \\h \\z \\u'; r._r.append(it)
+    fs = OxmlElement("w:fldChar"); fs.set(qn("w:fldCharType"), "separate"); r._r.append(fs)
+    r2 = p.add_run("（在 Word 中右键此处「更新域」即生成目录）"); _cn(r2); r2.font.size = Pt(9); r2.font.color.rgb = GREY
+    fe = OxmlElement("w:fldChar"); fe.set(qn("w:fldCharType"), "end"); r._r.append(fe)
+
+
+def _summary_box(doc, text):
+    """核心结论摘要框(浅橙底 + 橙左边框·开篇 BLUF·一眼抓重点)。"""
+    p = doc.add_paragraph(); _shade(p, "FFF7ED")
+    p.paragraph_format.left_indent = Cm(0.35); p.paragraph_format.right_indent = Cm(0.2)
+    p.paragraph_format.space_before = Pt(8); p.paragraph_format.space_after = Pt(10)
+    pPr = p._p.get_or_add_pPr(); pbdr = OxmlElement("w:pBdr")
+    left = OxmlElement("w:left")
+    for k, val in (("w:val", "single"), ("w:sz", "24"), ("w:space", "8"), ("w:color", ORANGE)):
+        left.set(qn(k), val)
+    pbdr.append(left); pPr.append(pbdr)
+    rl = p.add_run("核心结论　"); _cn(rl); rl.bold = True; rl.font.size = Pt(12.5); rl.font.color.rgb = BLUE
+    _runs(p, text)
+
+
+def _split_summary(md: str):
+    """从 report_md 抽「一句话先说重点」做摘要框·其余为诊断主体(去重复段)。"""
+    m = re.search(r"##\s*一句话先说重点\s*\n+(.*?)(?=\n##\s)", md, re.S)
+    summary = ""
+    if m:
+        summary = re.sub(r"\*\*", "", m.group(1)).strip().split("\n")[0]
+        md = md[:m.start()] + md[m.end():]
+    # 去掉文档大标题(# 账号诊断报告)和紧随的说明引用·封面已承载
+    md = re.sub(r"^#\s+.*\n", "", md)
+    md = re.sub(r"^>\s*这份报告.*\n", "", md, flags=re.M)
+    return summary, md.strip()
+
+
 def _table(doc, rows):
     t = doc.add_table(rows=0, cols=2); t.style = "Light List Accent 1"; t.alignment = WD_TABLE_ALIGNMENT.CENTER
     for k, v in rows:
@@ -234,20 +276,27 @@ def validate_report(result: dict, md: str = None) -> dict:
 
 
 def export_docx(result: dict, out_path: str, *, date: str = "") -> str:
-    """account_chain 结果 {ok, report_md, video, account, audit} → 专业 Word。"""
+    """account_chain 结果 → 专业 Word(二次编辑版)。
+
+    结构(结论先行·原始数据后置):
+      封面(品牌+报告编号) → 目录 → 核心结论摘要框 → 诊断主体(内层一二三主编号·无外层冲突)
+      → 附录·采集数据(表+图) → 数据声明。
+    """
     if not result.get("ok"):
         raise ValueError(f"结果非 ok·不能导出:{result.get('error')}")
+    import hashlib
     video = result.get("video", {}) or {}
     account = result.get("account", {}) or {}
     audit = result.get("audit", {}) or {}
     nick = account.get("nickname", "未知账号")
+    summary, body = _split_summary(result.get("report_md", ""))
+    rpt_no = "MP-" + hashlib.sha1(str(account.get("sec_uid") or nick).encode()).hexdigest()[:6].upper() + "-" + (date or "00000000")
 
     doc = Document()
     sec = doc.sections[0]
     sec.page_width = Cm(21); sec.page_height = Cm(29.7)
     sec.top_margin = Cm(2.54); sec.bottom_margin = Cm(2.2)
     sec.left_margin = Cm(3.17); sec.right_margin = Cm(3.17)
-
     _set_style(doc.styles["Normal"], 10.5, INK)
     doc.styles["Normal"].paragraph_format.line_spacing = 1.5
     doc.styles["Normal"].paragraph_format.space_after = Pt(4)
@@ -258,46 +307,58 @@ def export_docx(result: dict, out_path: str, *, date: str = "") -> str:
         except KeyError:
             pass
 
-    # 封面
-    tr = doc.add_paragraph().add_run("probe · 抖音账号诊断报告")
-    _cn(tr); tr.font.size = Pt(24); tr.bold = True; tr.font.color.rgb = BLUE
-    sr = doc.add_paragraph().add_run("实测样例 · 基于真实公开数据生成")
+    # ===== 封面(品牌化·居中) =====
+    bp = doc.add_paragraph(); bp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    bp.paragraph_format.space_before = Pt(90)
+    lr = bp.add_run("元探 · MetaProbe"); _cn(lr); lr.font.size = Pt(30); lr.bold = True; lr.font.color.rgb = BLUE
+    tp = doc.add_paragraph(); tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tr = tp.add_run("抖音账号深度诊断报告"); _cn(tr); tr.font.size = Pt(20); tr.bold = True; tr.font.color.rgb = INK
+    sp = doc.add_paragraph(); sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sr = sp.add_run("看懂一个账号：从一条视频的「看+听」到整个赛道的位置")
     _cn(sr); sr.italic = True; sr.font.size = Pt(11); sr.font.color.rgb = GREY
     _hrule(doc)
-    meta = doc.add_paragraph()
-    for label, val in [("分析对象", f"@{nick}"), ("数据来源", "合法授权渠道 · 平台公开数据"),
-                       ("分析引擎", "probe account_chain"), ("生成日期", date or "—")]:
-        rl = meta.add_run(f"{label}："); _cn(rl); rl.bold = True; rl.font.size = Pt(10); rl.font.color.rgb = INK2
-        rv = meta.add_run(f"{val}    "); _cn(rv); rv.font.size = Pt(10)
+    for label, val in [("分析对象", f"@{nick}"), ("报告编号", rpt_no),
+                       ("数据来源", "合法授权渠道 · 平台公开数据"), ("生成日期", date or "—")]:
+        mp = doc.add_paragraph(); mp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        rl = mp.add_run(f"{label}　"); _cn(rl); rl.bold = True; rl.font.size = Pt(10.5); rl.font.color.rgb = INK2
+        rv = mp.add_run(val); _cn(rv); rv.font.size = Pt(10.5)
+    _page_break(doc)
 
-    # 一、采集数据
-    _heading(doc, "一、采集数据概览（平台公开真值 · 无一编造）", BLUE, 15)
-    _heading(doc, "目标视频", INK, 12.5, 2); _table(doc, _video_rows(video))
-    _heading(doc, "账号画像（含兄弟视频聚合）", INK, 12.5, 2); _table(doc, _account_rows(account))
+    # ===== 目录 =====
+    _heading(doc, "目录", BLUE, 15)
+    _toc(doc)
+    _page_break(doc)
 
-    # 动态图表(根据实际数据选择画哪些·数据不足不插·诚实不硬凑)
+    # ===== 核心结论(摘要框·BLUF·一眼抓重点) =====
+    if summary:
+        _summary_box(doc, summary)
+
+    # ===== 诊断主体(report_md·内层一二三是唯一主编号·去外层冲突) =====
+    _parse_md(doc, body)
+    _page_break(doc)
+
+    # ===== 附录·采集数据(原始数据后置) =====
+    _heading(doc, "附录 · 采集数据（平台公开真值 · 无一编造）", BLUE, 14)
+    _heading(doc, "目标视频", INK, 12, 2); _table(doc, _video_rows(video))
+    _heading(doc, "账号画像（含兄弟视频聚合）", INK, 12, 2); _table(doc, _account_rows(account))
     import tempfile
     _charts = []
     try:
         _charts = _make_charts(result, tempfile.mkdtemp(prefix="probe_chart_"))
     except Exception:
-        _charts = []   # 图表失败不阻塞报告生成(降级·正文照出)
+        _charts = []   # 图表失败不阻塞(降级·正文照出)
     if _charts:
-        _heading(doc, "可视化（按数据自动生成）", INK, 12.5, 2)
+        _heading(doc, "数据可视化（按实际数据自动生成）", INK, 12, 2)
         for ctitle, cpath in _charts:
             pp = doc.add_paragraph(); pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
             pp.add_run().add_picture(cpath, width=Cm(13.5))
             cap = doc.add_paragraph(); cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
             rc = cap.add_run(ctitle); _cn(rc); rc.font.size = Pt(9); rc.italic = True; rc.font.color.rgb = GREY
 
-    # 二、诊断报告
-    _heading(doc, "二、诊断报告（说人话 · 照着做）", BLUE, 15)
-    _parse_md(doc, result.get("report_md", ""))
-
-    # 三、声明
-    _heading(doc, "三、数据来源与可信度声明", BLUE, 15)
+    # ===== 数据来源与可信度声明 =====
+    _heading(doc, "数据来源与可信度声明", BLUE, 14)
     q = doc.add_paragraph(); _shade(q, "EFF6FF"); q.paragraph_format.left_indent = Cm(0.4)
-    _runs(q, "本报告由 probe 引擎自动生成：合法授权渠道采集平台公开数据 → L1单条 / L2多条找规律 / L3账号判断 → ②事实核查 + ⑥合规 → 可信度担保 → 确定性规则生成（零 LLM 编造）。")
+    _runs(q, "本报告由元探(MetaProbe)引擎自动生成：合法授权渠道采集平台公开数据 → L1单条 / L2多条找规律 / L3账号判断 → ②事实核查 + ⑥合规 → 可信度担保 → 确定性规则生成（零 LLM 编造）。")
     sr_, cl_, es_ = audit.get("source_reliability", "?"), audit.get("confidence_level", "?"), audit.get("evidence_strength", "?")
     for line in [
         "**数字真实性**：粉丝/点赞/作品/标签/规律全部为平台**公开真值**，经合法授权渠道采集，未经编造或估算。",
@@ -314,19 +375,18 @@ def export_docx(result: dict, out_path: str, *, date: str = "") -> str:
 
 def standard_filename(account: dict, platform: str = "douyin", date: str = "",
                       report_type: str = "account") -> str:
-    """Word 报告标准文件名(全 ASCII kebab · 脱敏 · 可追溯)。
+    """Word 报告标准文件名(清楚可读·一看就知道是谁的什么报告)。
 
-    格式: probe-<type>-<platform>-<对象sha1前8>-<YYYYMMDD>.docx
-    例  : probe-account-douyin-a1b2c3d4-20260618.docx
-      - type     : account(账号诊断) / video(单视频)
-      - platform : douyin / kuaishou / xiaohongshu / ...
-      - 对象哈希  : sec_uid 或昵称的 sha1 前8位(脱敏·不泄露账号原始ID·唯一可区分)
-      - 日期      : YYYYMMDD
+    格式: 元探<类型>-<昵称>-<平台>-<YYYYMMDD>.docx
+    例  : 元探账号诊断-亿文-抖音-20260621.docx
+      - 昵称已清理文件名非法字符(/ \\ : * ? " < > | 及空格)·截断 20 字
     """
-    import hashlib
-    ident = account.get("sec_uid") or account.get("nickname") or "unknown"
-    h = hashlib.sha1(str(ident).encode("utf-8")).hexdigest()[:8]
-    return f"probe-{report_type}-{platform}-{h}-{date or '00000000'}.docx"
+    nick = str(account.get("nickname") or "未知账号")
+    nick = re.sub(r'[\\/:*?"<>|｜\s]+', "", nick)[:20] or "未知账号"
+    plat_cn = {"douyin": "抖音", "kuaishou": "快手", "xiaohongshu": "小红书",
+               "wechat_channels": "视频号"}.get(platform, platform)
+    type_cn = {"account": "账号诊断", "video": "单视频诊断"}.get(report_type, report_type)
+    return f"元探{type_cn}-{nick}-{plat_cn}-{date or '00000000'}.docx"
 
 
 if __name__ == "__main__":
