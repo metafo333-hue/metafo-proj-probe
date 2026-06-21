@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated_at": "2026-06-22T01:25:02",
+  "updated_at": "2026-06-22T02:53:23",
   "cases": [
     {
       "run_id": "douyin-dingxiangyisheng-20260621-120000",
@@ -59,7 +59,7 @@
       "video_title": "餐饮门店直供拿货，缩减成本拉高利润，规格齐全供货稳定",
       "video_like": 77,
       "has_av": true,
-      "analyzed_at": "2026-06-21T12:00:00",
+      "analyzed_at": "2026-06-21T14:32:00",
       "analyzed_date": "2026-06-21",
       "probe_version": "commit:8ae781b",
       "polish": {
@@ -104,7 +104,7 @@
       "video_title": "成都苍蝇馆子藏不住了｜排队2小时·人均30元吃到哭",
       "video_like": 8900,
       "has_av": false,
-      "analyzed_at": "2026-06-21T12:00:00",
+      "analyzed_at": "2026-06-21T15:00:00",
       "analyzed_date": "2026-06-21",
       "probe_version": "commit:7e7c214",
       "polish": {
@@ -147,7 +147,7 @@
       "video_title": "28岁脸部胶原流失怎么救｜三步急救方案·真实测评不滤镜",
       "video_like": 2450,
       "has_av": false,
-      "analyzed_at": "2026-06-21T12:00:00",
+      "analyzed_at": "2026-06-21T15:10:00",
       "analyzed_date": "2026-06-21",
       "probe_version": "commit:7e7c214",
       "polish": {
@@ -190,7 +190,7 @@
       "video_title": "四川泡椒厂直供·餐饮连锁50箱起批·比市面便宜30%",
       "video_like": 312,
       "has_av": false,
-      "analyzed_at": "2026-06-21T12:00:00",
+      "analyzed_at": "2026-06-21T15:20:00",
       "analyzed_date": "2026-06-21",
       "probe_version": "commit:7e7c214",
       "polish": {

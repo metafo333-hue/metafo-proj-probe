@@ -25,7 +25,6 @@
   --bg:          #F8FAFC;
   --white:       #FFFFFF;
   --sidebar-w:   220px;
-  --drawer-w:    560px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -197,6 +196,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 /* 筛选双行 */
@@ -296,7 +296,7 @@ body {
   padding: 14px;
   position: relative;
   cursor: pointer;
-  transition: box-shadow .2s, transform .15s;
+  transition: box-shadow .2s, transform .15s, border-color .15s;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -304,6 +304,10 @@ body {
 .case-card:hover {
   box-shadow: 0 4px 16px rgba(30,58,138,.12);
   transform: translateY(-1px);
+}
+.case-card.panel-active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(30,58,138,.2);
 }
 
 /* 平台徽标（右上角） */
@@ -324,7 +328,7 @@ body {
 .platform-badge.shipinhao { background: #07C160; }
 .platform-badge.default { background: var(--text-muted); }
 
-/* 版本角标（左上角，当 platform-badge 存在时推后） */
+/* 版本角标（左上角） */
 .version-badge {
   position: absolute;
   top: 0;
@@ -446,7 +450,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: background .15s;
-  pointer-events: none; /* 父卡片监听 click */
+  pointer-events: none;
 }
 .case-card:hover .btn-detail { background: var(--blue-light); }
 
@@ -459,66 +463,127 @@ mark {
 }
 
 /* ============================================================
-   列表视图 / 报告视图 内页切换
+   右侧面板 (Panel)
    ============================================================ */
-#list-view  { display: block; }
-#report-view { display: none; flex-direction: column; height: calc(100vh - var(--header-h)); }
-#report-view.active { display: flex; }
+#panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.3);
+  z-index: 200;
+  display: none;
+}
+#panel-overlay.open { display: block; }
 
-/* ── 报告视图导航条 ── */
-#report-nav {
+#panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: 65vw;
+  max-width: 760px;
+  min-width: 480px;
+  height: 100vh;
+  background: var(--white);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  box-shadow: -6px 0 40px rgba(0,0,0,.15);
+}
+#panel.open { transform: translateX(0); }
+
+/* panel header */
+#panel-header {
+  padding: 14px 16px 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+#panel-account {
+  font-size: 16px;
+  font-weight: 700;
+  flex: 1;
+  padding-right: 12px;
+  line-height: 1.3;
+  color: var(--text-dark);
+}
+#panel-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 20px;
-  background: var(--white);
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
-#back-btn {
+
+/* prev/next 按钮 */
+.nav-btn {
   background: var(--blue-bg);
   color: var(--blue);
   border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .12s;
+  line-height: 1;
+}
+.nav-btn:hover { background: #DBEAFE; }
+.nav-btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+#panel-case-index {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+#panel-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 2px;
+  line-height: 1;
+  transition: color .12s;
+}
+#panel-close:hover { color: var(--text-dark); }
+
+#panel-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 16px 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Word 按钮（面板内） */
+.word-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--orange);
+  color: #fff;
+  text-decoration: none;
   border-radius: 6px;
-  padding: 6px 13px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: opacity .15s, transform .1s;
   white-space: nowrap;
-  flex-shrink: 0;
-  transition: background .15s;
+  border: none;
 }
-#back-btn:hover { background: #DBEAFE; }
-#rv-info { flex: 1; min-width: 0; }
-#rv-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-dark);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#rv-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-  display: block;
-  margin-top: 1px;
-}
+.word-open-btn:hover { opacity: .85; transform: translateY(-1px); }
+.word-open-btn:active { transform: translateY(0); }
 
-/* ── 报告 Tabs ── */
-#report-tabs {
+/* Tabs */
+#panel-tabs {
   display: flex;
-  padding: 0 20px;
-  background: var(--white);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  padding: 0 16px;
 }
-.rtab {
-  padding: 10px 16px;
+.ptab {
+  padding: 9px 14px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -528,32 +593,74 @@ mark {
   white-space: nowrap;
   user-select: none;
 }
-.rtab:hover { color: var(--blue); }
-.rtab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+.ptab:hover { color: var(--blue); }
+.ptab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+  font-weight: 600;
+}
 
-/* ── 报告内容区 ── */
-#report-body {
+/* 内容区：TOC + 主体 */
+#panel-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* TOC 导航 */
+#panel-toc {
+  width: 150px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 10px 0;
+  background: #FAFAFA;
+  display: none;
+}
+#panel-toc.visible { display: block; }
+#panel-toc .toc-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  padding: 0 12px 6px;
+}
+.toc-item {
+  display: block;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-gray);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all .12s;
+  line-height: 1.4;
+}
+.toc-item:hover { color: var(--blue); background: #EFF6FF; }
+.toc-item.active {
+  color: var(--blue);
+  border-left-color: var(--blue);
+  background: #EFF6FF;
+  font-weight: 600;
+}
+.toc-item.h3 { padding-left: 20px; font-size: 11px; }
+
+/* 主体 */
+#panel-body {
   flex: 1;
   overflow-y: auto;
   padding: 0;
   background: var(--bg);
 }
-/* 仪表盘/历史 用 padding */
-#report-body.padded { padding: 20px; }
-/* 报告全文 iframe 撑满 */
-#report-body iframe {
-  width: 100%;
-  height: 100%;
-  min-height: calc(100vh - 180px);
-  border: none;
-  background: #fff;
-  display: block;
-}
+#panel-body.padded { padding: 18px; }
 
-/* ── 报告全文 markdown 渲染 ── */
+/* ============================================================
+   报告全文 markdown 渲染
+   ============================================================ */
 .md-content {
   line-height: 1.7;
   color: var(--text-dark);
+  padding: 16px;
 }
 .md-content h1 {
   font-size: 18px;
@@ -664,34 +771,6 @@ mark {
   text-align: center;
   padding: 40px 0;
   color: var(--text-muted);
-}
-.report-file-hint {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
-  text-align: center;
-  color: var(--text-muted);
-}
-.report-file-hint h4 {
-  font-size: 14px;
-  color: var(--text-gray);
-  margin-bottom: 8px;
-  text-align: left;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.report-file-hint code {
-  display: block;
-  background: var(--text-dark);
-  color: #A3E635;
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 12px;
-  font-family: "SF Mono", "Fira Code", monospace;
-  text-align: left;
-  margin: 10px 0;
-  white-space: pre;
 }
 
 /* 骨架屏 */
@@ -814,26 +893,6 @@ mark {
   text-align: right;
   line-height: 1.5;
 }
-
-/* ── Word 打开按钮 ── */
-.word-open-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: var(--orange);
-  color: #fff;
-  text-decoration: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity .15s, transform .1s;
-  white-space: nowrap;
-  border: none;
-}
-.word-open-btn:hover { opacity: .85; transform: translateY(-1px); }
-.word-open-btn:active { transform: translateY(0); }
 
 /* ── 仪表盘新元素 ── */
 .video-title-box {
@@ -964,7 +1023,6 @@ mark {
   margin-left: 6px;
   vertical-align: middle;
 }
-
 .no-history {
   text-align: center;
   padding: 30px 0;
@@ -992,7 +1050,7 @@ mark {
   #sidebar { display: none; }
   #header-stats { display: none; }
   #cards-grid { grid-template-columns: 1fr; }
-  #drawer { width: 100vw; }
+  #panel { width: 100vw; min-width: unset; }
   .metrics-grid-3 { grid-template-columns: repeat(2, 1fr); }
   .metrics-grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
@@ -1052,63 +1110,67 @@ mark {
 
   <!-- 右侧内容 -->
   <div id="content">
-
-    <!-- ══ 列表视图（默认） ══════════════════════════════════════ -->
-    <div id="list-view">
-      <!-- 双行筛选 -->
-      <div id="filters-bar">
-        <div class="filter-row" id="platform-row">
-          <span class="filter-label">平台</span>
-          <div class="chip active" data-platform="">全部</div>
-        </div>
-        <div class="filter-row" id="type-row">
-          <span class="filter-label">类型</span>
-          <div class="chip active" data-type="">全部</div>
-        </div>
+    <!-- 双行筛选 -->
+    <div id="filters-bar">
+      <div class="filter-row" id="platform-row">
+        <span class="filter-label">平台</span>
+        <div class="chip active" data-platform="">全部</div>
       </div>
-      <!-- 卡片网格 -->
-      <div id="cards-area">
-        <div id="cards-grid"></div>
-        <div id="empty-state">
-          <div class="empty-icon">🔍</div>
-          <p>没有找到匹配的案例</p>
-          <small>试试其他关键词或调整筛选条件</small>
-        </div>
+      <div class="filter-row" id="type-row">
+        <span class="filter-label">类型</span>
+        <div class="chip active" data-type="">全部</div>
       </div>
     </div>
-
-    <!-- ══ 报告视图（点击卡片后切入） ═══════════════════════════ -->
-    <div id="report-view">
-      <!-- 导航条 -->
-      <div id="report-nav">
-        <button id="back-btn" title="返回列表 (ESC)">← 返回列表</button>
-        <div id="rv-info">
-          <span id="rv-name">—</span>
-          <span id="rv-sub">—</span>
-        </div>
-        <a id="word-btn" class="word-open-btn" style="display:none" target="_blank">📄 Word</a>
+    <!-- 卡片网格 -->
+    <div id="cards-area">
+      <div id="cards-grid"></div>
+      <div id="empty-state">
+        <div class="empty-icon">🔍</div>
+        <p>没有找到匹配的案例</p>
+        <small>试试其他关键词或调整筛选条件</small>
       </div>
-      <!-- 内容 Tabs -->
-      <div id="report-tabs">
-        <div class="rtab active" data-tab="report">报告全文</div>
-        <div class="rtab" data-tab="dashboard">数据仪表盘</div>
-        <div class="rtab" data-tab="history">版本历史</div>
-      </div>
-      <!-- 内容区 -->
-      <div id="report-body"></div>
     </div>
+  </div>
+</div>
 
+<!-- ====== 右侧面板 ====== -->
+<div id="panel-overlay"></div>
+<div id="panel">
+  <!-- 面板 header -->
+  <div id="panel-header">
+    <div id="panel-account">@账号名</div>
+    <div id="panel-actions">
+      <button class="nav-btn" id="prev-case" title="上一个案例 (A)">◀</button>
+      <span id="panel-case-index"></span>
+      <button class="nav-btn" id="next-case" title="下一个案例 (D)">▶</button>
+      <a id="word-btn" class="word-open-btn" style="display:none" target="_blank">📄</a>
+      <button id="panel-close" title="关闭 (ESC)">×</button>
+    </div>
+  </div>
+  <div id="panel-sub"></div>
+  <!-- Tabs -->
+  <div id="panel-tabs">
+    <div class="ptab active" data-tab="report">报告全文</div>
+    <div class="ptab" data-tab="dashboard">数据仪表盘</div>
+    <div class="ptab" data-tab="历史">版本历史</div>
+  </div>
+  <!-- 内容区: TOC + 主体 -->
+  <div id="panel-content">
+    <div id="panel-toc">
+      <div class="toc-title">目录</div>
+    </div>
+    <div id="panel-body"></div>
   </div>
 </div>
 
 <!-- ====== Footer ====== -->
 <footer id="footer">
-  元探 MetaProbe · 元帅 metafo · 数据来自合法授权渠道 · <kbd>/</kbd> 搜索 · <kbd>ESC</kbd> 关闭 · <kbd>←→</kbd> 切换 Tab
+  元探 MetaProbe · 元帅 metafo · 数据来自合法授权渠道 · <kbd>/</kbd> 搜索 · <kbd>ESC</kbd> 关闭 · <kbd>←→</kbd> 切换 Tab · <kbd>A/D</kbd> 上/下一个案例
 </footer>
 
 <!-- ====== 嵌入数据（file:// 模式回退） ====== -->
 <script type="application/json" id="embedded-data">
-{"version":"1.1","updated_at":"2026-06-22T00:00:00","cases":[{"run_id":"douyin-dingxiangyisheng-20260621-120000","platform":"douyin","sec_uid":"MS4wLjABAAAAd2SoOO020RyRJI8wJGJt5oH8Cwqi","aweme_id":"7554979341508021567","account_name":"丁香医生","account_type":"知识/健康","follower":6438222,"avg_like":73966,"max_like":790105,"burst_ratio":null,"vertical_score":null,"video_title":"镜子里的你，照片里的你，哪一个才是真的你？为什么镜子里的你会更好看？","video_like":183741,"video_comment":5239,"video_collect":32990,"video_share":null,"has_av":false,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":false,"mode":"single","model":"DeepSeek-V3","segs_ok":0,"segs_total":1,"note":"过短降级·分段润色前"},"validation_pass":true,"validation_gaps":[],"ai_summary":"健康科普大V·643万粉成熟期·知识付费首选·星图报价19-64万/条","tags":["真实账号","首次分析","知识科普"],"report_chars":11515,"source":"real_tikhub","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-beichuanmoyujie-20260621-143200","platform":"douyin","sec_uid":"","aweme_id":"7644015926498044773","account_name":"北川魔芋姐｜赵娟","account_type":"带货·B2B","follower":4645,"avg_like":105,"max_like":383,"burst_ratio":3.6,"vertical_score":null,"video_title":"餐饮门店直供拿货，缩减成本拉高利润，规格齐全供货稳定","video_like":77,"video_comment":8,"video_collect":1,"video_share":null,"has_av":true,"analyzed_at":"2026-06-21T14:32:00","analyzed_date":"2026-06-21","probe_version":"commit:8ae781b","polish":{"ok":false,"mode":"single","model":"Qwen3.5-122B-A10B","segs_ok":0,"segs_total":1,"note":"过短降级"},"validation_pass":true,"validation_gaps":[],"ai_summary":"北川魔芋B2B·非遗第五代传承·4645粉成长期·私域询单主路径","tags":["真实账号","B2B","非遗","魔芋","首次分析"],"report_chars":8010,"source":"real_tikhub","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-chengduchihuo-20260621-150000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"成都吃货日记｜小李","account_type":"本地服务·探店","follower":380000,"avg_like":4500,"max_like":89000,"burst_ratio":19.8,"vertical_score":null,"video_title":"成都苍蝇馆子藏不住了｜排队2小时·人均30元吃到哭","video_like":8900,"video_comment":320,"video_collect":2300,"video_share":null,"has_av":false,"analyzed_at":"2026-06-21T15:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":true,"mode":"single","model":"DeepSeek-V3","segs_ok":1,"segs_total":1},"validation_pass":true,"validation_gaps":[],"ai_summary":"成都探店38万粉·爆款比19.8·广告+佣金成熟·苍蝇馆子爆款89K赞","tags":["fixture","探店","本地美食","成都"],"report_chars":2345,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-pifuanna-20260621-151000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"皮肤屏障研究院｜Anna","account_type":"颜值·美妆","follower":220000,"avg_like":1800,"max_like":38000,"burst_ratio":21.1,"vertical_score":null,"video_title":"28岁脸部胶原流失怎么救｜三步急救方案·真实测评不滤镜","video_like":2450,"video_comment":186,"video_collect":890,"video_share":null,"has_av":false,"analyzed_at":"2026-06-21T15:10:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":true,"mode":"single","model":"Qwen3.5-122B-A10B","segs_ok":1,"segs_total":1},"validation_pass":true,"validation_gaps":[],"ai_summary":"皮肤科顾问成分党·22万粉成长期·知识付费潜力·维A酸爆款38K赞","tags":["fixture","成分党","护肤","知识付费潜力"],"report_chars":2325,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-chuanweipaojiao-20260621-152000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"川味泡椒老赵｜赵老板","account_type":"带货·B2B","follower":52000,"avg_like":186,"max_like":4200,"burst_ratio":22.6,"vertical_score":null,"video_title":"四川泡椒厂直供·餐饮连锁50箱起批·比市面便宜30%","video_like":312,"video_comment":28,"video_collect":7,"video_share":null,"has_av":false,"analyzed_at":"2026-06-21T15:20:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":false,"mode":"single","model":"DeepSeek-V3","segs_ok":0,"segs_total":1,"note":"合规段保护降级"},"validation_pass":true,"validation_gaps":[],"ai_summary":"四川泡椒工厂B2B·52K粉·获奖品质需晒证据·私域询单主路径","tags":["fixture","B2B","工厂直供","四川"],"report_chars":2870,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1}]}
+{"version":"1.0","updated_at":"2026-06-22T02:53:23","cases":[{"run_id":"douyin-dingxiangyisheng-20260621-120000","platform":"douyin","sec_uid":"MS4wLjABAAAAd2SoOO020RyRJI8wJGJt5oH8Cwqi","aweme_id":"7554979341508021567","account_name":"丁香医生","account_type":"知识/健康","follower":6438222,"avg_like":73966,"max_like":790105,"burst_ratio":null,"video_title":"镜子里的你，照片里的你，哪一个才是真的你？为什么镜子里的你会更好看？","video_like":183741,"has_av":false,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":false,"mode":"single","model":"DeepSeek-V3","segs_ok":0,"segs_total":1,"note":"过短降级·分段润色前"},"validation_pass":true,"validation_gaps":[],"ai_summary":"健康科普大V·643万粉成熟期·知识付费首选·星图报价19-64万/条","tags":["真实账号","首次分析","知识科普"],"report_chars":6909,"source":"real_tikhub","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1,"video_comment":5239,"video_collect":32990,"video_share":57384},{"run_id":"douyin-beichuanmoyujie-20260621-143200","platform":"douyin","sec_uid":"","aweme_id":"7644015926498044773","account_name":"北川魔芋姐｜赵娟","account_type":"带货·B2B","follower":4645,"avg_like":105,"max_like":383,"burst_ratio":3.6,"video_title":"餐饮门店直供拿货，缩减成本拉高利润，规格齐全供货稳定","video_like":77,"has_av":true,"analyzed_at":"2026-06-21T14:32:00","analyzed_date":"2026-06-21","probe_version":"commit:8ae781b","polish":{"ok":false,"mode":"single","model":"Qwen3.5-122B-A10B","segs_ok":0,"segs_total":1,"note":"过短降级"},"validation_pass":true,"validation_gaps":[],"ai_summary":"北川魔芋B2B·非遗第五代传承·4645粉成长期·私域询单主路径","tags":["真实账号","B2B","非遗","魔芋","首次分析"],"report_chars":8010,"source":"real_tikhub","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1,"video_comment":8,"video_collect":1,"video_share":0},{"run_id":"douyin-chengduchihuo-20260621-150000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"成都吃货日记｜小李","account_type":"本地服务·探店","follower":380000,"avg_like":4500,"max_like":89000,"burst_ratio":19.8,"video_title":"成都苍蝇馆子藏不住了｜排队2小时·人均30元吃到哭","video_like":8900,"has_av":false,"analyzed_at":"2026-06-21T15:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":true,"mode":"single","model":"DeepSeek-V3","segs_ok":1,"segs_total":1},"validation_pass":true,"validation_gaps":[],"ai_summary":"成都探店38万粉·爆款比19.8·广告+佣金成熟·苍蝇馆子爆款89K赞","tags":["fixture","探店","本地美食","成都"],"report_chars":2345,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1,"video_comment":320,"video_collect":2300,"video_share":1200},{"run_id":"douyin-pifuanna-20260621-151000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"皮肤屏障研究院｜Anna","account_type":"颜值·美妆","follower":220000,"avg_like":1800,"max_like":38000,"burst_ratio":21.1,"video_title":"28岁脸部胶原流失怎么救｜三步急救方案·真实测评不滤镜","video_like":2450,"has_av":false,"analyzed_at":"2026-06-21T15:10:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":true,"mode":"single","model":"Qwen3.5-122B-A10B","segs_ok":1,"segs_total":1},"validation_pass":true,"validation_gaps":[],"ai_summary":"皮肤科顾问成分党·22万粉成长期·知识付费潜力·维A酸爆款38K赞","tags":["fixture","成分党","护肤","知识付费潜力"],"report_chars":2325,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1,"video_comment":186,"video_collect":890,"video_share":340},{"run_id":"douyin-chuanweipaojiao-20260621-152000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"川味泡椒老赵｜赵老板","account_type":"带货·B2B","follower":52000,"avg_like":186,"max_like":4200,"burst_ratio":22.6,"video_title":"四川泡椒厂直供·餐饮连锁50箱起批·比市面便宜30%","video_like":312,"has_av":false,"analyzed_at":"2026-06-21T15:20:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":false,"mode":"single","model":"DeepSeek-V3","segs_ok":0,"segs_total":1,"note":"合规段保护降级"},"validation_pass":true,"validation_gaps":[],"ai_summary":"四川泡椒工厂B2B·52K粉·获奖品质需晒证据·私域询单主路径","tags":["fixture","B2B","工厂直供","四川"],"report_chars":2870,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1,"video_comment":28,"video_collect":7,"video_share":15}]}
 </script>
 
 <!-- ====== 主脚本 ====== -->
@@ -1132,12 +1194,16 @@ function fmtNum(n) {
   if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
   return n.toLocaleString('zh-CN');
 }
-// 别名保持向后兼容
 const fmtFollowers = fmtNum;
 
 function fmtDate(s) {
   if (!s) return '—';
   return s.slice(0, 10);
+}
+
+function fmtDateTime(s) {
+  if (!s) return '—';
+  return s.slice(0, 19).replace('T', ' ');
 }
 
 function escHtml(s) {
@@ -1148,14 +1214,12 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-/** 高亮搜索词 */
 function highlight(text, q) {
   if (!q || !text) return escHtml(text || '');
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return escHtml(text).replace(new RegExp(escaped, 'gi'), m => `<mark>${m}</mark>`);
 }
 
-/** 类型 badge 颜色 */
 const TYPE_COLORS = {
   'B2B':    { bg: '#FFF3E0', color: '#E65100' },
   '带货':   { bg: '#E8F5E9', color: '#2E7D32' },
@@ -1176,7 +1240,6 @@ function getTypeBadgeStyle(accountType) {
   return TYPE_COLORS['默认'];
 }
 
-/** 润色状态 */
 function polishStatus(polish) {
   if (!polish) return { icon: '📝', label: '润色未知', cls: '' };
   if (polish.ok) {
@@ -1191,7 +1254,6 @@ function polishStatus(polish) {
    ============================================================ */
 function renderMarkdown(text) {
   if (!text) return '<p class="no-report">暂无报告全文。</p>';
-
   const lines = text.split('\n');
   const out = [];
   let inUl = false, inOl = false, inTable = false;
@@ -1204,10 +1266,8 @@ function renderMarkdown(text) {
   }
 
   function inlineMd(s) {
-    // 先转义 HTML，再做行内语法
     let r = String(s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // 保留原始 emoji（不转义 unicode）
     r = r
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
@@ -1217,84 +1277,55 @@ function renderMarkdown(text) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
-    // H1
     if (/^# /.test(line)) {
       closeAll();
-      out.push(`<h1>${inlineMd(line.slice(2))}</h1>`);
-    }
-    // H2
-    else if (/^## /.test(line)) {
+      out.push(`<h2>${inlineMd(line.slice(2))}</h2>`);
+    } else if (/^## /.test(line)) {
       closeAll();
-      out.push(`<h2>${inlineMd(line.slice(3))}</h2>`);
-    }
-    // H3
-    else if (/^### /.test(line)) {
+      out.push(`<h3>${inlineMd(line.slice(3))}</h3>`);
+    } else if (/^### /.test(line)) {
       closeAll();
-      out.push(`<h3>${inlineMd(line.slice(4))}</h3>`);
-    }
-    // H4
-    else if (/^#### /.test(line)) {
-      closeAll();
-      out.push(`<h4>${inlineMd(line.slice(5))}</h4>`);
-    }
-    // HR
-    else if (/^---+$/.test(line.trim())) {
+      out.push(`<h4>${inlineMd(line.slice(4))}</h4>`);
+    } else if (/^---+$/.test(line.trim())) {
       closeAll();
       out.push('<hr>');
-    }
-    // 表格行
-    else if (/^\|/.test(line)) {
+    } else if (/^\|/.test(line)) {
       const cells = line.split('|').slice(1, -1).map(c => c.trim());
-      // 分隔行（全是 - 和 :）
       if (cells.every(c => /^[-:]+$/.test(c))) {
-        // 忽略
+        // separator row — skip
       } else {
         if (!inTable) {
           closeAll();
           out.push('<table><thead><tr>');
           cells.forEach(c => out.push(`<th>${inlineMd(c)}</th>`));
           out.push('</tr></thead><tbody>');
-          inTable = true;
-          tableHead = true;
+          inTable = true; tableHead = true;
         } else {
           out.push('<tr>');
           cells.forEach(c => out.push(`<td>${inlineMd(c)}</td>`));
           out.push('</tr>');
         }
       }
-    }
-    // 引用块
-    else if (/^> /.test(line)) {
+    } else if (/^> /.test(line)) {
       closeAll();
       out.push(`<blockquote>${inlineMd(line.slice(2))}</blockquote>`);
-    }
-    // 无序列表
-    else if (/^[-*] /.test(line)) {
+    } else if (/^[-*] /.test(line)) {
       if (inTable) { out.push('</tbody></table>'); inTable = false; }
       if (inOl)    { out.push('</ol>'); inOl = false; }
       if (!inUl)   { out.push('<ul>'); inUl = true; }
       out.push(`<li>${inlineMd(line.slice(2))}</li>`);
-    }
-    // 有序列表
-    else if (/^\d+\. /.test(line)) {
+    } else if (/^\d+\. /.test(line)) {
       if (inTable) { out.push('</tbody></table>'); inTable = false; }
       if (inUl)    { out.push('</ul>'); inUl = false; }
       if (!inOl)   { out.push('<ol>'); inOl = true; }
       out.push(`<li>${inlineMd(line.replace(/^\d+\. /, ''))}</li>`);
-    }
-    // 空行
-    else if (line.trim() === '') {
+    } else if (line.trim() === '') {
       closeAll();
-      // 不插入额外元素，段落间距由 CSS 控制
-    }
-    // 普通段落
-    else {
+    } else {
       closeAll();
       out.push(`<p>${inlineMd(line)}</p>`);
     }
   }
-
   closeAll();
   return out.join('\n');
 }
@@ -1303,11 +1334,12 @@ function renderMarkdown(text) {
    应用状态
    ============================================================ */
 let allCases = [];
+let filteredCases = [];   // 当前筛选结果（供面板 ◀▶ 导航用）
 let currentCase = null;
 let activePlatform = '';
 let activeType = '';
-let activeTab = 'report';
-let reportCache = {}; // run_id → md 文本或 null（加载失败）
+let activePanelTab = 'report';
+let reportCache = {};
 let isServerMode = false;
 
 /* ============================================================
@@ -1327,6 +1359,7 @@ function pushUrlParams() {
   if (activePlatform) params.set('platform', activePlatform);
   if (activeType)     params.set('type', activeType);
   if (q)              params.set('q', q);
+  if (currentCase)    params.set('case', currentCase.run_id);
   const str = params.toString();
   const url = str ? location.pathname + '?' + str : location.pathname;
   history.replaceState(null, '', url);
@@ -1364,6 +1397,14 @@ async function loadData() {
   readUrlParams();
   renderAll();
   updateDataStatus(mode, data.updated_at);
+
+  // URL 参数打开案例
+  const sp = new URLSearchParams(location.search);
+  const caseId = sp.get('case');
+  if (caseId) {
+    const found = allCases.find(c => c.run_id === caseId);
+    if (found) openPanel(found);
+  }
 }
 
 function updateDataStatus(mode, updatedAt) {
@@ -1382,21 +1423,16 @@ function renderAll() {
   buildVersionOptions();
   updateStats();
   renderCards();
-  pushUrlParams();
 }
 
 function buildPlatformChips() {
   const row = document.getElementById('platform-row');
-  // 清除动态项
   [...row.querySelectorAll('.chip[data-platform]:not([data-platform=""])')].forEach(el => el.remove());
-
-  // 统计平台数量
   const counts = {};
   allCases.forEach(c => {
     const p = c.platform || '';
     if (p) counts[p] = (counts[p] || 0) + 1;
   });
-
   Object.entries(counts).forEach(([p, n]) => {
     const cfg = PLATFORM_CONFIG[p] || { label: p, emoji: '📱', cls: 'default' };
     const div = document.createElement('div');
@@ -1405,16 +1441,12 @@ function buildPlatformChips() {
     div.innerHTML = `${cfg.emoji} ${escHtml(cfg.label)} <span class="chip-count">${n}</span>`;
     row.appendChild(div);
   });
-
-  // 全部 chip 状态
   row.querySelector('[data-platform=""]').classList.toggle('active', activePlatform === '');
 }
 
 function buildTypeChips() {
   const row = document.getElementById('type-row');
   [...row.querySelectorAll('.chip[data-type]:not([data-type=""])')].forEach(el => el.remove());
-
-  // 在当前平台筛选下计数类型
   const base = activePlatform
     ? allCases.filter(c => (c.platform || '') === activePlatform)
     : allCases;
@@ -1423,7 +1455,6 @@ function buildTypeChips() {
     const t = c.account_type || '';
     if (t) counts[t] = (counts[t] || 0) + 1;
   });
-
   Object.entries(counts).sort((a,b) => b[1]-a[1]).forEach(([t, n]) => {
     const div = document.createElement('div');
     div.className = 'chip' + (activeType === t ? ' active' : '');
@@ -1431,7 +1462,6 @@ function buildTypeChips() {
     div.innerHTML = `${escHtml(t)} <span class="chip-count">${n}</span>`;
     row.appendChild(div);
   });
-
   row.querySelector('[data-type=""]').classList.toggle('active', activeType === '');
 }
 
@@ -1484,30 +1514,35 @@ function getFilteredCases() {
 }
 
 function renderCards() {
-  const list = getFilteredCases();
+  filteredCases = getFilteredCases();
   const grid = document.getElementById('cards-grid');
   const empty = document.getElementById('empty-state');
   const q = document.getElementById('search-input').value.trim().toLowerCase();
 
   grid.innerHTML = '';
 
-  // Header 筛选计数
   const fcEl = document.getElementById('filter-count');
   const isFiltered = activePlatform || activeType || q || document.getElementById('version-select').value;
   if (isFiltered) {
     fcEl.style.display = '';
-    fcEl.textContent = `已筛选 ${list.length} / 共 ${allCases.length} 个案例`;
+    fcEl.textContent = `已筛选 ${filteredCases.length} / 共 ${allCases.length} 个案例`;
   } else {
     fcEl.style.display = 'none';
   }
 
-  if (list.length === 0) {
+  if (filteredCases.length === 0) {
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
 
-  list.forEach(c => grid.appendChild(buildCard(c, q)));
+  filteredCases.forEach(c => grid.appendChild(buildCard(c, q)));
+
+  // 如果当前面板打开，更新活跃卡片高亮 & ◀▶ 按钮状态
+  if (currentCase) {
+    markActiveCard(currentCase.run_id);
+    updatePanelNav();
+  }
 }
 
 /* ============================================================
@@ -1516,20 +1551,18 @@ function renderCards() {
 function buildCard(c, q) {
   const div = document.createElement('div');
   div.className = 'case-card';
-  div.addEventListener('click', () => openDrawer(c));
+  div.dataset.runId = c.run_id;
+  div.addEventListener('click', () => openPanel(c));
 
-  // 平台徽标（右上角）
   const pCfg = PLATFORM_CONFIG[c.platform || ''] || null;
   if (pCfg) {
     div.innerHTML += `<div class="platform-badge ${pCfg.cls}">${pCfg.emoji} ${escHtml(pCfg.label)}</div>`;
   }
 
-  // 版本角标（左上角）
   if (c.version_count > 1) {
     div.innerHTML += `<div class="version-badge">v${c.version_count}</div>`;
   }
 
-  // 类型 badge
   const style = getTypeBadgeStyle(c.account_type);
   div.innerHTML += `
     <div>
@@ -1538,10 +1571,8 @@ function buildCard(c, q) {
       </span>
     </div>`;
 
-  // 账号名（高亮）
   div.innerHTML += `<div class="card-account">${highlight(c.account_name || '—', q)}</div>`;
 
-  // 粉丝行
   div.innerHTML += `
     <div class="card-followers">
       粉丝 <strong>${fmtFollowers(c.follower)}</strong>
@@ -1549,7 +1580,6 @@ function buildCard(c, q) {
       &nbsp;·&nbsp; 爆款比 ${c.burst_ratio != null ? c.burst_ratio + 'x' : '—'}
     </div>`;
 
-  // 图标行
   const ps = polishStatus(c.polish);
   const avIcon = c.has_av
     ? '<span class="icon-item info">🎥 视听✅</span>'
@@ -1564,12 +1594,10 @@ function buildCard(c, q) {
       ${passIcon}
     </div>`;
 
-  // 摘要（高亮）
   if (c.ai_summary) {
     div.innerHTML += `<div class="card-summary">${highlight(c.ai_summary, q)}</div>`;
   }
 
-  // 标签
   if (c.tags && c.tags.length) {
     const tagsHtml = c.tags.map(t =>
       `<span class="tag-pill" data-tag="${escHtml(t)}">${highlight(t, q)}</span>`
@@ -1577,7 +1605,6 @@ function buildCard(c, q) {
     div.innerHTML += `<div class="card-tags">${tagsHtml}</div>`;
   }
 
-  // 底部
   div.innerHTML += `
     <div class="card-footer">
       <div class="card-meta">
@@ -1587,25 +1614,27 @@ function buildCard(c, q) {
       <div class="btn-detail">查看详情</div>
     </div>`;
 
-  // 标签点击过滤（不冒泡到卡片 openDrawer）
   div.querySelectorAll('.tag-pill').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
       const tag = el.dataset.tag;
       document.getElementById('search-input').value = tag;
       renderCards();
-      pushUrlParams();
     });
   });
 
   return div;
 }
 
-/* ============================================================
-   详情抽屉
-   ============================================================ */
+function markActiveCard(runId) {
+  document.querySelectorAll('.case-card').forEach(el => {
+    el.classList.toggle('panel-active', el.dataset.runId === runId);
+  });
+}
 
-/* docx 路径（file:// 模式用绝对路径）*/
+/* ============================================================
+   右侧面板逻辑
+   ============================================================ */
 function getDocxUrl(runId) {
   const loc = window.location.href;
   if (loc.startsWith('file://')) {
@@ -1615,7 +1644,6 @@ function getDocxUrl(runId) {
   return `../data/cases/${runId}/report.docx`;
 }
 
-/* serve.py 模式：调 /open-file 端点 → 服务器 open → Word/Pages 直接弹出，零下载 */
 async function openWordFile(runId, btn) {
   const prev = btn.textContent;
   btn.textContent = '⏳ 打开中…';
@@ -1630,7 +1658,6 @@ async function openWordFile(runId, btn) {
       throw new Error(data.error || 'open failed');
     }
   } catch (err) {
-    // 降级：普通 href 下载
     btn.textContent = prev;
     btn.style.pointerEvents = '';
     const a = document.createElement('a');
@@ -1640,85 +1667,109 @@ async function openWordFile(runId, btn) {
   }
 }
 
-/* ── 切到报告视图 ── */
-function showReport(c) {
-  currentCase = c;
-  activeTab = 'report';
+function updatePanelNav() {
+  if (!currentCase) return;
+  const idx = filteredCases.findIndex(c => c.run_id === currentCase.run_id);
+  const total = filteredCases.length;
 
-  // 更新导航条
-  document.getElementById('rv-name').textContent = '@' + (c.account_name || '—');
-  document.getElementById('rv-sub').textContent =
-    [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
-      .filter(Boolean).join(' · ');
+  document.getElementById('prev-case').disabled = (idx <= 0);
+  document.getElementById('next-case').disabled = (idx < 0 || idx >= total - 1);
+  document.getElementById('panel-case-index').textContent =
+    idx >= 0 ? `${idx + 1}/${total}` : '';
+}
+
+function openPanel(c) {
+  currentCase = c;
+  activePanelTab = 'report';
+
+  // 更新 header
+  document.getElementById('panel-account').textContent = '@' + (c.account_name || '—');
+  document.getElementById('panel-sub').textContent = [
+    fmtFollowers(c.follower) + '粉',
+    c.account_type,
+    fmtDateTime(c.analyzed_at)
+  ].filter(Boolean).join(' · ');
 
   // Word 按钮
   const wordBtn = document.getElementById('word-btn');
-  if (wordBtn) {
-    wordBtn.style.display = 'inline-flex';
-    if (isServerMode) {
-      wordBtn.removeAttribute('href');
-      wordBtn.onclick = (e) => { e.preventDefault(); openWordFile(c.run_id, wordBtn); };
-      wordBtn.title = '零下载直接打开 Word';
-    } else {
-      wordBtn.onclick = null;
-      wordBtn.href = getDocxUrl(c.run_id);
-      wordBtn.title = '下载后自动打开 Word';
-    }
+  wordBtn.style.display = 'inline-flex';
+  if (isServerMode) {
+    wordBtn.removeAttribute('href');
+    wordBtn.onclick = (e) => { e.preventDefault(); openWordFile(c.run_id, wordBtn); };
+    wordBtn.title = '零下载直接打开 Word';
+  } else {
+    wordBtn.onclick = null;
+    wordBtn.href = getDocxUrl(c.run_id);
+    wordBtn.title = '下载后自动打开 Word';
   }
 
-  // 激活 tabs
-  document.querySelectorAll('.rtab').forEach(t =>
-    t.classList.toggle('active', t.dataset.tab === activeTab));
+  // Tabs 重置
+  document.querySelectorAll('.ptab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === 'report'));
 
-  // 切换视图
-  document.getElementById('list-view').style.display = 'none';
-  document.getElementById('report-view').classList.add('active');
+  // 打开面板
+  document.getElementById('panel-overlay').classList.add('open');
+  document.getElementById('panel').classList.add('open');
 
-  // 更新 URL（不刷新）
-  const sp = new URLSearchParams(window.location.search);
-  sp.set('case', c.run_id);
-  history.pushState({}, '', '?' + sp.toString());
+  // 更新卡片高亮
+  markActiveCard(c.run_id);
 
-  renderReportBody();
+  // 更新 ◀▶ 导航
+  updatePanelNav();
+
+  // 更新 URL
+  pushUrlParams();
+
+  // 渲染内容
+  renderPanelBody();
 }
 
-/* ── 返回列表视图 ── */
-function showList() {
-  document.getElementById('list-view').style.display = '';
-  document.getElementById('report-view').classList.remove('active');
+function closePanel() {
   currentCase = null;
-  // 恢复 URL
-  const sp = new URLSearchParams(window.location.search);
+  document.getElementById('panel-overlay').classList.remove('open');
+  document.getElementById('panel').classList.remove('open');
+  markActiveCard('');
+
+  // 清除 case URL 参数
+  const sp = new URLSearchParams(location.search);
   sp.delete('case');
-  history.pushState({}, '', sp.toString() ? '?' + sp.toString() : location.pathname);
+  history.replaceState(null, '', sp.toString() ? '?' + sp.toString() : location.pathname);
 }
 
 /* 兼容旧调用名 */
-function openDrawer(c) { showReport(c); }
-function closeDrawer()  { showList(); }
+function openDrawer(c) { openPanel(c); }
+function closeDrawer()  { closePanel(); }
 
-function renderReportBody() {
-  const body = document.getElementById('report-body');
-  if (!currentCase) { body.innerHTML = ''; return; }
-  body.scrollTop = 0;
-  body.className = activeTab === 'report' ? '' : 'padded';
+function renderPanelBody() {
+  const panelBody = document.getElementById('panel-body');
+  const panelToc  = document.getElementById('panel-toc');
+  if (!currentCase) { panelBody.innerHTML = ''; return; }
+  panelBody.scrollTop = 0;
 
-  if (activeTab === 'report')    renderReportTab(currentCase, body);
-  if (activeTab === 'dashboard') body.innerHTML = renderDashboardTab(currentCase);
-  if (activeTab === 'history')   body.innerHTML = renderHistoryTab(currentCase);
+  if (activePanelTab === 'report') {
+    panelBody.className = '';
+    panelToc.classList.add('visible');
+    renderReportTab(currentCase, panelBody);
+  } else if (activePanelTab === 'dashboard') {
+    panelBody.className = 'padded';
+    panelToc.classList.remove('visible');
+    panelBody.innerHTML = renderDashboardTab(currentCase);
+  } else if (activePanelTab === '历史') {
+    panelBody.className = 'padded';
+    panelToc.classList.remove('visible');
+    panelBody.innerHTML = renderHistoryTab(currentCase);
+  }
 }
 
-function renderDrawerBody() { renderReportBody(); }
-
-/* ── 报告全文 Tab（懒加载 + 骨架屏） ── */
-/* ── 报告全文 Tab · 优先加载 report.html，回退 report.md 渲染 ── */
+/* ── 报告全文 Tab（懒加载 + 骨架屏）── */
 async function renderReportTab(c, body) {
   if (reportCache[c.run_id] !== undefined) {
     _injectReport(body, c, reportCache[c.run_id]);
     return;
   }
+
   // 骨架屏
-  body.innerHTML = `<div style="padding:8px 0">
+  body.innerHTML = `<div style="padding:16px">
     <div class="skeleton wide"></div><div class="skeleton medium"></div>
     <div class="skeleton short" style="margin-bottom:20px"></div>
     <div class="skeleton wide"></div><div class="skeleton medium"></div>
@@ -1726,13 +1777,11 @@ async function renderReportTab(c, body) {
   </div>`;
 
   if (!isServerMode) {
-    // file:// 模式：只显示摘要 + 两个入口
     reportCache[c.run_id] = null;
     _injectReport(body, c, null);
     return;
   }
 
-  // 优先加载 report.html（精美排版），失败则 fallback 到 report.md
   let loaded = null, type = 'html';
   try {
     let res = await fetch(`../data/cases/${c.run_id}/report.html`, { cache: 'no-store' });
@@ -1746,38 +1795,71 @@ async function renderReportTab(c, body) {
   } catch (_) {}
 
   reportCache[c.run_id] = loaded ? { type, content: loaded } : null;
-  if (currentCase?.run_id === c.run_id && activeTab === 'report') {
+  if (currentCase?.run_id === c.run_id && activePanelTab === 'report') {
     _injectReport(body, c, reportCache[c.run_id]);
     body.scrollTop = 0;
   }
 }
 
 function _injectReport(body, c, cached) {
-  // ── 有内容 ──────────────────────────────────────────────────────
+  // 清除旧 TOC
+  const panelToc = document.getElementById('panel-toc');
+  panelToc.innerHTML = '<div class="toc-title">目录</div>';
+
   if (cached) {
     if (cached.type === 'html') {
-      // report.html：用 <iframe> 嵌入，完全隔离样式
-      const blob = new Blob([cached.content], { type: 'text/html;charset=utf-8' });
-      const url  = URL.createObjectURL(blob);
-      body.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;color:var(--text-muted)">
-          <span style="background:var(--green-bg);color:var(--green);padding:1px 7px;border-radius:4px;font-weight:600">HTML 精美排版</span>
-          <span>由 SiliconFlow 或 Python 渲染器生成</span>
-        </div>
-        <iframe src="${url}" style="width:100%;height:100%;min-height:calc(100vh - 180px);border:none;background:#fff;display:block" onload="URL.revokeObjectURL('${url}')"></iframe>`;
+      // Shadow DOM 嵌入，隔离样式
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'width:100%;height:100%;min-height:calc(100vh - 200px)';
+
+      try {
+        const shadow = wrapper.attachShadow({ mode: 'open' });
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(cached.content, 'text/html');
+        const styles = [...doc.querySelectorAll('style, link[rel="stylesheet"]')];
+        const bodyContent = doc.body ? doc.body.innerHTML : cached.content;
+
+        // 注入样式 + 内容
+        const styleHtml = styles.map(s => s.outerHTML).join('\n');
+        shadow.innerHTML = styleHtml + `<div id="report-root" style="padding:16px">${bodyContent}</div>`;
+
+        // 提取 headings 构建 TOC
+        setTimeout(() => buildTocFromShadow(shadow, panelToc, body), 100);
+      } catch (e) {
+        // Shadow DOM 失败则 iframe 回退
+        const blob = new Blob([cached.content], { type: 'text/html;charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        body.innerHTML = `
+          <div style="padding:6px 12px;font-size:11px;color:var(--text-muted);background:var(--green-bg);border-bottom:1px solid var(--border)">
+            <span style="background:var(--green-bg);color:var(--green);padding:1px 7px;border-radius:4px;font-weight:600">HTML 精美排版</span>
+          </div>
+          <iframe src="${url}" style="width:100%;height:calc(100% - 30px);border:none;background:#fff;display:block" onload="URL.revokeObjectURL('${url}')"></iframe>`;
+        panelToc.classList.remove('visible');
+        return;
+      }
+
+      body.innerHTML = '';
+      body.appendChild(wrapper);
       return;
     }
-    // report.md fallback：走 Markdown 渲染
-    body.innerHTML = `
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
-        <span style="background:#FFF7ED;color:var(--orange);padding:1px 7px;border-radius:4px;font-weight:600">Markdown 模式</span>
-        <span style="margin-left:6px">report.html 未找到 · 运行 <code style="font-size:10px">python3 scripts/gen_report_html.py --all</code> 生成</span>
-      </div>
-      <div class="md-content">${renderMarkdown(cached.content)}</div>`;
+
+    // report.md fallback
+    const container = document.createElement('div');
+    container.className = 'md-content';
+    container.innerHTML = renderMarkdown(cached.content);
+    body.innerHTML = `<div style="font-size:11px;color:var(--text-muted);padding:6px 12px;background:#FFF7ED;border-bottom:1px solid var(--border)">
+      <span style="background:#FFF7ED;color:var(--orange);padding:1px 7px;border-radius:4px;font-weight:600">Markdown 模式</span>
+      <span style="margin-left:6px">report.html 未找到</span>
+    </div>`;
+    body.appendChild(container);
+
+    // 构建 TOC from md rendered headings
+    buildTocFromDom(container, panelToc, body);
     return;
   }
 
-  // ── file:// 模式 or 加载失败 ────────────────────────────────────
+  // file:// 或加载失败
+  panelToc.classList.remove('visible');
   const htmlUrl = (() => {
     const loc = window.location.href;
     if (loc.startsWith('file://')) {
@@ -1787,6 +1869,7 @@ function _injectReport(body, c, cached) {
     return null;
   })();
 
+  body.className = 'padded';
   body.innerHTML = `
     <div style="margin-bottom:14px">
       <div class="video-title-box">${escHtml(c.video_title || '—')}</div>
@@ -1805,9 +1888,64 @@ function _injectReport(body, c, cached) {
     </div>`;
 }
 
-/* ── 数据仪表盘 Tab（v3 · 五区块全量数据）── */
+/* 从 Shadow DOM 提取 headings 构建 TOC */
+function buildTocFromShadow(shadow, tocEl, scrollEl) {
+  const root = shadow.getElementById('report-root') || shadow;
+  const headings = [...root.querySelectorAll('h1,h2,h3')];
+  buildTocItems(headings, tocEl, scrollEl, (h, id) => {
+    h.id = id;
+    return () => { shadow.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  });
+}
+
+/* 从普通 DOM 提取 headings 构建 TOC */
+function buildTocFromDom(container, tocEl, scrollEl) {
+  const headings = [...container.querySelectorAll('h1,h2,h3,h4')];
+  buildTocItems(headings, tocEl, scrollEl, (h, id) => {
+    h.id = id;
+    return () => { h.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  });
+}
+
+let tocIdCounter = 0;
+function buildTocItems(headings, tocEl, scrollEl, makeScrollFn) {
+  if (!headings.length) return;
+
+  headings.forEach((h, i) => {
+    const id = 'toc-h-' + (++tocIdCounter);
+    const scrollFn = makeScrollFn(h, id);
+
+    const item = document.createElement('div');
+    const tag = h.tagName.toLowerCase();
+    item.className = 'toc-item' + (tag === 'h3' || tag === 'h4' ? ' h3' : '');
+    item.textContent = h.textContent.replace(/^[#·\s]+/, '').trim() || '(无标题)';
+    item.addEventListener('click', () => {
+      scrollFn();
+      tocEl.querySelectorAll('.toc-item').forEach(el => el.classList.remove('active'));
+      item.classList.add('active');
+    });
+    tocEl.appendChild(item);
+  });
+
+  // 滚动监听（IntersectionObserver）
+  if (scrollEl && window.IntersectionObserver) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          const tocItems = [...tocEl.querySelectorAll('.toc-item')];
+          const idx = headings.findIndex(h => h.id === id);
+          tocItems.forEach((item, i) => item.classList.toggle('active', i === idx));
+        }
+      });
+    }, { root: scrollEl, threshold: 0.1, rootMargin: '-10% 0px -70% 0px' });
+
+    headings.forEach(h => { if (h.id) observer.observe(h); });
+  }
+}
+
+/* ── 数据仪表盘 Tab ── */
 function renderDashboardTab(c) {
-  /* ── 粉丝段位 ── */
   const follower = c.follower || 0;
   let tierClass = 'tier-start', tierLabel = '冷启 (<1千)', tierColor = '#94A3B8';
   if (follower >= 1000000)     { tierClass = 'tier-head';   tierLabel = '头部 (100万+)';  tierColor = 'var(--green)'; }
@@ -1820,7 +1958,6 @@ function renderDashboardTab(c) {
   const burstPct  = c.burst_ratio != null ? Math.min(100, (c.burst_ratio / 30) * 100).toFixed(0) : 0;
   const burstColor = burstHot ? 'var(--orange)' : burstWarm ? '#F59E0B' : 'var(--blue-light)';
 
-  /* ── 区块 A：账号概况 ── */
   const sectionA = `
     <div class="dashboard-section">
       <div class="dashboard-section-title">👤 账号概况</div>
@@ -1852,7 +1989,6 @@ function renderDashboardTab(c) {
       </div>` : ''}
     </div>`;
 
-  /* ── 区块 B：本条视频 ── */
   const vLike    = c.video_like    || 0;
   const avgLike  = c.avg_like      || 0;
   const vComment = c.video_comment || 0;
@@ -1900,7 +2036,6 @@ function renderDashboardTab(c) {
       </div>` : ''}
     </div>`;
 
-  /* ── 区块 C：商业价值（经验区间）── */
   const COMM = {
     '知识/健康':     { tier:'A档', tc:'#2563EB', desc:'知识付费·星图报价高',    cpm:'3–30元/粉',     paths:['知识付费','带货佣金'] },
     '带货·B2B':     { tier:'S档', tc:'var(--green)', desc:'B端精准·私域天花板最高',cpm:'50–500元/线索', paths:['私域询单','知识付费'] },
@@ -1929,7 +2064,6 @@ function renderDashboardTab(c) {
       </div>
     </div>`;
 
-  /* ── 区块 D：分析质量 ── */
   let polishDetail = '—';
   if (c.polish) {
     if (c.polish.ok && c.polish.segs_ok >= c.polish.segs_total)
@@ -1974,12 +2108,11 @@ function renderDashboardTab(c) {
         <span class="dr-value">${c.report_chars ? c.report_chars.toLocaleString() + ' 字' : '—'}</span>
       </div>
       <div class="detail-row">
-        <span class="dr-label">分析日期</span>
-        <span class="dr-value">${escHtml(c.analyzed_date || '—')}</span>
+        <span class="dr-label">分析时间</span>
+        <span class="dr-value">${fmtDateTime(c.analyzed_at)}</span>
       </div>
     </div>`;
 
-  /* ── 区块 E：标签 ── */
   const sectionE = c.tags && c.tags.length ? `
     <div class="dashboard-section" style="padding-bottom:4px">
       <div class="dashboard-section-title" style="margin-bottom:8px">🏷️ 标签</div>
@@ -2010,7 +2143,7 @@ function renderHistoryTab(c) {
     const ps = polishStatus(x.polish);
     return `
       <div class="timeline-item ${isCurrent ? 'current' : ''}">
-        <div class="tl-date">${x.analyzed_at ? x.analyzed_at.slice(0,16).replace('T',' ') : '—'}
+        <div class="tl-date">${fmtDateTime(x.analyzed_at)}
           ${isCurrent ? '<span class="tl-current-label">当前</span>' : ''}
         </div>
         <div class="tl-card">
@@ -2029,16 +2162,21 @@ function renderHistoryTab(c) {
   return `<div class="timeline">${items}</div>`;
 }
 
+/* 标签点击跳搜索 */
+function setSearch(tag) {
+  document.getElementById('search-input').value = tag;
+  renderCards();
+}
+
 /* ============================================================
    事件绑定
    ============================================================ */
 
-// 平台 chips（事件委托）
+// 平台 chips
 document.getElementById('platform-row').addEventListener('click', e => {
   const chip = e.target.closest('.chip[data-platform]');
   if (!chip) return;
   activePlatform = chip.dataset.platform;
-  // 切换平台时重置类型筛选
   activeType = '';
   buildPlatformChips();
   buildTypeChips();
@@ -2046,7 +2184,7 @@ document.getElementById('platform-row').addEventListener('click', e => {
   pushUrlParams();
 });
 
-// 类型 chips（事件委托）
+// 类型 chips
 document.getElementById('type-row').addEventListener('click', e => {
   const chip = e.target.closest('.chip[data-type]');
   if (!chip) return;
@@ -2068,28 +2206,42 @@ document.getElementById('sort-select').addEventListener('change', renderCards);
 // 版本筛选
 document.getElementById('version-select').addEventListener('change', renderCards);
 
-// 返回列表按钮
-document.getElementById('back-btn').addEventListener('click', showList);
+// 面板关闭
+document.getElementById('panel-close').addEventListener('click', closePanel);
+document.getElementById('panel-overlay').addEventListener('click', closePanel);
 
-// 报告视图 Tabs
-document.getElementById('report-tabs').addEventListener('click', e => {
-  const tab = e.target.closest('.rtab');
+// 面板 Tabs
+document.getElementById('panel-tabs').addEventListener('click', e => {
+  const tab = e.target.closest('.ptab');
   if (!tab) return;
-  document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
   tab.classList.add('active');
-  activeTab = tab.dataset.tab;
-  const body = document.getElementById('report-body');
-  body.className = activeTab === 'report' ? '' : 'padded';
-  renderReportBody();
+  activePanelTab = tab.dataset.tab;
+  renderPanelBody();
+});
+
+// ◀ 上一个
+document.getElementById('prev-case').addEventListener('click', () => {
+  if (!currentCase) return;
+  const idx = filteredCases.findIndex(c => c.run_id === currentCase.run_id);
+  if (idx > 0) openPanel(filteredCases[idx - 1]);
+});
+
+// ▶ 下一个
+document.getElementById('next-case').addEventListener('click', () => {
+  if (!currentCase) return;
+  const idx = filteredCases.findIndex(c => c.run_id === currentCase.run_id);
+  if (idx >= 0 && idx < filteredCases.length - 1) openPanel(filteredCases[idx + 1]);
 });
 
 /* 键盘快捷键 */
 document.addEventListener('keydown', e => {
-  const inReport = document.getElementById('report-view').classList.contains('active');
+  const panelOpen = document.getElementById('panel').classList.contains('open');
+  const inInput = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
 
-  // ESC：报告模式→返回列表，列表模式→清空搜索
+  // ESC
   if (e.key === 'Escape') {
-    if (inReport) { showList(); }
+    if (panelOpen) { closePanel(); }
     else {
       const si = document.getElementById('search-input');
       if (si.value) { si.value = ''; renderCards(); pushUrlParams(); }
@@ -2097,27 +2249,43 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // /：列表模式下聚焦搜索
-  if (e.key === '/' && !inReport &&
-      document.activeElement.tagName !== 'INPUT' &&
-      document.activeElement.tagName !== 'TEXTAREA') {
+  // / 聚焦搜索（面板关闭时）
+  if (e.key === '/' && !panelOpen && !inInput) {
     e.preventDefault();
     document.getElementById('search-input').focus();
     return;
   }
 
-  // ← →：报告模式下切换 Tab
-  if (inReport && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-    const tabs = [...document.querySelectorAll('.rtab')];
-    const idx = tabs.findIndex(t => t.classList.contains('active'));
-    let next = idx + (e.key === 'ArrowRight' ? 1 : -1);
-    if (next < 0) next = tabs.length - 1;
-    if (next >= tabs.length) next = 0;
-    tabs.forEach(t => t.classList.remove('active'));
-    tabs[next].classList.add('active');
-    activeTab = tabs[next].dataset.tab;
-    document.getElementById('report-body').className = activeTab === 'report' ? '' : 'padded';
-    renderReportBody();
+  if (panelOpen) {
+    // ← → 切换 Tab
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const tabs = [...document.querySelectorAll('.ptab')];
+      const idx = tabs.findIndex(t => t.classList.contains('active'));
+      let next = idx + (e.key === 'ArrowRight' ? 1 : -1);
+      if (next < 0) next = tabs.length - 1;
+      if (next >= tabs.length) next = 0;
+      tabs.forEach(t => t.classList.remove('active'));
+      tabs[next].classList.add('active');
+      activePanelTab = tabs[next].dataset.tab;
+      renderPanelBody();
+      return;
+    }
+
+    // A = 上一个案例
+    if (e.key === 'a' || e.key === 'A') {
+      if (inInput) return;
+      const idx = filteredCases.findIndex(c => c.run_id === currentCase?.run_id);
+      if (idx > 0) openPanel(filteredCases[idx - 1]);
+      return;
+    }
+
+    // D = 下一个案例
+    if (e.key === 'd' || e.key === 'D') {
+      if (inInput) return;
+      const idx = filteredCases.findIndex(c => c.run_id === currentCase?.run_id);
+      if (idx >= 0 && idx < filteredCases.length - 1) openPanel(filteredCases[idx + 1]);
+      return;
+    }
   }
 });
 
