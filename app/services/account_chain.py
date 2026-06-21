@@ -18,6 +18,10 @@ from app.services.account_report import build_report, _track, _is_business
 from app.services.audiovisual import analyze_douyin_video, render_av_section
 from app.services.competitor_compare import compare_accounts
 from app.services.l0_environment import build_l0_environment, render_l0_section
+from app.services.commercial import classify_track_value, render_commercial_section
+from app.services.conversion import render_conversion_section
+from app.services.commercial_data import (category_commission, category_gmv_tier,
+                                          xingtu_price_estimate, render_commercial_data_section)
 
 _MOBILE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
               "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
@@ -182,10 +186,22 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                               hot_topics=_hot)
     l0_md = render_l0_section(l0)
 
-    # 5. 确定性报告(works→L2 规律;av_md→L1 视听六层;compare_md→L4 竞品;l0_md→L0 环境)
+    # 4.9 商业转化诊断(战略主轴·三层诊断+商业数据增强+精准转化方案)
     works = rd.get("works_sample")
+    _tv = classify_track_value(account)
+    _biz_data = {"commission": category_commission(_track_name),
+                 "gmv": category_gmv_tier(_track_name),
+                 "xingtu": xingtu_price_estimate(account.get("follower") or 0, _track_name)}
+    business_md = "\n\n".join(filter(None, [
+        render_commercial_section(account, _tv),
+        render_commercial_data_section(account, _track_name, _biz_data),
+        render_conversion_section(account, video, works, av_six),
+    ]))
+
+    # 5. 确定性报告(works→L2;av_md→L1视听;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴)
     report_md = build_report(video, account, audit, works=works,
-                             av_md=av_md, compare_md=compare_md, l0_md=l0_md)
+                             av_md=av_md, compare_md=compare_md, l0_md=l0_md,
+                             business_md=business_md)
 
     # 5.5 LLM 润色(内容方法论原则1真叙事感·REPORT_POLISH=1 启用·默认关·只重组不编造·失败降级原文)
     if os.getenv("REPORT_POLISH") == "1":
