@@ -1,4 +1,4 @@
-# probe · 自媒体赛道 A · 数据源完整清单 v1.2
+# probe · 自媒体赛道 A · 数据源完整清单 v1.3
 
 > v1.3（2026-06-22）：抖音 play_count 修复——TikHub 统计专用端点 `/api/v1/douyin/app/v3/fetch_video_statistics` 已接入，MEASURED 返回；批量 50条/次；tikhub_adapter.py + probe/datasources/tikhub.py 双处同步更新。
 > v1.2（2026-06-22）：新增 A⑤ 微信视频号域——JZL `wxvideo` 端点 ✅ active，13 字段已验证；v2_name 发现链路已通（get_finder=1）；合规缺口表更新视频号状态。

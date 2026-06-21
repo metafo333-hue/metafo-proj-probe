@@ -1,4 +1,4 @@
-# probe 能力类别清单 v1.1（capability catalog · 输入→交付映射）
+# probe 能力类别清单 v1.3（capability catalog · 输入→交付映射）
 
 > 日期：2026-06-15 · 性质：产品能力面 SSOT 之一·把「probe 对素材能做哪些类别的分析/审核/报告」一张表说清。
 > v1.3（2026-06-22）：抖音 play_count 修复——接 TikHub 统计专用端点（`/api/v1/douyin/app/v3/fetch_video_statistics`），真实播放量 MEASURED 返回；批量接口 50条/次。

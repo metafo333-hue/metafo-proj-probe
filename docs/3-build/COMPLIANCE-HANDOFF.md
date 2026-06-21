@@ -1,7 +1,8 @@
-# probe 数据来源合规整改 · HANDOFF（上报母体合规官）
+# COMPLIANCE-HANDOFF（指针）
 
-> 日期：2026-06-03 · 触发：母体下发 probe 数据来源合规铁律
-> 依据红线第 8 条「自己爬/逆向/绕反爬 → 拒绝、写 handoff、上报合规官、改第三方授权 API」
+> 真源已移至项目根目录。本文件仅作导航，内容不在此维护。
+
+**真源**：[../../COMPLIANCE-HANDOFF.md](../../COMPLIANCE-HANDOFF.md)
 
 ## 一、发现的违规（整改前）
 
