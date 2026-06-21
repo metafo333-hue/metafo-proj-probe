@@ -17,7 +17,19 @@ import re
 import urllib.request
 
 SF_ENDPOINT = "https://api.siliconflow.cn/v1/chat/completions"
-POLISH_MODEL = os.getenv("REPORT_POLISH_MODEL", "deepseek-ai/DeepSeek-V3")
+
+
+def _polish_model() -> str:
+    """润色模型 = 模型路由层按周更表选(默认质量/成本均衡 Qwen3.5-122B·替旧 DeepSeek-V3)。
+    REPORT_POLISH_MODEL env 可锁定(路由内部已处理)。路由不可用回退国产默认,永不阻塞。"""
+    try:
+        from app.services.model_router import select
+        return select("polish") or "Qwen/Qwen3.5-122B-A10B"
+    except Exception:
+        return os.getenv("REPORT_POLISH_MODEL", "Qwen/Qwen3.5-122B-A10B")
+
+
+POLISH_MODEL = _polish_model()  # 模块级快照(兼容);热选见 polish_report()
 
 _PROMPT = """你是顶级的短视频账号诊断顾问。下面是一份「确定性规则」生成的账号诊断报告,内容全部正确,但表达有点像清单、段落之间是断的。
 
@@ -48,20 +60,36 @@ def _nums(text: str) -> set:
     return {n.replace(",", "") for n in re.findall(r"\d[\d,]{2,}", text or "")}
 
 
-def polish_report(report_md: str, sf_key: str | None = None, *,
-                  must_keep=None, timeout: int = 150) -> dict:
-    """LLM 润色 report_md。返回 {ok:True, polished} 或 {ok:False, fallback:原文, error}。
+# 超此长度走分段润色(点1:太长的报告分段处理)·防单次 max_tokens 截断+长输入质量衰减
+_SEGMENT_THRESHOLD = 7000
+_ANCHORS = ("看+听", "藏着的规律", "整体判断", "赛道的大环境", "最该解决",
+            "拿不到", "瞎编", "晒证据", "虚假宣传")
 
-    must_keep: 必须逐字保留的核心数字列表(粉丝/均赞/最高赞等关键判断值)。
-               次要数字(转发/收藏/日期)允许润色重述。不传则守所有 4 位+数字。
-    """
-    key = sf_key or os.getenv("SILICONFLOW_API_KEY")
-    if not key or not report_md:
-        return {"ok": False, "fallback": report_md, "error": "缺 key 或空报告"}
-    # max_tokens 动态:长报告需更多输出空间(6000 对 6000+ 字中文报告不够·实测截断)
-    dyn_max_tokens = max(8000, int(len(report_md) * 2))
-    payload = {"model": POLISH_MODEL, "temperature": 0.5, "max_tokens": dyn_max_tokens,
-               "messages": [{"role": "user", "content": _PROMPT.format(md=report_md)}]}
+
+def _guards(md: str, polished: str, must_keep) -> str | None:
+    """润色稿过护栏。通过返回 None,否则返回降级原因。守:过短/核心数字/锚点/诚实标注。"""
+    if not polished or len(polished) < len(md) * 0.40:
+        return "输出异常(过短)"
+    keep = {str(n).replace(",", "") for n in (must_keep or [])
+            if n and str(n).replace(",", "").isdigit()}
+    if not keep:
+        keep = {n for n in _nums(md) if len(n) >= 5}
+    keep = {n for n in keep if n in _nums(md)}  # 只守本段确实出现的数字(分段安全)
+    missing = keep - _nums(polished)
+    if missing:
+        return f"篡改/丢失核心数字 {sorted(missing)[:3]}"
+    lost = [a for a in _ANCHORS if a in md and a not in polished]
+    if lost:
+        return f"改了关键锚点/诚实标注 {lost[:2]}"
+    return None
+
+
+def _polish_once(md: str, key: str, must_keep, timeout: int) -> dict:
+    """单次润色 md(不含尾注)。{ok:True,polished} 或 {ok:False,fallback:md,error}。"""
+    dyn_max_tokens = max(8000, int(len(md) * 2))
+    payload = {"model": _polish_model(), "temperature": 0.5,
+               "max_tokens": dyn_max_tokens,
+               "messages": [{"role": "user", "content": _PROMPT.format(md=md)}]}
     try:
         req = urllib.request.Request(
             SF_ENDPOINT, data=json.dumps(payload).encode("utf-8"),
@@ -69,30 +97,61 @@ def polish_report(report_md: str, sf_key: str | None = None, *,
         with urllib.request.urlopen(req, timeout=timeout) as r:
             resp = json.load(r)
         polished = (((resp.get("choices") or [{}])[0]).get("message") or {}).get("content", "").strip()
-    except Exception as e:  # noqa: BLE001 — 任何失败都降级原文,不阻塞
-        return {"ok": False, "fallback": report_md, "error": f"润色调用失败:{e}"}
+    except Exception as e:  # noqa: BLE001 — 任何失败降级原文,不阻塞
+        return {"ok": False, "fallback": md, "error": f"润色调用失败:{e}"}
+    bad = _guards(md, polished, must_keep)
+    if bad:
+        return {"ok": False, "fallback": md, "error": f"{bad}·降级原文(守真实性)"}
+    return {"ok": True, "polished": polished}
 
-    # 40%(非 50%):报告含商业数据段时 LLM 合理归纳裸 dict→自然语言·体积缩小是预期好行为
-    if not polished or len(polished) < len(report_md) * 0.40:
-        return {"ok": False, "fallback": report_md, "error": "润色输出异常(过短)·降级原文"}
-    # 护栏:核心数字(粉丝/均赞/最高赞·must_keep)必须逐字仍在润色稿·防篡改关键判断值
-    # 次要数字(转发/收藏/日期)允许润色重述(如"互动亮眼")·不强求逐字
-    keep = {str(n).replace(",", "") for n in (must_keep or []) if n and str(n).replace(",", "").isdigit()}
-    if not keep:
-        # 守 5 位+(≥10000)大数字:粉丝/高赞/播放等核心指标
-        # 4 位数(1000–9999)不强求:常见于模板说教("1000个客户")和小互动数(如收藏/评论)·允许润色重述
-        keep = {n for n in _nums(report_md) if len(n) >= 5}
-    missing = keep - _nums(polished)
-    if missing:
-        return {"ok": False, "fallback": report_md,
-                "error": f"润色篡改/丢失核心数字 {sorted(missing)[:3]}·降级原文(守真实性)"}
-    # 护栏:关键标题锚点(验收/层检测靠它识别)必须保留·防润色改骨架致验收失效
-    anchors = [a for a in ("看+听", "藏着的规律", "整体判断", "赛道的大环境", "最该解决",
-                           "拿不到", "瞎编",   # 诚实标注·用子串兼容不同措辞
-                           "晒证据", "虚假宣传")  # 合规段(有资质声称时出现)·防润色删除法律底线
-               if a in report_md]
-    lost = [a for a in anchors if a not in polished]
-    if lost:
-        return {"ok": False, "fallback": report_md,
-                "error": f"润色改了关键锚点/诚实标注 {lost[:2]}·降级原文(护栏)"}
-    return {"ok": True, "polished": polished + _NOTE, "note": "polished"}
+
+def _split_sections(md: str) -> list[str]:
+    """按顶层 ## 切段(段头随段)·首个 ## 前的引言自成一段。供长报告分段润色。"""
+    parts, buf = [], []
+    for ln in md.split("\n"):
+        if ln.startswith("## ") and buf:
+            parts.append("\n".join(buf))
+            buf = [ln]
+        else:
+            buf.append(ln)
+    if buf:
+        parts.append("\n".join(buf))
+    return parts or [md]
+
+
+def polish_report(report_md: str, sf_key: str | None = None, *,
+                  must_keep=None, timeout: int = 150) -> dict:
+    """LLM 润色 report_md。短报告单次,长报告(>7000字)按 ## 分段逐段润色再拼接。
+
+    返回 {ok:True, polished} 或 {ok:False, fallback:原文, error}。
+    must_keep: 必须逐字保留的核心数字(粉丝/均赞/最高赞)。次要数字允许重述。
+    分段:任一段润色失败→该段保留原文(优雅降级,部分润色仍可用)。
+    """
+    key = sf_key or os.getenv("SILICONFLOW_API_KEY")
+    if not key or not report_md:
+        return {"ok": False, "fallback": report_md, "error": "缺 key 或空报告"}
+
+    # 短报告:单次润色
+    if len(report_md) <= _SEGMENT_THRESHOLD:
+        out = _polish_once(report_md, key, must_keep, timeout)
+        if out["ok"]:
+            return {"ok": True, "polished": out["polished"] + _NOTE, "note": "polished"}
+        return {"ok": False, "fallback": report_md, "error": out["error"]}
+
+    # 长报告:分段润色(点1)·逐段守护栏·段失败保原文
+    segs = _split_sections(report_md)
+    polished_segs, n_ok = [], 0
+    for seg in segs:
+        if len(seg.strip()) < 200:  # 太短的段不值得单独调,直接保留
+            polished_segs.append(seg)
+            continue
+        out = _polish_once(seg, key, must_keep, timeout)
+        if out["ok"]:
+            polished_segs.append(out["polished"])
+            n_ok += 1
+        else:
+            polished_segs.append(seg)  # 优雅降级:该段用原文
+    if n_ok == 0:
+        return {"ok": False, "fallback": report_md, "error": "分段润色全失败·降级原文"}
+    return {"ok": True, "polished": "\n".join(polished_segs) + _NOTE,
+            "note": f"polished_segmented({n_ok}/{len(segs)}段)"}

@@ -13,7 +13,19 @@ import re
 import urllib.request
 
 SF_ENDPOINT = "https://api.siliconflow.cn/v1/chat/completions"
-SF_MODEL = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
+
+
+def _sf_model() -> str:
+    """视听模型 = 模型路由层按周更表选(默认全模态思维链 Omni-Thinking)。
+    路由不可用时回退原 Instruct(永不阻塞)。见 model_router.TASK_SPEC['vision']。"""
+    try:
+        from app.services.model_router import select
+        return select("vision") or "Qwen/Qwen3-Omni-30B-A3B-Instruct"
+    except Exception:
+        return "Qwen/Qwen3-Omni-30B-A3B-Instruct"
+
+
+SF_MODEL = _sf_model()  # 模块级快照(向后兼容引用);热选见调用处 _sf_model()
 
 # 六层 schema 键(供渲染/校验对齐)
 LAYERS = ("auditory", "visual", "text", "narrative", "persona", "psychology")
@@ -52,7 +64,7 @@ def analyze_audiovisual(video_url: str, sf_key: str | None = None, *,
     if not key:
         return {"ok": False, "error": "缺 SILICONFLOW_API_KEY(走 vault)"}
     payload = {
-        "model": SF_MODEL,
+        "model": _sf_model(),  # 热选:周更表更新后无需重启即用上最新最优
         "messages": [{"role": "user", "content": [
             {"type": "text", "text": _SIX_LAYER_PROMPT},
             {"type": "video_url",
