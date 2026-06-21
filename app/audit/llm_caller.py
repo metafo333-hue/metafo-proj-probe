@@ -7,7 +7,7 @@
 --------
 LITELLM_BASE_URL  : OpenAI 兼容端点 base（如 http://ufo2:4000/v1）
 LITELLM_API_KEY   : 鉴权 key
-LITELLM_MODEL     : 模型别名（如 qwen2.5-72b-instruct、cc-sonnet）
+LITELLM_MODEL     : 国产模型别名（如 bl-glm/bl-qwen/deepseek·禁 cc-*/claude/gpt·见 foundation-constraints 铁律一）
 
 切换控制
 --------
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # 键名对齐 probe-a 现有 env(PROBE_LITELLM_BASE/KEY·ufo2 LiteLLM)，fallback LITELLM_*(本地/CI 兼容)
 _BASE_URL = os.getenv("PROBE_LITELLM_BASE") or os.getenv("LITELLM_BASE_URL", "")
 _API_KEY  = os.getenv("PROBE_LITELLM_KEY") or os.getenv("LITELLM_API_KEY", "")
-_MODEL    = os.getenv("GATES_LITELLM_MODEL") or os.getenv("LITELLM_MODEL", "cc-haiku")
+_MODEL    = os.getenv("GATES_LITELLM_MODEL") or os.getenv("LITELLM_MODEL", "bl-glm")
 _TIMEOUT  = 10  # 秒；闸级调用比业务层更短，防止 pipeline 阻塞
 
 

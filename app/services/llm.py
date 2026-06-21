@@ -19,11 +19,11 @@ _DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 _QWEN_KEY     = os.getenv("BAILIAN_API_KEY", "")
 
 _PROVIDERS = [
-    # LiteLLM proxy 优先（ufo2 Tailscale 内网 · cc-sonnet）
+    # LiteLLM proxy 优先（ufo2 Tailscale 内网 · bl-glm）
     {
         "name": "litellm",
         "base": lambda: _LITELLM_BASE,
-        "model": "cc-sonnet",
+        "model": "bl-glm",
         "key": lambda: _LITELLM_KEY,
     },
     {
