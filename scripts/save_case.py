@@ -56,6 +56,42 @@ def _probe_version() -> str:
         return "unknown"
 
 
+def _warn_duplicate(aweme_id: str, sec_uid: str, nick: str, idx: dict) -> None:
+    """同条 URL（aweme_id）或同账号（sec_uid）已有历史记录时，输出醒目警告。
+
+    两种提醒级别:
+      🔴 SAME_VIDEO  — 完全相同的 aweme_id（同一条视频再次分析）
+                       → 说明系统在迭代·本次可作版本对比；或误重复·可跳过
+      🟡 SAME_ACCOUNT — 同账号（sec_uid）但不同视频
+                        → 正常跟踪成长；历史记录列出供参考
+    """
+    cases = idx.get("cases") or []
+    same_video  = [c for c in cases if aweme_id and c.get("aweme_id") == aweme_id]
+    same_acct   = [c for c in cases if sec_uid   and c.get("sec_uid")  == sec_uid
+                   and c.get("aweme_id") != aweme_id]
+
+    if same_video:
+        print("\n" + "─" * 60)
+        print(f"⚠️  【重测提醒】同一条视频已有 {len(same_video)} 次历史分析记录")
+        print(f"   账号: @{nick}  aweme_id: {aweme_id}")
+        for c in same_video:
+            ps = c.get("polish", {})
+            polish_s = "✅润色" if ps.get("ok") else "❌降级"
+            print(f"   ├─ {c['analyzed_date']}  ver:{c.get('probe_version','?')}  "
+                  f"report:{c.get('report_chars',0)}字  {polish_s}  "
+                  f"run_id:{c['run_id']}")
+        print("   ↳ 用途：系统迭代效果对比 / 检查润色是否改善 / 确认重复再决定是否保留")
+        print("─" * 60 + "\n")
+    elif same_acct:
+        print("\n" + "─" * 60)
+        print(f"📋 【同账号提醒】@{nick} 已有 {len(same_acct)} 条其他视频的历史分析")
+        for c in same_acct[:3]:   # 最多显示 3 条
+            print(f"   ├─ {c['analyzed_date']}  {c.get('video_title','')[:30]}…  run_id:{c['run_id'][-15:]}")
+        if len(same_acct) > 3:
+            print(f"   └─ 还有 {len(same_acct)-3} 条，查看案例库了解完整历史")
+        print("─" * 60 + "\n")
+
+
 def _infer_type(account: dict) -> str:
     """从签名+标签推断账号类型。"""
     sig = (account.get("signature") or "").lower()
@@ -132,6 +168,10 @@ def save_case(
     nick = account.get("nickname") or "未知账号"
     sec_uid = account.get("sec_uid") or ""
     aweme_id = result.get("aweme_id") or ""
+
+    # ── 重测提醒（同 aweme_id 或同 sec_uid 已有记录时输出警告）──────────────
+    idx_existing = _load_index()
+    _warn_duplicate(aweme_id, sec_uid, nick, idx_existing)
     follower = account.get("follower") or 0
     avg_like = account.get("avg_like") or 0
     max_like = account.get("max_like") or 0
