@@ -261,16 +261,24 @@ class AuditLLMBackend(ModelBackend):
         self._stub = StubBackend()
 
     def faithfulness(self, claim: str, sources: list[str]) -> float:
-        """闸2：判断 claim 是否由 sources 支持，返回 0.0-1.0。"""
+        """闸2：判断 claim 是否由 sources 支持，返回 0.0-1.0。
+
+        MetaRoute 基准测试 2026-06-22：R1-Free 100% vs Flash 80%，切到 R1-Free。
+        路由：GATES_FAITHFULNESS_MODEL 环境变量可覆盖（默认 R1-Free）。
+        """
+        import os, re
         from app.audit.llm_caller import call
         src_text = "\n".join(f"[{i+1}] {s[:300]}" for i, s in enumerate(sources[:3]))
         prompt = (
             f"判断声称是否由来源支持，只输出一个 0.0~1.0 的浮点数，不要其他文字。\n\n"
             f"声称：{claim[:200]}\n来源：\n{src_text}"
         )
-        raw = call([{"role": "user", "content": prompt}], max_tokens=10)
+        # 闸2 路由：优先用 R1-Free（推理模型，忠实度 100% > Flash 80%，免费）
+        model_override = os.getenv("GATES_FAITHFULNESS_MODEL",
+                                   "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B")
+        raw = call([{"role": "user", "content": prompt}], max_tokens=10,
+                   model=model_override)
         if raw:
-            import re
             m = re.search(r"[01](\.\d+)?", raw)
             if m:
                 try:
