@@ -459,87 +459,66 @@ mark {
 }
 
 /* ============================================================
-   详情抽屉
+   列表视图 / 报告视图 内页切换
    ============================================================ */
-#drawer-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.35);
-  z-index: 200;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .25s;
-}
-#drawer-overlay.open {
-  opacity: 1;
-  pointer-events: auto;
-}
+#list-view  { display: block; }
+#report-view { display: none; flex-direction: column; height: calc(100vh - var(--header-h)); }
+#report-view.active { display: flex; }
 
-#drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: var(--drawer-w);
-  max-width: 95vw;
-  height: 100vh;
-  background: var(--white);
-  z-index: 201;
+/* ── 报告视图导航条 ── */
+#report-nav {
   display: flex;
-  flex-direction: column;
-  transform: translateX(100%);
-  transition: transform .28s cubic-bezier(.4,0,.2,1);
-  box-shadow: -4px 0 30px rgba(0,0,0,.15);
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
-#drawer.open { transform: translateX(0); }
+#back-btn {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+#back-btn:hover { background: #DBEAFE; }
+#rv-info { flex: 1; min-width: 0; }
+#rv-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-dark);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#rv-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 1px;
+}
 
-/* 抽屉头 */
-#drawer-header {
-  padding: 16px 18px 0;
+/* ── 报告 Tabs ── */
+#report-tabs {
+  display: flex;
+  padding: 0 20px;
+  background: var(--white);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.drawer-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-#drawer-account-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text-dark);
-  flex: 1;
-  padding-right: 10px;
-  line-height: 1.3;
-}
-#drawer-close {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-  color: var(--text-muted);
-  line-height: 1;
-  padding: 0 2px;
-  transition: color .15s;
-}
-#drawer-close:hover { color: var(--text-dark); }
-
-#drawer-sub {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-
-/* 抽屉 tabs */
-#drawer-tabs {
-  display: flex;
-  gap: 0;
-  margin: 0 -18px;
-  padding: 0 18px;
-  border-top: 1px solid var(--border);
-}
-.drawer-tab {
-  padding: 9px 14px;
+.rtab {
+  padding: 10px 16px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -549,18 +528,26 @@ mark {
   white-space: nowrap;
   user-select: none;
 }
-.drawer-tab:hover { color: var(--blue); }
-.drawer-tab.active {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
-  font-weight: 600;
-}
+.rtab:hover { color: var(--blue); }
+.rtab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
 
-/* 抽屉内容 */
-#drawer-body {
+/* ── 报告内容区 ── */
+#report-body {
   flex: 1;
   overflow-y: auto;
-  padding: 18px;
+  padding: 0;
+  background: var(--bg);
+}
+/* 仪表盘/历史 用 padding */
+#report-body.padded { padding: 20px; }
+/* 报告全文 iframe 撑满 */
+#report-body iframe {
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 180px);
+  border: none;
+  background: #fff;
+  display: block;
 }
 
 /* ── 报告全文 markdown 渲染 ── */
@@ -1065,53 +1052,53 @@ mark {
 
   <!-- 右侧内容 -->
   <div id="content">
-    <!-- 双行筛选 -->
-    <div id="filters-bar">
-      <!-- 平台筛选行（第一层） -->
-      <div class="filter-row" id="platform-row">
-        <span class="filter-label">平台</span>
-        <div class="chip active" data-platform="">全部</div>
-        <!-- 动态插入平台 chip -->
+
+    <!-- ══ 列表视图（默认） ══════════════════════════════════════ -->
+    <div id="list-view">
+      <!-- 双行筛选 -->
+      <div id="filters-bar">
+        <div class="filter-row" id="platform-row">
+          <span class="filter-label">平台</span>
+          <div class="chip active" data-platform="">全部</div>
+        </div>
+        <div class="filter-row" id="type-row">
+          <span class="filter-label">类型</span>
+          <div class="chip active" data-type="">全部</div>
+        </div>
       </div>
-      <!-- 类型筛选行（第二层） -->
-      <div class="filter-row" id="type-row">
-        <span class="filter-label">类型</span>
-        <div class="chip active" data-type="">全部</div>
-        <!-- 动态插入类型 chip -->
+      <!-- 卡片网格 -->
+      <div id="cards-area">
+        <div id="cards-grid"></div>
+        <div id="empty-state">
+          <div class="empty-icon">🔍</div>
+          <p>没有找到匹配的案例</p>
+          <small>试试其他关键词或调整筛选条件</small>
+        </div>
       </div>
     </div>
 
-    <!-- 卡片网格 -->
-    <div id="cards-area">
-      <div id="cards-grid"></div>
-      <div id="empty-state">
-        <div class="empty-icon">🔍</div>
-        <p>没有找到匹配的案例</p>
-        <small>试试其他关键词或调整筛选条件</small>
+    <!-- ══ 报告视图（点击卡片后切入） ═══════════════════════════ -->
+    <div id="report-view">
+      <!-- 导航条 -->
+      <div id="report-nav">
+        <button id="back-btn" title="返回列表 (ESC)">← 返回列表</button>
+        <div id="rv-info">
+          <span id="rv-name">—</span>
+          <span id="rv-sub">—</span>
+        </div>
+        <a id="word-btn" class="word-open-btn" style="display:none" target="_blank">📄 Word</a>
       </div>
+      <!-- 内容 Tabs -->
+      <div id="report-tabs">
+        <div class="rtab active" data-tab="report">报告全文</div>
+        <div class="rtab" data-tab="dashboard">数据仪表盘</div>
+        <div class="rtab" data-tab="history">版本历史</div>
+      </div>
+      <!-- 内容区 -->
+      <div id="report-body"></div>
     </div>
-  </div>
-</div>
 
-<!-- ====== 详情抽屉 ====== -->
-<div id="drawer-overlay"></div>
-<div id="drawer" role="dialog" aria-modal="true" aria-label="案例详情">
-  <div id="drawer-header">
-    <div class="drawer-title-row">
-      <div id="drawer-account-name">—</div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <a id="word-btn" class="word-open-btn" style="display:none" target="_blank" title="点击直接在 Word/Pages 中打开报告">📄 Word 报告</a>
-        <button id="drawer-close" title="关闭 (ESC)">×</button>
-      </div>
-    </div>
-    <div id="drawer-sub">—</div>
-    <div id="drawer-tabs">
-      <div class="drawer-tab active" data-tab="report">报告全文</div>
-      <div class="drawer-tab" data-tab="dashboard">数据仪表盘</div>
-      <div class="drawer-tab" data-tab="history">版本历史</div>
-    </div>
   </div>
-  <div id="drawer-body"></div>
 </div>
 
 <!-- ====== Footer ====== -->
@@ -1653,63 +1640,75 @@ async function openWordFile(runId, btn) {
   }
 }
 
-function openDrawer(c) {
+/* ── 切到报告视图 ── */
+function showReport(c) {
   currentCase = c;
   activeTab = 'report';
 
-  document.getElementById('drawer-account-name').textContent = '@' + (c.account_name || '—');
-  document.getElementById('drawer-sub').textContent =
+  // 更新导航条
+  document.getElementById('rv-name').textContent = '@' + (c.account_name || '—');
+  document.getElementById('rv-sub').textContent =
     [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
       .filter(Boolean).join(' · ');
 
-  // Word 按钮：始终显示
-  // serve.py 模式 → /open-file 端点 → 服务器直接 open，零下载弹窗
-  // file:// 模式  → file:/// 绝对路径（Chrome 仍会下载·但立即自动打开）
+  // Word 按钮
   const wordBtn = document.getElementById('word-btn');
   if (wordBtn) {
     wordBtn.style.display = 'inline-flex';
     if (isServerMode) {
-      // 用 /open-file 端点，click 时 fetch 而非 href 跳转
       wordBtn.removeAttribute('href');
-      wordBtn.style.cursor = 'pointer';
-      wordBtn.onclick = (e) => {
-        e.preventDefault();
-        openWordFile(c.run_id, wordBtn);
-      };
-      wordBtn.title = '点击直接在 Word/Pages 打开（零下载·serve.py 模式）';
+      wordBtn.onclick = (e) => { e.preventDefault(); openWordFile(c.run_id, wordBtn); };
+      wordBtn.title = '零下载直接打开 Word';
     } else {
       wordBtn.onclick = null;
-      wordBtn.href  = getDocxUrl(c.run_id);
-      wordBtn.title = '点击打开 Word 报告（Chrome 会下载后自动打开）';
+      wordBtn.href = getDocxUrl(c.run_id);
+      wordBtn.title = '下载后自动打开 Word';
     }
   }
 
-  document.querySelectorAll('.drawer-tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.tab === activeTab);
-  });
+  // 激活 tabs
+  document.querySelectorAll('.rtab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === activeTab));
 
-  renderDrawerBody();
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-overlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  // 切换视图
+  document.getElementById('list-view').style.display = 'none';
+  document.getElementById('report-view').classList.add('active');
+
+  // 更新 URL（不刷新）
+  const sp = new URLSearchParams(window.location.search);
+  sp.set('case', c.run_id);
+  history.pushState({}, '', '?' + sp.toString());
+
+  renderReportBody();
 }
 
-function closeDrawer() {
-  document.getElementById('drawer').classList.remove('open');
-  document.getElementById('drawer-overlay').classList.remove('open');
-  document.body.style.overflow = '';
+/* ── 返回列表视图 ── */
+function showList() {
+  document.getElementById('list-view').style.display = '';
+  document.getElementById('report-view').classList.remove('active');
   currentCase = null;
+  // 恢复 URL
+  const sp = new URLSearchParams(window.location.search);
+  sp.delete('case');
+  history.pushState({}, '', sp.toString() ? '?' + sp.toString() : location.pathname);
 }
 
-function renderDrawerBody() {
-  const body = document.getElementById('drawer-body');
+/* 兼容旧调用名 */
+function openDrawer(c) { showReport(c); }
+function closeDrawer()  { showList(); }
+
+function renderReportBody() {
+  const body = document.getElementById('report-body');
   if (!currentCase) { body.innerHTML = ''; return; }
   body.scrollTop = 0;
+  body.className = activeTab === 'report' ? '' : 'padded';
 
   if (activeTab === 'report')    renderReportTab(currentCase, body);
   if (activeTab === 'dashboard') body.innerHTML = renderDashboardTab(currentCase);
   if (activeTab === 'history')   body.innerHTML = renderHistoryTab(currentCase);
 }
+
+function renderDrawerBody() { renderReportBody(); }
 
 /* ── 报告全文 Tab（懒加载 + 骨架屏） ── */
 /* ── 报告全文 Tab · 优先加载 report.html，回退 report.md 渲染 ── */
@@ -1765,7 +1764,7 @@ function _injectReport(body, c, cached) {
           <span style="background:var(--green-bg);color:var(--green);padding:1px 7px;border-radius:4px;font-weight:600">HTML 精美排版</span>
           <span>由 SiliconFlow 或 Python 渲染器生成</span>
         </div>
-        <iframe src="${url}" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--border);border-radius:8px;background:#fff" onload="URL.revokeObjectURL('${url}')"></iframe>`;
+        <iframe src="${url}" style="width:100%;height:100%;min-height:calc(100vh - 180px);border:none;background:#fff;display:block" onload="URL.revokeObjectURL('${url}')"></iframe>`;
       return;
     }
     // report.md fallback：走 Markdown 渲染
@@ -2069,45 +2068,47 @@ document.getElementById('sort-select').addEventListener('change', renderCards);
 // 版本筛选
 document.getElementById('version-select').addEventListener('change', renderCards);
 
-// 关闭抽屉
-document.getElementById('drawer-close').addEventListener('click', closeDrawer);
-document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
+// 返回列表按钮
+document.getElementById('back-btn').addEventListener('click', showList);
 
-// 抽屉 tabs
-document.getElementById('drawer-tabs').addEventListener('click', e => {
-  const tab = e.target.closest('.drawer-tab');
+// 报告视图 Tabs
+document.getElementById('report-tabs').addEventListener('click', e => {
+  const tab = e.target.closest('.rtab');
   if (!tab) return;
-  document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
   tab.classList.add('active');
   activeTab = tab.dataset.tab;
-  renderDrawerBody();
+  const body = document.getElementById('report-body');
+  body.className = activeTab === 'report' ? '' : 'padded';
+  renderReportBody();
 });
 
 /* 键盘快捷键 */
 document.addEventListener('keydown', e => {
-  // ESC：关闭抽屉或清空搜索
+  const inReport = document.getElementById('report-view').classList.contains('active');
+
+  // ESC：报告模式→返回列表，列表模式→清空搜索
   if (e.key === 'Escape') {
-    const drawer = document.getElementById('drawer');
-    if (drawer.classList.contains('open')) {
-      closeDrawer();
-    } else {
+    if (inReport) { showList(); }
+    else {
       const si = document.getElementById('search-input');
       if (si.value) { si.value = ''; renderCards(); pushUrlParams(); }
     }
     return;
   }
 
-  // /：聚焦搜索（避免在 input 时触发）
-  if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+  // /：列表模式下聚焦搜索
+  if (e.key === '/' && !inReport &&
+      document.activeElement.tagName !== 'INPUT' &&
+      document.activeElement.tagName !== 'TEXTAREA') {
     e.preventDefault();
     document.getElementById('search-input').focus();
     return;
   }
 
-  // ← →：抽屉内 Tab 切换
-  const drawer = document.getElementById('drawer');
-  if (drawer.classList.contains('open') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-    const tabs = [...document.querySelectorAll('.drawer-tab')];
+  // ← →：报告模式下切换 Tab
+  if (inReport && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const tabs = [...document.querySelectorAll('.rtab')];
     const idx = tabs.findIndex(t => t.classList.contains('active'));
     let next = idx + (e.key === 'ArrowRight' ? 1 : -1);
     if (next < 0) next = tabs.length - 1;
@@ -2115,7 +2116,8 @@ document.addEventListener('keydown', e => {
     tabs.forEach(t => t.classList.remove('active'));
     tabs[next].classList.add('active');
     activeTab = tabs[next].dataset.tab;
-    renderDrawerBody();
+    document.getElementById('report-body').className = activeTab === 'report' ? '' : 'padded';
+    renderReportBody();
   }
 });
 
