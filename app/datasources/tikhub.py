@@ -149,9 +149,11 @@ class TikHubAdapter(DataSourceAdapter):
         return None
 
     def _fetch_douyin_play_count(self, aweme_id: str) -> int | None:
-        """调抖音统计接口拿单条 play_count（$0.001/次）。失败返回 None。"""
+        """调抖音统计接口拿单条 play_count（$0.001/次）。失败返回 None。
+        参数名：aweme_ids（复数）；响应：data.statistics_list[0].play_count。
+        """
         url = (f"{_TIKHUB_BASE}{_DOUYIN_STAT_EP}?"
-               f"{urllib.parse.urlencode({'aweme_id': aweme_id})}")
+               f"{urllib.parse.urlencode({'aweme_ids': aweme_id})}")
         try:
             req = urllib.request.Request(url, headers={
                 "Authorization": f"Bearer {self._key}",
@@ -161,9 +163,8 @@ class TikHubAdapter(DataSourceAdapter):
             with urllib.request.urlopen(req, timeout=20) as resp:
                 body = _json.loads(resp.read().decode("utf-8"))
             stat_data = (body or {}).get("data", body) or {}
-            pc = stat_data.get("play_count")
-            if pc is None:
-                pc = (stat_data.get("statistics") or {}).get("play_count")
+            stat_list = stat_data.get("statistics_list") or []
+            pc = stat_list[0].get("play_count") if stat_list else None
             return int(pc) if isinstance(pc, (int, float)) and pc > 0 else None
         except Exception:  # noqa: BLE001
             return None
@@ -189,19 +190,24 @@ class TikHubAdapter(DataSourceAdapter):
                 })
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     body = _json.loads(resp.read().decode("utf-8"))
-                items = (body or {}).get("data", body) or {}
-                if isinstance(items, list):
-                    for item in items:
+                items_data = (body or {}).get("data", body) or {}
+                # 响应结构：{"statistics_list": [{aweme_id, play_count, ...}]}
+                stat_list = items_data.get("statistics_list") or []
+                if isinstance(stat_list, list):
+                    for item in stat_list:
                         if isinstance(item, dict):
                             aid = item.get("aweme_id")
                             pc = item.get("play_count")
                             if aid and isinstance(pc, int) and pc > 0:
                                 out[str(aid)] = pc
-                elif isinstance(items, dict):
-                    for aid, item in items.items():
-                        pc = item.get("play_count") if isinstance(item, dict) else item
-                        if isinstance(pc, int) and pc > 0:
-                            out[str(aid)] = pc
+                elif isinstance(items_data, list):
+                    # 兼容：data 本身是 list
+                    for item in items_data:
+                        if isinstance(item, dict):
+                            aid = item.get("aweme_id")
+                            pc = item.get("play_count")
+                            if aid and isinstance(pc, int) and pc > 0:
+                                out[str(aid)] = pc
             except Exception:  # noqa: BLE001
                 continue
         return out
