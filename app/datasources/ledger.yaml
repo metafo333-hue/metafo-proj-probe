@@ -948,6 +948,21 @@ sources:
     status: live
     note: "实测 iTunes RSS topfreeapplications 200 OK，返回 10 条美区 Top Free App；iTunes Search API 200 OK；Lookup API 200 OK（单App元数据+当前价格）；App Store 无原生'限免'标签，需上层维护价格快照对比，本模块返回当前价格供上层决策"
 
+  anysearch:
+    vendor: AnySearch (公共搜索聚合)
+    api_base: https://api.anysearch.com/v1
+    module: app.datasources.anysearch
+    supported_kinds: [search, extract, batch_search]
+    domain: [D1, D5]
+    access_type: free
+    method: [W]
+    authority_score: 6
+    freshness: realtime
+    cost: "免费 1000次/天·无需 key·POST JSON"
+    license: "AnySearch 公开 API ToS · 仅取公开可检索 web 内容"
+    status: live                           # 无需 key · 实现在 app/datasources/anysearch.py（非 public/）
+    note: "提供 search()/batch_search()/extract_url() · 用于 D1 核查声称+D5 竞品横评"
+
 candidates_to_evaluate:   # 待标准19核验对比选型(R1 付费授权前置)
   - 新榜
   - 飞瓜

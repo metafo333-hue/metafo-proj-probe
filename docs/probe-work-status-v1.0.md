@@ -1,6 +1,12 @@
 # 元探 MetaProbe · 工作现状台账 v1.0
 
-> 更新：2026-06-13 · 性质：机械盘点，仅记录事实状态，不含计划
+> ⚠️ **此文档已过期（停在 2026-06-13）**，以下内容已发生重大变化：
+> - TikHub 已接入（key 已配），抖音 play_count 已修复（统计专用端点），JZL 微信视频号已接入
+> - 数据源扩展至 58 源（ledger v9），wikidata_sparql/reddit_rss 已转 live
+> - 案例库建成（5个案例），报告润色层已上线
+> **当前状态真源**：[6-datasources/datasource-ledger-and-status-v2.md](6-datasources/datasource-ledger-and-status-v2.md)
+>
+> 更新：2026-06-13 · 性质：机械盘点（历史快照·不再维护）
 
 ---
 
