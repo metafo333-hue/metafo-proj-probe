@@ -279,9 +279,19 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         verify_md = _vl.render_verify_section(sec_uid)
     except Exception as _e:  # noqa: BLE001
         _log.warning("verify_loop 降级: %s", _e)
-    # 输入层:评论洞察 + 受众画像 → 依赖灰度数据源/创作者授权·当前管线无 provider
-    #   接口已就绪(comment_insight.load_comments / audience_source.register_source)·
-    #   灰度 feed 接好后在此填 comment_md / audience_md·商业链不自建抓取(中性指针)
+    # 输入层:评论洞察(TikHub 持牌源·安全接入·PROBE_COMMENT_ENABLED 灰度开关·默认开·可一键关)
+    if os.getenv("PROBE_COMMENT_ENABLED", "1") == "1":
+        try:
+            from app.datasources.tikhub_comment_source import TikHubCommentSource
+            from app.services import comment_insight as _ci
+            _comments = _ci.load_comments(TikHubCommentSource(key), aweme_id)
+            comment_md = _ci.render_comment_section(
+                _ci.analyze_comments(_comments, _track_name))
+        except Exception as _e:  # noqa: BLE001
+            _log.warning("comment_insight 降级: %s", _e)
+    # 受众画像:A路需创作者授权数据·C路(粉丝列表聚合)PIPL 默认关·
+    #   真正的灰色/个人侧通路走 audience_source.register_source 隔离注册(不在商业链自建抓取·
+    #   中性指针)·当前自动管线无授权数据 → audience_md 留 None(安全·有授权源时在此接)
 
     # 5. 确定性报告(works→L2;av_md→L1视听;attribution_md→归因飞轮;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴;+11缺口段)
     report_md = build_report(video, account, audit, works=works,
