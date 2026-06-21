@@ -10,14 +10,27 @@
 SDK：`pip install tikhub`（官方）。已确认方法：
   hybrid_parsing.video_data(url=)  — 通用 URL 解析（抖音/B站/快手/微博视频）
   xiaohongshu_web.get_note_info_v2(share_text=)  — 小红书笔记
+
+抖音播放量修复（2026-06-22）：
+  通用接口不再返回播放量 → fetch_metadata 会追加调用统计专用端点
+  /api/v1/douyin/app/v3/fetch_video_statistics 注入真实 play_count。
+  批量接口：fetch_batch_douyin_stats(aweme_ids) 每次最多 50 条（$0.025/次）。
 """
 from __future__ import annotations
 
+import json as _json
 import os
 import re
+import urllib.parse
+import urllib.request
 from typing import Any
 
 from app.datasources.base import DataSourceAdapter
+
+_TIKHUB_BASE = os.environ.get("TIKHUB_API_BASE", "https://api.tikhub.io")
+_DOUYIN_STAT_EP = "/api/v1/douyin/app/v3/fetch_video_statistics"
+_DOUYIN_BATCH_STAT_EP = "/api/v1/douyin/app/v3/fetch_multi_video_statistics"
+_DOUYIN_BATCH_SIZE = 50  # 单次最多 50 个，$0.025/次
 
 
 class TikHubAdapter(DataSourceAdapter):
@@ -65,16 +78,28 @@ class TikHubAdapter(DataSourceAdapter):
                 raw = c.hybrid_parsing.video_data(url=url)
         except Exception as e:
             return {"_error": f"{type(e).__name__}: {str(e)[:160]}"}
-        return self._normalize(raw, plat, url)
+
+        result = self._normalize(raw, plat, url)
+
+        # 抖音专项：通用接口不返回播放量，追加统计端点注入真实 play_count
+        if plat == "douyin":
+            aweme_id = self._extract_aweme_id(raw)
+            if aweme_id:
+                pc = self._fetch_douyin_play_count(aweme_id)
+                if pc and pc > 0:
+                    result.setdefault("metadata", {})["play_count"] = pc
+
+        return result
 
     def _normalize(self, raw: Any, plat: str, url: str) -> dict[str, Any]:
-        """第三方原始数据 → 标准化元数据（原料进结论出：只取元数据，不直吐全量原文）。
-
-        各平台字段不同，联调（配 key 后）按真实返回精修字段映射。
-        """
+        """第三方原始数据 → 标准化元数据（原料进结论出：只取元数据，不直吐全量原文）。"""
         data = raw.get("data", raw) if isinstance(raw, dict) else {}
         if not isinstance(data, dict):
             data = {}
+
+        if plat == "douyin":
+            return self._normalize_douyin(data)
+
         title = data.get("desc") or data.get("title") or data.get("content") or ""
         if not isinstance(title, str):
             title = str(title)
@@ -84,11 +109,102 @@ class TikHubAdapter(DataSourceAdapter):
                    if k in data}
         return {
             "title": title[:200],
-            "text": title,                         # 标准化元数据（标题/简介），非原始全文
+            "text": title,
             "platform": plat,
             "metadata": metrics,
             "source_id": self.source_id,
         }
 
+    def _normalize_douyin(self, data: dict) -> dict[str, Any]:
+        """抖音响应按真实 aweme_detail 结构精确提取字段。"""
+        detail = data.get("aweme_detail") if isinstance(data, dict) else None
+        if not isinstance(detail, dict):
+            detail = {}
+        st = detail.get("statistics", {}) or {}
+        title = detail.get("desc", "") or ""
+        if not isinstance(title, str):
+            title = str(title)
+        metrics: dict[str, Any] = {}
+        for k in ("digg_count", "comment_count", "share_count", "collect_count"):
+            v = st.get(k)
+            if v is not None:
+                metrics[k] = v
+        pc = st.get("play_count")
+        if pc is not None:
+            metrics["play_count"] = pc
+        return {
+            "title": title[:200],
+            "text": title,
+            "platform": "douyin",
+            "metadata": metrics,
+            "source_id": self.source_id,
+        }
+
+    def _extract_aweme_id(self, raw: Any) -> str | None:
+        """从 hybrid_parsing 响应中提取 aweme_id。"""
+        data = raw.get("data", raw) if isinstance(raw, dict) else {}
+        detail = data.get("aweme_detail") if isinstance(data, dict) else None
+        if isinstance(detail, dict):
+            return detail.get("aweme_id")
+        return None
+
+    def _fetch_douyin_play_count(self, aweme_id: str) -> int | None:
+        """调抖音统计接口拿单条 play_count（$0.001/次）。失败返回 None。"""
+        url = (f"{_TIKHUB_BASE}{_DOUYIN_STAT_EP}?"
+               f"{urllib.parse.urlencode({'aweme_id': aweme_id})}")
+        try:
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"Bearer {self._key}",
+                "Accept": "application/json",
+                "User-Agent": "probe/1.0 (+https://metafoclaw.com)",
+            })
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = _json.loads(resp.read().decode("utf-8"))
+            stat_data = (body or {}).get("data", body) or {}
+            pc = stat_data.get("play_count")
+            if pc is None:
+                pc = (stat_data.get("statistics") or {}).get("play_count")
+            return int(pc) if isinstance(pc, (int, float)) and pc > 0 else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def fetch_batch_douyin_stats(self, aweme_ids: list) -> dict:
+        """批量拉取抖音视频播放量（最多 50 条/次·$0.025/次）。
+
+        返回 {aweme_id: play_count}，失败项不含于结果。
+        超过 50 时自动分批。
+        """
+        if not self._key or not aweme_ids:
+            return {}
+        out: dict = {}
+        for i in range(0, len(aweme_ids), _DOUYIN_BATCH_SIZE):
+            chunk = aweme_ids[i:i + _DOUYIN_BATCH_SIZE]
+            url = (f"{_TIKHUB_BASE}{_DOUYIN_BATCH_STAT_EP}?"
+                   f"{urllib.parse.urlencode({'aweme_ids': ','.join(str(x) for x in chunk)})}")
+            try:
+                req = urllib.request.Request(url, headers={
+                    "Authorization": f"Bearer {self._key}",
+                    "Accept": "application/json",
+                    "User-Agent": "probe/1.0 (+https://metafoclaw.com)",
+                })
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    body = _json.loads(resp.read().decode("utf-8"))
+                items = (body or {}).get("data", body) or {}
+                if isinstance(items, list):
+                    for item in items:
+                        if isinstance(item, dict):
+                            aid = item.get("aweme_id")
+                            pc = item.get("play_count")
+                            if aid and isinstance(pc, int) and pc > 0:
+                                out[str(aid)] = pc
+                elif isinstance(items, dict):
+                    for aid, item in items.items():
+                        pc = item.get("play_count") if isinstance(item, dict) else item
+                        if isinstance(pc, int) and pc > 0:
+                            out[str(aid)] = pc
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+
     def cost_hint(self) -> dict[str, float]:
-        return {"premium_data": 0.007}             # TikHub ≈ $0.001/req
+        return {"premium_data": 0.007}             # TikHub ≈ $0.001/req（+$0.001/抖音统计追加）
