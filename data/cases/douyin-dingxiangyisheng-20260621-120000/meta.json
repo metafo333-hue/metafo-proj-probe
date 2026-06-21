@@ -1,0 +1,38 @@
+{
+  "run_id": "douyin-dingxiangyisheng-20260621-120000",
+  "platform": "douyin",
+  "sec_uid": "MS4wLjABAAAAd2SoOO020RyRJI8wJGJt5oH8Cwqi",
+  "aweme_id": "7554979341508021567",
+  "account_name": "丁香医生",
+  "account_type": "知识/健康",
+  "follower": 6438222,
+  "avg_like": 73966,
+  "max_like": 790105,
+  "burst_ratio": null,
+  "video_title": "镜子里的你，照片里的你，哪一个才是真的你？为什么镜子里的你会更好看？",
+  "video_like": 183741,
+  "video_comment": 5239,
+  "video_collect": 32990,
+  "has_av": false,
+  "analyzed_date": "2026-06-21",
+  "probe_version": "commit:7e7c214",
+  "polish": {
+    "ok": false,
+    "mode": "single",
+    "model": "DeepSeek-V3",
+    "segs_ok": 0,
+    "segs_total": 1,
+    "note": "过短降级·分段润色前"
+  },
+  "validation_pass": true,
+  "validation_gaps": [],
+  "tags": [
+    "真实账号",
+    "首次分析",
+    "知识科普"
+  ],
+  "report_chars": 6909,
+  "source": "real_tikhub",
+  "ai_summary": "健康科普大V·643万粉成熟期·知识付费首选·星图报价19-64万/条",
+  "analyzed_at": "2026-06-21T12:00:00"
+}

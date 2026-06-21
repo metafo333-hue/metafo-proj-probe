@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>元探 · 案例库 MetaProbe Cases</title>
+<style>
+/* ============================================================
+   破晓品牌配色 & 全局重置
+   ============================================================ */
+:root {
+  --blue:        #1E3A8A;
+  --blue-light:  #3B5FC0;
+  --blue-bg:     #EFF6FF;
+  --orange:      #FF7A1A;
+  --green:       #066C37;
+  --red:         #B91C1C;
+  --text-dark:   #1E293B;
+  --text-gray:   #475569;
+  --text-muted:  #94A3B8;
+  --border:      #CBD5E1;
+  --bg:          #F8FAFC;
+  --white:       #FFFFFF;
+  --sidebar-w:   220px;
+  --drawer-w:    520px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  color: var(--text-dark);
+  background: var(--bg);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   顶部 Header
+   ============================================================ */
+#header {
+  background: var(--blue);
+  color: #fff;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(30,58,138,.4);
+  z-index: 100;
+}
+
+#header h1 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+
+#header .subtitle {
+  font-size: 11px;
+  opacity: .7;
+  margin-top: 1px;
+}
+
+#header-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.stat-chip {
+  background: rgba(255,255,255,.15);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.stat-chip span {
+  opacity: .75;
+  font-weight: 400;
+}
+
+/* ============================================================
+   主体布局：侧边栏 + 内容区
+   ============================================================ */
+#layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── 左侧边栏 ── */
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--white);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 16px 12px;
+  gap: 20px;
+}
+
+.sidebar-section label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-bottom: 6px;
+}
+
+#search-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-dark);
+  outline: none;
+  transition: border-color .2s;
+}
+#search-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(30,58,138,.1); }
+
+#sort-select, #version-select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-dark);
+  background: var(--white);
+  outline: none;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+#sort-select:focus, #version-select:focus { border-color: var(--blue); }
+
+#data-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  background: var(--blue-bg);
+  border-radius: 8px;
+  line-height: 1.5;
+}
+#data-status .mode-badge {
+  display: inline-block;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ── 右侧内容区 ── */
+#content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 类型筛选 chips */
+#chips-bar {
+  padding: 10px 16px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+#chips-bar::-webkit-scrollbar { display: none; }
+
+.chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1.5px solid var(--border);
+  color: var(--text-gray);
+  background: var(--white);
+  transition: all .15s;
+  user-select: none;
+}
+.chip:hover { border-color: var(--blue); color: var(--blue); }
+.chip.active {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+/* 卡片网格 */
+#cards-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+#cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+#empty-state {
+  display: none;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+#empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+#empty-state p { font-size: 15px; margin-bottom: 6px; color: var(--text-gray); }
+#empty-state small { font-size: 12px; }
+
+/* ============================================================
+   案例卡片
+   ============================================================ */
+.case-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  position: relative;
+  cursor: default;
+  transition: box-shadow .2s, transform .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.case-card:hover {
+  box-shadow: 0 4px 16px rgba(30,58,138,.12);
+  transform: translateY(-1px);
+}
+
+/* 版本角标 */
+.version-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--orange);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 0 10px 0 8px;
+  min-width: 22px;
+  text-align: center;
+}
+
+/* 类型 badge */
+.type-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+
+/* 账号名行 */
+.card-account {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1.3;
+  padding-right: 28px; /* 避免被角标遮挡 */
+}
+
+/* 粉丝数 */
+.card-followers {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: -4px;
+}
+.card-followers strong { color: var(--blue); font-size: 13px; }
+
+/* 图标行 */
+.card-icons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.icon-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.icon-item.ok    { background: #F0FDF4; color: var(--green); }
+.icon-item.warn  { background: #FFFBEB; color: #92400E; }
+.icon-item.fail  { background: #FEF2F2; color: var(--red); }
+.icon-item.info  { background: var(--blue-bg); color: var(--blue); }
+
+/* ai_summary */
+.card-summary {
+  font-size: 12px;
+  color: var(--text-gray);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 底部：日期 + 字数 + 按钮 */
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--bg);
+}
+.card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-detail {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-detail:hover { background: var(--blue-light); }
+
+/* ============================================================
+   详情抽屉
+   ============================================================ */
+#drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s;
+}
+#drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: var(--drawer-w);
+  max-width: 95vw;
+  height: 100vh;
+  background: var(--white);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  box-shadow: -4px 0 30px rgba(0,0,0,.15);
+}
+#drawer.open { transform: translateX(0); }
+
+/* 抽屉头 */
+#drawer-header {
+  padding: 16px 18px 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+#drawer-account-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-dark);
+  flex: 1;
+  padding-right: 10px;
+  line-height: 1.3;
+}
+#drawer-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+  padding: 0 2px;
+  transition: color .15s;
+}
+#drawer-close:hover { color: var(--text-dark); }
+
+#drawer-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* 抽屉 tabs */
+#drawer-tabs {
+  display: flex;
+  gap: 0;
+  margin: 0 -18px;
+  padding: 0 18px;
+  border-top: 1px solid var(--border);
+}
+.drawer-tab {
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2.5px solid transparent;
+  color: var(--text-muted);
+  transition: all .15s;
+  white-space: nowrap;
+  user-select: none;
+}
+.drawer-tab:hover { color: var(--blue); }
+.drawer-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+  font-weight: 600;
+}
+
+/* 抽屉内容 */
+#drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+/* ── 报告全文 markdown 渲染 ── */
+.md-content h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--blue);
+  margin: 18px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--blue-bg);
+}
+.md-content h2:first-child { margin-top: 0; }
+.md-content h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 12px 0 6px;
+}
+.md-content strong { color: var(--blue); font-weight: 700; }
+.md-content ul, .md-content ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.md-content li { margin: 3px 0; line-height: 1.6; }
+.md-content blockquote {
+  border-left: 3px solid var(--border);
+  background: var(--bg);
+  padding: 8px 12px;
+  margin: 8px 0;
+  color: var(--text-gray);
+  font-style: italic;
+  border-radius: 0 6px 6px 0;
+}
+.md-content p {
+  margin: 6px 0;
+  line-height: 1.65;
+}
+.md-content .no-report {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+}
+
+/* ── 关键指标 tab ── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.metric-card {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+.metric-card .m-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.metric-card .m-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1.2;
+}
+.metric-card .m-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.metric-card.ok-card  { border-color: #BBF7D0; background: #F0FDF4; }
+.metric-card.ok-card  .m-value { color: var(--green); }
+.metric-card.fail-card { border-color: #FECACA; background: #FEF2F2; }
+.metric-card.fail-card .m-value { color: var(--red); }
+
+.metrics-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin: 16px 0 8px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--bg);
+  font-size: 13px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-row .dr-label { color: var(--text-muted); }
+.detail-row .dr-value { font-weight: 500; }
+
+/* ── 版本历史 tab ── */
+.timeline {
+  position: relative;
+  padding-left: 24px;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.timeline-item {
+  position: relative;
+  margin-bottom: 20px;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -21px;
+  top: 8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--white);
+  box-shadow: 0 0 0 2px var(--border);
+}
+.timeline-item.current::before {
+  background: var(--blue);
+  box-shadow: 0 0 0 2px var(--blue);
+}
+.tl-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.tl-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.timeline-item.current .tl-card {
+  border-color: var(--blue);
+  background: var(--blue-bg);
+}
+.tl-card .tl-version {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 4px;
+  font-family: monospace;
+}
+.tl-card .tl-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dark);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.tl-card .tl-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tl-current-label {
+  display: inline-block;
+  font-size: 10px;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 600;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.no-history {
+  text-align: center;
+  padding: 30px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ============================================================
+   Footer
+   ============================================================ */
+#footer {
+  background: var(--white);
+  border-top: 1px solid var(--border);
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   响应式（移动端 < 768px）
+   ============================================================ */
+@media (max-width: 767px) {
+  #sidebar {
+    display: none;
+  }
+  #header-stats {
+    display: none;
+  }
+  #cards-grid {
+    grid-template-columns: 1fr;
+  }
+  #drawer {
+    width: 100vw;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== 顶部 Header ====== -->
+<header id="header">
+  <div>
+    <h1>元探 · 案例库</h1>
+    <div class="subtitle">MetaProbe Cases</div>
+  </div>
+  <div id="header-stats">
+    <div class="stat-chip"><span>总案例 </span><strong id="stat-total">0</strong></div>
+    <div class="stat-chip"><span>账号 </span><strong id="stat-accounts">0</strong></div>
+    <div class="stat-chip"><span>成功率 </span><strong id="stat-pass-rate">—</strong></div>
+  </div>
+</header>
+
+<!-- ====== 主体布局 ====== -->
+<div id="layout">
+
+  <!-- 左侧边栏 -->
+  <aside id="sidebar">
+    <div class="sidebar-section">
+      <label>搜索</label>
+      <input id="search-input" type="text" placeholder="账号名 / 摘要 / 标签…" autocomplete="off">
+    </div>
+
+    <div class="sidebar-section">
+      <label>排序</label>
+      <select id="sort-select">
+        <option value="date-desc">最新日期</option>
+        <option value="followers-desc">粉丝最多</option>
+        <option value="followers-asc">粉丝最少</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <label>系统版本</label>
+      <select id="version-select">
+        <option value="">全部版本</option>
+      </select>
+    </div>
+
+    <div id="data-status">
+      <div id="data-mode-line">正在加载…</div>
+      <div id="data-updated-line" style="margin-top:4px;"></div>
+    </div>
+  </aside>
+
+  <!-- 右侧内容 -->
+  <div id="content">
+    <!-- 类型 chips -->
+    <div id="chips-bar">
+      <div class="chip active" data-type="">全部</div>
+      <!-- 动态插入各类型 chip -->
+    </div>
+
+    <!-- 卡片网格 -->
+    <div id="cards-area">
+      <div id="cards-grid"></div>
+      <div id="empty-state">
+        <div class="empty-icon">🔍</div>
+        <p>没有匹配的案例</p>
+        <small>尝试调整搜索词或筛选条件</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 详情抽屉 ====== -->
+<div id="drawer-overlay"></div>
+<div id="drawer" role="dialog" aria-modal="true" aria-label="案例详情">
+  <div id="drawer-header">
+    <div class="drawer-title-row">
+      <div id="drawer-account-name">—</div>
+      <button id="drawer-close" title="关闭">×</button>
+    </div>
+    <div id="drawer-sub">—</div>
+    <div id="drawer-tabs">
+      <div class="drawer-tab active" data-tab="report">报告全文</div>
+      <div class="drawer-tab" data-tab="metrics">关键指标</div>
+      <div class="drawer-tab" data-tab="history">版本历史</div>
+    </div>
+  </div>
+  <div id="drawer-body"></div>
+</div>
+
+<!-- ====== Footer ====== -->
+<footer id="footer">
+  元探 MetaProbe · 元帅 metafo · 数据来自合法授权渠道
+</footer>
+
+<!-- ====== 嵌入数据（file:// 模式回退） ====== -->
+<script type="application/json" id="embedded-data">
+{"version":"1.0","updated_at":"2026-06-22T00:52:22","cases":[{"run_id":"douyin-dingxiangyisheng-20260621-120000","platform":"douyin","sec_uid":"MS4wLjABAAAAd2SoOO020RyRJI8wJGJt5oH8Cwqi","aweme_id":"7554979341508021567","account_name":"丁香医生","account_type":"知识/健康","follower":6438222,"avg_like":73966,"max_like":790105,"burst_ratio":null,"video_title":"镜子里的你，照片里的你，哪一个才是真的你？为什么镜子里的你会更好看？","video_like":183741,"has_av":false,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":false,"mode":"single","model":"DeepSeek-V3","segs_ok":0,"segs_total":1,"note":"过短降级·分段润色前"},"validation_pass":true,"validation_gaps":[],"ai_summary":"健康科普大V·643万粉成熟期·知识付费首选·星图报价19-64万/条","tags":["真实账号","首次分析","知识科普"],"report_chars":6909,"source":"real_tikhub","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-beichuanmoyujie-20260621-143200","platform":"douyin","sec_uid":"","aweme_id":"7644015926498044773","account_name":"北川魔芋姐｜赵娟","account_type":"带货·B2B","follower":4645,"avg_like":105,"max_like":383,"burst_ratio":3.6,"video_title":"餐饮门店直供拿货，缩减成本拉高利润，规格齐全供货稳定","video_like":77,"has_av":true,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:8ae781b","polish":{"ok":false,"mode":"single","model":"Qwen3.5-122B-A10B","segs_ok":0,"segs_total":1,"note":"过短降级"},"validation_pass":true,"validation_gaps":[],"ai_summary":"北川魔芋B2B·非遗第五代传承·4645粉成长期·私域询单主路径","tags":["真实账号","B2B","非遗","魔芋","首次分析"],"report_chars":8010,"source":"real_tikhub","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-chengduchihuo-20260621-150000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"成都吃货日记｜小李","account_type":"本地服务·探店","follower":380000,"avg_like":4500,"max_like":89000,"burst_ratio":19.8,"video_title":"成都苍蝇馆子藏不住了｜排队2小时·人均30元吃到哭","video_like":8900,"has_av":false,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":true,"mode":"single","model":"DeepSeek-V3","segs_ok":1,"segs_total":1},"validation_pass":true,"validation_gaps":[],"ai_summary":"成都探店38万粉·爆款比19.8·广告+佣金成熟·苍蝇馆子爆款89K赞","tags":["fixture","探店","本地美食","成都"],"report_chars":2345,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-pifuanna-20260621-151000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"皮肤屏障研究院｜Anna","account_type":"颜值·美妆","follower":220000,"avg_like":1800,"max_like":38000,"burst_ratio":21.1,"video_title":"28岁脸部胶原流失怎么救｜三步急救方案·真实测评不滤镜","video_like":2450,"has_av":false,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":true,"mode":"single","model":"Qwen3.5-122B-A10B","segs_ok":1,"segs_total":1},"validation_pass":true,"validation_gaps":[],"ai_summary":"皮肤科顾问成分党·22万粉成长期·知识付费潜力·维A酸爆款38K赞","tags":["fixture","成分党","护肤","知识付费潜力"],"report_chars":2325,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1},{"run_id":"douyin-chuanweipaojiao-20260621-152000","platform":"douyin","sec_uid":"","aweme_id":"","account_name":"川味泡椒老赵｜赵老板","account_type":"带货·B2B","follower":52000,"avg_like":186,"max_like":4200,"burst_ratio":22.6,"video_title":"四川泡椒厂直供·餐饮连锁50箱起批·比市面便宜30%","video_like":312,"has_av":false,"analyzed_at":"2026-06-21T12:00:00","analyzed_date":"2026-06-21","probe_version":"commit:7e7c214","polish":{"ok":false,"mode":"single","model":"DeepSeek-V3","segs_ok":0,"segs_total":1,"note":"合规段保护降级"},"validation_pass":true,"validation_gaps":[],"ai_summary":"四川泡椒工厂B2B·52K粉·获奖品质需晒证据·私域询单主路径","tags":["fixture","B2B","工厂直供","四川"],"report_chars":2870,"source":"fixture","prev_run_id":null,"version_count":1,"prev_vid_run_id":null,"vid_version_count":1}]}
+</script>
+
+<!-- ====== 主脚本 ====== -->
+<script>
+/* ============================================================
+   工具函数
+   ============================================================ */
+
+/**
+ * 粉丝数格式化：>= 10000 → "X.X万"，否则加千位逗号
+ */
+function fmtFollowers(n) {
+  if (n == null) return '—';
+  n = Number(n);
+  if (n >= 10000) {
+    return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+  }
+  return n.toLocaleString('zh-CN');
+}
+
+/**
+ * 简易 Markdown 渲染（仅覆盖常用语法）
+ * 支持：## ### **** - > 有序列表
+ */
+function renderMarkdown(text) {
+  if (!text) return '<p class="no-report">暂无报告全文。</p>';
+
+  const lines = text.split('\n');
+  const html = [];
+  let inList = false;
+  let listType = '';
+
+  function closeList() {
+    if (inList) {
+      html.push(listType === 'ul' ? '</ul>' : '</ol>');
+      inList = false;
+      listType = '';
+    }
+  }
+
+  lines.forEach(line => {
+    // ## 标题
+    if (/^## /.test(line)) {
+      closeList();
+      html.push('<h2>' + escHtml(line.slice(3)) + '</h2>');
+    }
+    // ### 标题
+    else if (/^### /.test(line)) {
+      closeList();
+      html.push('<h3>' + escHtml(line.slice(4)) + '</h3>');
+    }
+    // > 引用
+    else if (/^> /.test(line)) {
+      closeList();
+      html.push('<blockquote>' + inlineMarkdown(line.slice(2)) + '</blockquote>');
+    }
+    // - 无序列表
+    else if (/^- /.test(line)) {
+      if (!inList || listType !== 'ul') {
+        closeList();
+        html.push('<ul>');
+        inList = true; listType = 'ul';
+      }
+      html.push('<li>' + inlineMarkdown(line.slice(2)) + '</li>');
+    }
+    // 有序列表 1. 2. ...
+    else if (/^\d+\. /.test(line)) {
+      if (!inList || listType !== 'ol') {
+        closeList();
+        html.push('<ol>');
+        inList = true; listType = 'ol';
+      }
+      html.push('<li>' + inlineMarkdown(line.replace(/^\d+\. /, '')) + '</li>');
+    }
+    // 空行
+    else if (line.trim() === '') {
+      closeList();
+      html.push('<p style="margin:4px 0;"></p>');
+    }
+    // 普通段落
+    else {
+      closeList();
+      html.push('<p>' + inlineMarkdown(line) + '</p>');
+    }
+  });
+
+  closeList();
+  return html.join('');
+}
+
+/**
+ * 行内 Markdown：**bold** 和 HTML 转义（保留 emoji）
+ */
+function inlineMarkdown(s) {
+  return escHtml(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * 类型 badge 颜色映射（按类型关键词）
+ */
+const TYPE_COLORS = {
+  'B2B':    { bg: '#FFF3E0', color: '#E65100' },
+  '带货':   { bg: '#E8F5E9', color: '#2E7D32' },
+  '知识':   { bg: '#E3F2FD', color: '#1565C0' },
+  '健康':   { bg: '#E8F5E9', color: '#2E7D32' },
+  '本地':   { bg: '#FCE4EC', color: '#880E4F' },
+  '颜值':   { bg: '#F3E5F5', color: '#6A1B9A' },
+  '美食':   { bg: '#FFF8E1', color: '#F57F17' },
+  '科技':   { bg: '#E0F2F1', color: '#00695C' },
+  '教育':   { bg: '#E8EAF6', color: '#283593' },
+  '默认':   { bg: '#F1F5F9', color: '#475569' },
+};
+
+function getTypeBadgeStyle(accountType) {
+  if (!accountType) return TYPE_COLORS['默认'];
+  for (const key of Object.keys(TYPE_COLORS)) {
+    if (key !== '默认' && accountType.includes(key)) {
+      return TYPE_COLORS[key];
+    }
+  }
+  return TYPE_COLORS['默认'];
+}
+
+/**
+ * 润色状态解析
+ * polish.ok && segs_ok === segs_total → ✅全段
+ * polish.ok && segs_ok < segs_total   → ⚠️部分
+ * !polish.ok                           → ❌降级
+ */
+function polishStatus(polish) {
+  if (!polish) return { icon: '📝', label: '润色未知', cls: '' };
+  if (polish.ok) {
+    if (polish.segs_ok >= polish.segs_total) {
+      return { icon: '📝', label: '润色✅', cls: 'ok' };
+    }
+    return { icon: '📝', label: '润色⚠️', cls: 'warn' };
+  }
+  return { icon: '📝', label: '润色❌', cls: 'fail' };
+}
+
+/**
+ * 日期格式化
+ */
+function fmtDate(s) {
+  if (!s) return '—';
+  return s.slice(0, 10);
+}
+
+/* ============================================================
+   状态
+   ============================================================ */
+let allCases = [];        // 全量数据
+let currentCase = null;  // 当前打开的案例
+let activeType = '';      // 当前选中的类型筛选
+let activeTab = 'report'; // 当前抽屉 tab
+
+/* ============================================================
+   数据加载（Server 模式 → 失败则用 embedded-data）
+   ============================================================ */
+async function loadData() {
+  let data = null;
+  let mode = '';
+
+  // 尝试 fetch（Server 模式）
+  try {
+    const res = await fetch('../data/cases/index.json', { cache: 'no-store' });
+    if (res.ok) {
+      data = await res.json();
+      mode = 'Server';
+    }
+  } catch (_) {
+    // 网络失败（file:// 或 CORS），走 embedded
+  }
+
+  // 回退到嵌入数据（File 模式）
+  if (!data) {
+    try {
+      const el = document.getElementById('embedded-data');
+      data = JSON.parse(el.textContent.trim());
+      mode = 'File';
+    } catch (_) {
+      data = { version: '1.0', updated_at: '', cases: [] };
+      mode = 'File';
+    }
+  }
+
+  allCases = (data.cases || []);
+  renderAll();
+  updateDataStatus(mode, data.updated_at);
+}
+
+function updateDataStatus(mode, updatedAt) {
+  const modeEl = document.getElementById('data-mode-line');
+  const updEl = document.getElementById('data-updated-line');
+  modeEl.innerHTML = `<span class="mode-badge">${mode}</span> ${allCases.length} 条案例已加载`;
+  if (updatedAt) {
+    updEl.textContent = '更新：' + updatedAt.slice(0, 16).replace('T', ' ');
+  } else {
+    updEl.textContent = '';
+  }
+}
+
+/* ============================================================
+   渲染主流程
+   ============================================================ */
+function renderAll() {
+  buildChips();
+  buildVersionOptions();
+  updateStats();
+  renderCards();
+}
+
+/** 动态生成类型 chips */
+function buildChips() {
+  const types = [...new Set(allCases.map(c => c.account_type).filter(Boolean))].sort();
+  const bar = document.getElementById('chips-bar');
+
+  // 清空非第一个（保留"全部"）
+  while (bar.children.length > 1) bar.removeChild(bar.lastChild);
+
+  types.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'chip' + (activeType === t ? ' active' : '');
+    div.dataset.type = t;
+    div.textContent = t;
+    bar.appendChild(div);
+  });
+}
+
+/** 动态生成系统版本 select */
+function buildVersionOptions() {
+  const sel = document.getElementById('version-select');
+  const versions = [...new Set(allCases.map(c => c.probe_version).filter(Boolean))].sort().reverse();
+  const current = sel.value;
+
+  sel.innerHTML = '<option value="">全部版本</option>';
+  versions.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v.slice(0, 7);
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+/** 更新 Header 统计 */
+function updateStats() {
+  document.getElementById('stat-total').textContent = allCases.length;
+  const accounts = new Set(allCases.map(c => c.sec_uid || c.account_name)).size;
+  document.getElementById('stat-accounts').textContent = accounts;
+  const passed = allCases.filter(c => c.validation_pass).length;
+  const rate = allCases.length ? Math.round(passed / allCases.length * 100) + '%' : '—';
+  document.getElementById('stat-pass-rate').textContent = rate;
+}
+
+/** 过滤 + 排序 */
+function getFilteredCases() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const sort = document.getElementById('sort-select').value;
+  const ver = document.getElementById('version-select').value;
+
+  let list = allCases.filter(c => {
+    // 类型筛选
+    if (activeType && c.account_type !== activeType) return false;
+    // 版本筛选
+    if (ver && c.probe_version !== ver) return false;
+    // 文本搜索
+    if (q) {
+      const haystack = [
+        c.account_name, c.ai_summary, c.video_title,
+        ...(c.tags || [])
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // 排序
+  list.sort((a, b) => {
+    if (sort === 'followers-desc') return (b.follower || 0) - (a.follower || 0);
+    if (sort === 'followers-asc')  return (a.follower || 0) - (b.follower || 0);
+    // date-desc（默认）
+    return (b.analyzed_at || '').localeCompare(a.analyzed_at || '');
+  });
+
+  return list;
+}
+
+/** 渲染卡片 */
+function renderCards() {
+  const list = getFilteredCases();
+  const grid = document.getElementById('cards-grid');
+  const empty = document.getElementById('empty-state');
+
+  grid.innerHTML = '';
+
+  if (list.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  list.forEach(c => {
+    grid.appendChild(buildCard(c));
+  });
+}
+
+/** 构建单张卡片 DOM */
+function buildCard(c) {
+  const div = document.createElement('div');
+  div.className = 'case-card';
+
+  // 版本角标
+  if (c.version_count > 1) {
+    div.innerHTML += `<div class="version-badge">v${c.version_count}</div>`;
+  }
+
+  // 类型 badge
+  const style = getTypeBadgeStyle(c.account_type);
+  div.innerHTML += `
+    <div>
+      <span class="type-badge" style="background:${style.bg};color:${style.color};">
+        ${escHtml(c.account_type || '未知类型')}
+      </span>
+    </div>`;
+
+  // 账号名
+  div.innerHTML += `<div class="card-account">${escHtml(c.account_name || '—')}</div>`;
+
+  // 粉丝数
+  div.innerHTML += `
+    <div class="card-followers">
+      粉丝 <strong>${fmtFollowers(c.follower)}</strong>
+      &nbsp;·&nbsp; 均赞 ${fmtFollowers(c.avg_like)}
+      &nbsp;·&nbsp; 爆款比 ${c.burst_ratio != null ? c.burst_ratio + 'x' : '—'}
+    </div>`;
+
+  // 图标行
+  const ps = polishStatus(c.polish);
+  const avIcon = c.has_av
+    ? '<span class="icon-item info">🎥 视听✅</span>'
+    : '<span class="icon-item">🎥 视听—</span>';
+  const passIcon = c.validation_pass
+    ? '<span class="icon-item ok">✅ 验收通过</span>'
+    : '<span class="icon-item fail">❌ 有缺口</span>';
+  div.innerHTML += `
+    <div class="card-icons">
+      ${avIcon}
+      <span class="icon-item ${ps.cls}">${ps.icon} ${escHtml(ps.label)}</span>
+      ${passIcon}
+    </div>`;
+
+  // ai_summary
+  if (c.ai_summary) {
+    div.innerHTML += `<div class="card-summary">${escHtml(c.ai_summary)}</div>`;
+  }
+
+  // 底部
+  div.innerHTML += `
+    <div class="card-footer">
+      <div class="card-meta">
+        ${fmtDate(c.analyzed_date || c.analyzed_at)}
+        ${c.report_chars ? ' · ' + c.report_chars.toLocaleString() + '字' : ''}
+      </div>
+      <button class="btn-detail" data-run-id="${escHtml(c.run_id)}">查看详情</button>
+    </div>`;
+
+  // 绑定按钮
+  div.querySelector('.btn-detail').addEventListener('click', () => openDrawer(c));
+
+  return div;
+}
+
+/* ============================================================
+   详情抽屉
+   ============================================================ */
+function openDrawer(c) {
+  currentCase = c;
+  activeTab = 'report';
+
+  // 更新 header
+  document.getElementById('drawer-account-name').textContent = '@' + (c.account_name || '—');
+  document.getElementById('drawer-sub').textContent =
+    [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
+      .filter(Boolean).join(' · ');
+
+  // 重置 tabs
+  document.querySelectorAll('.drawer-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === activeTab);
+  });
+
+  renderDrawerBody();
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  currentCase = null;
+}
+
+function renderDrawerBody() {
+  const body = document.getElementById('drawer-body');
+  if (!currentCase) { body.innerHTML = ''; return; }
+
+  if (activeTab === 'report')  body.innerHTML = renderReportTab(currentCase);
+  if (activeTab === 'metrics') body.innerHTML = renderMetricsTab(currentCase);
+  if (activeTab === 'history') body.innerHTML = renderHistoryTab(currentCase);
+}
+
+/** 报告全文 Tab */
+function renderReportTab(c) {
+  const fullText = c.report_full || c.ai_summary || '';
+  return `<div class="md-content">${renderMarkdown(fullText)}</div>`;
+}
+
+/** 关键指标 Tab */
+function renderMetricsTab(c) {
+  const ps = polishStatus(c.polish);
+  const validIcon = c.validation_pass ? '✅ 通过' : '❌ 有缺口';
+  const gaps = (c.validation_gaps || []).join('、') || '—';
+
+  return `
+    <div class="metrics-section-title">账号数据</div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="m-label">粉丝数</div>
+        <div class="m-value">${fmtFollowers(c.follower)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">均赞</div>
+        <div class="m-value">${fmtFollowers(c.avg_like)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">最高赞</div>
+        <div class="m-value">${fmtFollowers(c.max_like)}</div>
+      </div>
+      <div class="metric-card ${c.burst_ratio >= 3 ? 'ok-card' : ''}">
+        <div class="m-label">爆款比</div>
+        <div class="m-value">${c.burst_ratio != null ? c.burst_ratio : '—'}<span class="m-unit">x</span></div>
+      </div>
+    </div>
+
+    <div class="metrics-section-title">分析质量</div>
+
+    <div class="detail-row">
+      <span class="dr-label">视听分析</span>
+      <span class="dr-value">${c.has_av ? '✅ 有视听层' : '— 仅文本'}</span>
+    </div>
+    <div class="detail-row">
+      <span class="dr-label">润色状态</span>
+      <span class="dr-value">${escHtml(ps.label)}</span>
+    </div>
+    ${c.polish ? `
+    <div class="detail-row">
+      <span class="dr-label">润色模型</span>
+      <span class="dr-value">${escHtml(c.polish.model || '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="dr-label">段落完成</span>
+      <span class="dr-value">${c.polish.segs_ok} / ${c.polish.segs_total}</span>
+    </div>` : ''}
+    <div class="detail-row">
+      <span class="dr-label">验收结果</span>
+      <span class="dr-value">${validIcon}</span>
+    </div>
+    ${gaps !== '—' ? `
+    <div class="detail-row">
+      <span class="dr-label">缺口项</span>
+      <span class="dr-value" style="color:var(--red)">${escHtml(gaps)}</span>
+    </div>` : ''}
+    <div class="detail-row">
+      <span class="dr-label">报告字数</span>
+      <span class="dr-value">${c.report_chars ? c.report_chars.toLocaleString() + '字' : '—'}</span>
+    </div>
+    <div class="detail-row">
+      <span class="dr-label">Probe 版本</span>
+      <span class="dr-value" style="font-family:monospace">${escHtml((c.probe_version || '—').slice(0, 7))}</span>
+    </div>
+    <div class="detail-row">
+      <span class="dr-label">分析时间</span>
+      <span class="dr-value">${escHtml(c.analyzed_at ? c.analyzed_at.slice(0, 16).replace('T', ' ') : '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="dr-label">视频标题</span>
+      <span class="dr-value" style="max-width:230px;text-align:right;font-size:12px">${escHtml(c.video_title || '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="dr-label">视频赞数</span>
+      <span class="dr-value">${c.video_like != null ? c.video_like.toLocaleString() : '—'}</span>
+    </div>
+    ${(c.tags && c.tags.length) ? `
+    <div class="detail-row">
+      <span class="dr-label">标签</span>
+      <span class="dr-value">${c.tags.map(t => escHtml(t)).join(' · ')}</span>
+    </div>` : ''}
+  `;
+}
+
+/** 版本历史 Tab */
+function renderHistoryTab(c) {
+  if (!c.sec_uid && !c.account_name) {
+    return '<div class="no-history">无法识别账号，无法查询历史版本。</div>';
+  }
+
+  // 找同一账号的所有 run（按 sec_uid 匹配，退而求其次用 account_name）
+  const siblings = allCases
+    .filter(x => {
+      if (c.sec_uid) return x.sec_uid === c.sec_uid;
+      return x.account_name === c.account_name;
+    })
+    .sort((a, b) => (b.analyzed_at || '').localeCompare(a.analyzed_at || ''));
+
+  if (siblings.length <= 1 && !c.prev_run_id) {
+    return '<div class="no-history">该账号目前仅有 1 个分析版本。</div>';
+  }
+
+  const items = siblings.map(x => {
+    const isCurrent = x.run_id === c.run_id;
+    const ps = polishStatus(x.polish);
+    return `
+      <div class="timeline-item ${isCurrent ? 'current' : ''}">
+        <div class="tl-date">${x.analyzed_at ? x.analyzed_at.slice(0,16).replace('T',' ') : '—'}
+          ${isCurrent ? '<span class="tl-current-label">当前</span>' : ''}
+        </div>
+        <div class="tl-card">
+          <div class="tl-version">${escHtml((x.probe_version || '').slice(0,7))}</div>
+          <div class="tl-title">${escHtml(x.video_title || '（无标题）')}</div>
+          <div class="tl-meta">
+            <span>粉丝 ${fmtFollowers(x.follower)}</span>
+            <span>均赞 ${fmtFollowers(x.avg_like)}</span>
+            <span>${escHtml(ps.label)}</span>
+            <span>${x.validation_pass ? '✅验收通过' : '❌有缺口'}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `<div class="timeline">${items}</div>`;
+}
+
+/* ============================================================
+   事件绑定
+   ============================================================ */
+
+// chips 点击（事件委托）
+document.getElementById('chips-bar').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  activeType = chip.dataset.type;
+  renderCards();
+});
+
+// 搜索框
+document.getElementById('search-input').addEventListener('input', renderCards);
+
+// 排序
+document.getElementById('sort-select').addEventListener('change', renderCards);
+
+// 版本筛选
+document.getElementById('version-select').addEventListener('change', renderCards);
+
+// 关闭抽屉
+document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
+
+// ESC 关闭
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDrawer();
+});
+
+// 抽屉 tabs 切换
+document.getElementById('drawer-tabs').addEventListener('click', e => {
+  const tab = e.target.closest('.drawer-tab');
+  if (!tab) return;
+  document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  activeTab = tab.dataset.tab;
+  renderDrawerBody();
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+loadData();
+</script>
+</body>
+</html>

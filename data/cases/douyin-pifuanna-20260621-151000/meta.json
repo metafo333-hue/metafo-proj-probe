@@ -1,0 +1,38 @@
+{
+  "run_id": "douyin-pifuanna-20260621-151000",
+  "platform": "douyin",
+  "sec_uid": "",
+  "aweme_id": "",
+  "account_name": "皮肤屏障研究院｜Anna",
+  "account_type": "颜值·美妆",
+  "follower": 220000,
+  "avg_like": 1800,
+  "max_like": 38000,
+  "burst_ratio": 21.1,
+  "video_title": "28岁脸部胶原流失怎么救｜三步急救方案·真实测评不滤镜",
+  "video_like": 2450,
+  "video_comment": 186,
+  "video_collect": 890,
+  "has_av": false,
+  "analyzed_date": "2026-06-21",
+  "probe_version": "commit:7e7c214",
+  "polish": {
+    "ok": true,
+    "mode": "single",
+    "model": "Qwen3.5-122B-A10B",
+    "segs_ok": 1,
+    "segs_total": 1
+  },
+  "validation_pass": true,
+  "validation_gaps": [],
+  "tags": [
+    "fixture",
+    "成分党",
+    "护肤",
+    "知识付费潜力"
+  ],
+  "report_chars": 2325,
+  "source": "fixture",
+  "ai_summary": "皮肤科顾问成分党·22万粉成长期·知识付费潜力·维A酸爆款38K赞",
+  "analyzed_at": "2026-06-21T12:00:00"
+}
