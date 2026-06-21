@@ -1712,83 +1712,98 @@ function renderDrawerBody() {
 }
 
 /* ── 报告全文 Tab（懒加载 + 骨架屏） ── */
+/* ── 报告全文 Tab · 优先加载 report.html，回退 report.md 渲染 ── */
 async function renderReportTab(c, body) {
-  // 若已缓存
   if (reportCache[c.run_id] !== undefined) {
-    body.innerHTML = renderCachedReport(c, reportCache[c.run_id]);
+    _injectReport(body, c, reportCache[c.run_id]);
     return;
   }
-
   // 骨架屏
-  body.innerHTML = `
-    <div>
-      <div class="skeleton wide"></div>
-      <div class="skeleton medium"></div>
-      <div class="skeleton short" style="margin-bottom:20px"></div>
-      <div class="skeleton wide"></div>
-      <div class="skeleton medium"></div>
-      <div class="skeleton wide" style="margin-bottom:20px"></div>
-      <div class="skeleton medium"></div>
-      <div class="skeleton short"></div>
-    </div>`;
+  body.innerHTML = `<div style="padding:8px 0">
+    <div class="skeleton wide"></div><div class="skeleton medium"></div>
+    <div class="skeleton short" style="margin-bottom:20px"></div>
+    <div class="skeleton wide"></div><div class="skeleton medium"></div>
+    <div class="skeleton wide" style="margin-bottom:20px"></div>
+  </div>`;
 
   if (!isServerMode) {
+    // file:// 模式：只显示摘要 + 两个入口
     reportCache[c.run_id] = null;
-    body.innerHTML = renderCachedReport(c, null);
+    _injectReport(body, c, null);
     return;
   }
 
+  // 优先加载 report.html（精美排版），失败则 fallback 到 report.md
+  let loaded = null, type = 'html';
   try {
-    const res = await fetch(`../data/cases/${c.run_id}/report.md`, { cache: 'no-store' });
+    let res = await fetch(`../data/cases/${c.run_id}/report.html`, { cache: 'no-store' });
     if (res.ok) {
-      const md = await res.text();
-      reportCache[c.run_id] = md;
+      loaded = await res.text();
     } else {
-      reportCache[c.run_id] = null;
+      type = 'md';
+      res = await fetch(`../data/cases/${c.run_id}/report.md`, { cache: 'no-store' });
+      if (res.ok) loaded = await res.text();
     }
-  } catch (_) {
-    reportCache[c.run_id] = null;
-  }
+  } catch (_) {}
 
-  // 仍在当前 case 时更新
-  if (currentCase && currentCase.run_id === c.run_id && activeTab === 'report') {
-    body.innerHTML = renderCachedReport(c, reportCache[c.run_id]);
+  reportCache[c.run_id] = loaded ? { type, content: loaded } : null;
+  if (currentCase?.run_id === c.run_id && activeTab === 'report') {
+    _injectReport(body, c, reportCache[c.run_id]);
     body.scrollTop = 0;
   }
 }
 
-function renderCachedReport(c, md) {
-  if (md) {
-    return `<div class="md-content">${renderMarkdown(md)}</div>`;
-  }
-  if (!isServerMode) {
-    // file:// 模式：展示 AI 摘要 + Word 直接打开（绝对 file:/// 路径，无需下载）
-    const wordUrl = getDocxUrl(c.run_id);
-    return `
-      <div style="margin-bottom:16px">
-        <div class="video-title-box">${escHtml(c.video_title || '—')}</div>
-      </div>
-      ${c.ai_summary ? `
-      <div style="background:var(--blue-bg);border-left:3px solid var(--blue);padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:16px">
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">AI 摘要</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text-dark)">${escHtml(c.ai_summary)}</div>
-      </div>` : ''}
-      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:14px">
-        <div style="font-size:28px;flex-shrink:0">📄</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text-dark);margin-bottom:4px">点击上方橙色按钮打开完整 Word 报告</div>
-          <div style="font-size:11px;color:var(--text-muted)">报告包含完整诊断、商业分析、视听六层（如有）。点击「📄 Word 报告」按钮即可用 Word/Pages 打开。</div>
+function _injectReport(body, c, cached) {
+  // ── 有内容 ──────────────────────────────────────────────────────
+  if (cached) {
+    if (cached.type === 'html') {
+      // report.html：用 <iframe> 嵌入，完全隔离样式
+      const blob = new Blob([cached.content], { type: 'text/html;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;color:var(--text-muted)">
+          <span style="background:var(--green-bg);color:var(--green);padding:1px 7px;border-radius:4px;font-weight:600">HTML 精美排版</span>
+          <span>由 SiliconFlow 或 Python 渲染器生成</span>
         </div>
-        <a href="${wordUrl}" target="_blank" onclick="if(window.location.href.startsWith('file://')){return true;}event.preventDefault();openWordFile('${escHtml(c.run_id)}',this);" style="flex-shrink:0;padding:8px 14px;background:var(--orange);color:#fff;text-decoration:none;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap">
-          📄 打开
-        </a>
+        <iframe src="${url}" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--border);border-radius:8px;background:#fff" onload="URL.revokeObjectURL('${url}')"></iframe>`;
+      return;
+    }
+    // report.md fallback：走 Markdown 渲染
+    body.innerHTML = `
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
+        <span style="background:#FFF7ED;color:var(--orange);padding:1px 7px;border-radius:4px;font-weight:600">Markdown 模式</span>
+        <span style="margin-left:6px">report.html 未找到 · 运行 <code style="font-size:10px">python3 scripts/gen_report_html.py --all</code> 生成</span>
       </div>
-      <div style="margin-top:12px;padding:10px 14px;background:var(--bg);border-radius:6px;font-size:11px;color:var(--text-muted)">
-        💡 想查看完整网页报告：<code style="background:#E2E8F0;padding:2px 6px;border-radius:3px;font-family:monospace;color:var(--text-dark)">cd probe && python3 hub/serve.py</code>
-        → 访问 http://localhost:7890/hub/probe-cases.html（Word 零下载直接打开）
-      </div>`;
+      <div class="md-content">${renderMarkdown(cached.content)}</div>`;
+    return;
   }
-  return `<p class="no-report">报告文件加载失败，请检查 data/cases/${escHtml(c.run_id)}/report.md 是否存在。</p>`;
+
+  // ── file:// 模式 or 加载失败 ────────────────────────────────────
+  const htmlUrl = (() => {
+    const loc = window.location.href;
+    if (loc.startsWith('file://')) {
+      const base = loc.replace(/[?#].*$/, '').replace(/\/hub\/[^/]+$/, '');
+      return `${base}/data/cases/${c.run_id}/report.html`;
+    }
+    return null;
+  })();
+
+  body.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div class="video-title-box">${escHtml(c.video_title || '—')}</div>
+    </div>
+    ${c.ai_summary ? `<div style="background:var(--blue-bg);border-left:3px solid var(--blue);padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:16px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">AI 摘要</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text-dark)">${escHtml(c.ai_summary)}</div>
+    </div>` : ''}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      ${htmlUrl ? `<a href="${htmlUrl}" target="_blank" style="flex:1;min-width:120px;padding:10px 14px;background:var(--blue);color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px">🌐 网页报告</a>` : ''}
+      <a href="${getDocxUrl(c.run_id)}" target="_blank" onclick="if(!window.location.href.startsWith('file://')){event.preventDefault();openWordFile('${escHtml(c.run_id)}',this);}" style="flex:1;min-width:120px;padding:10px 14px;background:var(--orange);color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px">📄 Word 报告</a>
+    </div>
+    <div style="padding:10px 14px;background:var(--bg);border-radius:6px;font-size:11px;color:var(--text-muted)">
+      💡 <code style="font-size:10px;background:#E2E8F0;padding:1px 5px;border-radius:3px">cd probe && python3 hub/serve.py</code>
+      启动后可在网页内直接阅读完整报告
+    </div>`;
 }
 
 /* ── 数据仪表盘 Tab（v3 · 五区块全量数据）── */
