@@ -175,4 +175,4 @@ probe 已是成熟引擎（双支柱 + 四层 + M1 上线），深耕 = 把**三
 - 数据源可行性红线真源：[feasibility-v1](../4-research/probe-github-datasource-feasibility-v1.md) §5
 - 审核 8 闸真源：[audit-system-v1](../3-build/probe-audit-system-v1.md)
 - 验收方法论：`~/.claude/rules/L1-infra/acceptance.md`（元验五阶 · L3 真实接入 / L6 运营期）
-- 已决：[decision_probe_tikhub_keep_paid](../../../../.claude-commerce/projects/-Users-metafo/memory/decision_probe_tikhub_keep_paid_20260613.md)（否决自托管爬虫·保留 TikHub）
+- 已决：[[decision_probe_tikhub_keep_paid_20260613]]（memory·否决自托管爬虫·保留 TikHub）

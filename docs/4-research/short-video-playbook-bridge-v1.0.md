@@ -8,13 +8,13 @@
 
 ## 〇、为什么是「桥接」而不是「搬进来」
 
-短视频认知体系（`运营报告/short-video-playbook/`）与 probe 自媒体分析是**两层不同的东西**，硬合并或整树拷贝都错：
+短视频认知体系（`运营报告/短视频认知体系/`）与 probe 自媒体分析是**两层不同的东西**，硬合并或整树拷贝都错：
 
 | 维度 | 短视频认知体系 | probe `datasource-selfmedia-track-a-v1.md` |
 |------|--------------|-------------------------------------------|
 | 层次 | **需求/认知侧**：为什么采、采什么信号、赛道逻辑、爆款解码维度 | **供给/工程侧**：哪些 API 合规可得、✅⚠️❌ 红线台账 |
 | 服务对象 | **跨引擎共享**（MetaWrite/MetaDrama/MetaReach/MetaLearn + probe） | probe 私有 |
-| SSOT 真源 | `运营报告/short-video-playbook/`（认知层原处，工作素材） | probe git 仓（已版本化） |
+| SSOT 真源 | `运营报告/短视频认知体系/`（认知层原处，工作素材） | probe git 仓（已版本化） |
 
 **纪律**：本文档对认知层**只引用（绝对路径指针）、不复制**——避免一份知识两处维护必漂移（本仓 SSOT 铁律）。认知层任何内容更新只改其原处真源，本桥接只维护「映射关系」。
 
@@ -26,14 +26,14 @@
 
 | 分块 | 绝对路径 | 在 probe 自媒体的角色 |
 |------|---------|---------------------|
-| 主干成品 | `/Users/metafo/Downloads/metafoclaw/运营报告/short-video-playbook/short-video-master-guide.md` | 需求侧总纲·选题/赛道/爆款逻辑一篇读懂 |
-| 01 底层认知 | `.../01-foundation/`（平权理念/时机/信息源六重身份） | 北极星·为什么做自媒体情报（信息差=竞争力） |
-| 02 平台机制 | `.../02-platform-mechanism/traffic-race-and-weight.md` | **权重信号定义**（完播/互动/标签/ECPM）= probe 要采集与解读的指标 |
-| 03 赛道战略 | `.../03-track-strategy/`（全品类/投产比/平权契合） | 与 probe **赛道注册表**（9 赛道）的概念对齐源 |
-| 04 内容执行 | `.../04-account-content-ops/`（信息元素40项/活人感/技巧弹药库） | **信息元素 40 项**= probe 自媒体采集字段的需求清单 |
-| 05 流量运营·采集层 | `.../05-traffic-ops/url-only-data-acquisition.md` | ⚙️ **工程件**：7 类数据可得性矩阵 = probe 数据源可行性规格（见 §三对账） |
-| 06 规模化 | `.../06-scaling/multi-account-matrix.md` | 矩阵/风控逻辑·MetaReach 分发侧（probe 弱相关） |
-| 07 工具·组合深探 | `.../07-tooling/combo-deep-probe-tool-design.md` | ⚙️ **工程件**：probe 采集层组件设计，代码已落 combo-deep-probe 独立仓（见 §三对账） |
+| 主干成品 | `/Users/metafo/Downloads/metafoclaw/运营报告/短视频认知体系/short-video-master-guide.md` | 需求侧总纲·选题/赛道/爆款逻辑一篇读懂 |
+| 01 底层认知 | `.../01-底层认知/`（平权理念/时机/信息源六重身份） | 北极星·为什么做自媒体情报（信息差=竞争力） |
+| 02 平台机制 | `.../02-平台机制/traffic-race-and-weight.md` | **权重信号定义**（完播/互动/标签/ECPM）= probe 要采集与解读的指标 |
+| 03 赛道战略 | `.../03-赛道战略/`（全品类/投产比/平权契合） | 与 probe **赛道注册表**（9 赛道）的概念对齐源 |
+| 04 内容执行 | `.../04-账号与内容/`（信息元素40项/活人感/技巧弹药库） | **信息元素 40 项**= probe 自媒体采集字段的需求清单 |
+| 05 流量运营·采集层 | `.../05-流量运营/url-only-data-acquisition.md` | ⚙️ **工程件**：7 类数据可得性矩阵 = probe 数据源可行性规格（见 §三对账） |
+| 06 规模化 | `.../06-规模化/multi-account-matrix.md` | 矩阵/风控逻辑·MetaReach 分发侧（probe 弱相关） |
+| 07 工具·组合深探 | `.../07-工具层/combo-deep-probe-tool-design.md` | ⚙️ **工程件**：probe 采集层组件设计，代码已落 combo-deep-probe 独立仓（见 §三对账） |
 
 ---
 
@@ -105,8 +105,8 @@
 
 ## 五、关联
 
-- 需求侧认知真源（绝对路径，见 §一指针表）：`运营报告/short-video-playbook/`
+- 需求侧认知真源（绝对路径，见 §一指针表）：`运营报告/短视频认知体系/`
 - 供给侧 probe 真源：[datasource-selfmedia-track-a-v1.md](datasource-selfmedia-track-a-v1.md) · [feasibility-v1](probe-github-datasource-feasibility-v1.md) · `app/datasources/ledger.yaml`
 - 采集组件代码：`/Users/metafo/Downloads/metafoclaw/combo-deep-probe/`（独立 git 仓）
 - 部署职能：`server-roles.md` 机6 probe-a
-- SSOT 治理纪律：[records/probe-ssot-governance-v1.md](records/probe-ssot-governance-v1.md)
+- SSOT 治理纪律：[records/probe-ssot-governance-v1.md](../records/probe-ssot-governance-v1.md)
