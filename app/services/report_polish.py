@@ -24,7 +24,7 @@ _PROMPT = """你是顶级的短视频账号诊断顾问。下面是一份「确�
 你的任务:把它**重写成一篇有逻辑主线、像一个懂行的人在跟创作者面对面聊他账号**的诊断报告——让他读完清楚"我是谁→卡在哪→为什么→怎么破"。
 
 铁律(违反任何一条都是严重错误):
-1. **禁止改任何数字**(粉丝数/点赞数/比例/百分比等,全部原样保留)
+1. **禁止改任何数字**(粉丝数/点赞数/比例/百分比等,全部原样保留)。**数字必须保持阿拉伯数字原格式**——不能把 220000 改成"22万"、不能把 6438222 改成"643万"等中文单位缩写，必须原封不动保留阿拉伯数字
 2. **禁止新增任何事实或判断**(原报告没说的结论,你绝不能编出来)
 3. **禁止删除关键结论**(每段的核心判断和行动建议都要保留)
 4. 你能做的只有:调整语序让逻辑更顺、加"正因为/所以"这类过渡句串联段落、把生硬的话说得更自然、突出重点
@@ -58,7 +58,9 @@ def polish_report(report_md: str, sf_key: str | None = None, *,
     key = sf_key or os.getenv("SILICONFLOW_API_KEY")
     if not key or not report_md:
         return {"ok": False, "fallback": report_md, "error": "缺 key 或空报告"}
-    payload = {"model": POLISH_MODEL, "temperature": 0.5, "max_tokens": 6000,
+    # max_tokens 动态:长报告需更多输出空间(6000 对 6000+ 字中文报告不够·实测截断)
+    dyn_max_tokens = max(8000, int(len(report_md) * 2))
+    payload = {"model": POLISH_MODEL, "temperature": 0.5, "max_tokens": dyn_max_tokens,
                "messages": [{"role": "user", "content": _PROMPT.format(md=report_md)}]}
     try:
         req = urllib.request.Request(
@@ -70,20 +72,24 @@ def polish_report(report_md: str, sf_key: str | None = None, *,
     except Exception as e:  # noqa: BLE001 — 任何失败都降级原文,不阻塞
         return {"ok": False, "fallback": report_md, "error": f"润色调用失败:{e}"}
 
-    if not polished or len(polished) < len(report_md) * 0.5:
+    # 40%(非 50%):报告含商业数据段时 LLM 合理归纳裸 dict→自然语言·体积缩小是预期好行为
+    if not polished or len(polished) < len(report_md) * 0.40:
         return {"ok": False, "fallback": report_md, "error": "润色输出异常(过短)·降级原文"}
     # 护栏:核心数字(粉丝/均赞/最高赞·must_keep)必须逐字仍在润色稿·防篡改关键判断值
     # 次要数字(转发/收藏/日期)允许润色重述(如"互动亮眼")·不强求逐字
     keep = {str(n).replace(",", "") for n in (must_keep or []) if n and str(n).replace(",", "").isdigit()}
     if not keep:
-        keep = {n for n in _nums(report_md) if len(n) >= 4}  # 无指定则守 4 位+大数字
+        # 守 5 位+(≥10000)大数字:粉丝/高赞/播放等核心指标
+        # 4 位数(1000–9999)不强求:常见于模板说教("1000个客户")和小互动数(如收藏/评论)·允许润色重述
+        keep = {n for n in _nums(report_md) if len(n) >= 5}
     missing = keep - _nums(polished)
     if missing:
         return {"ok": False, "fallback": report_md,
                 "error": f"润色篡改/丢失核心数字 {sorted(missing)[:3]}·降级原文(守真实性)"}
     # 护栏:关键标题锚点(验收/层检测靠它识别)必须保留·防润色改骨架致验收失效
     anchors = [a for a in ("看+听", "藏着的规律", "整体判断", "赛道的大环境", "最该解决",
-                           "拿不到", "绝不瞎编")  # 含诚实标注词(R0.8 真实性·不许润色改没)
+                           "拿不到", "瞎编",   # 诚实标注·用子串兼容不同措辞
+                           "晒证据", "虚假宣传")  # 合规段(有资质声称时出现)·防润色删除法律底线
                if a in report_md]
     lost = [a for a in anchors if a not in polished]
     if lost:
