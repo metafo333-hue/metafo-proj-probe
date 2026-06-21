@@ -1616,6 +1616,18 @@ function buildCard(c, q) {
 /* ============================================================
    详情抽屉
    ============================================================ */
+
+/* docx 路径：file:// → 绝对 file:/// 直接打开（无下载）；server → 相对路径 */
+function getDocxUrl(runId) {
+  const loc = window.location.href;
+  if (loc.startsWith('file://')) {
+    // file:///…/probe/hub/probe-cases.html → file:///…/probe/data/cases/{runId}/report.docx
+    const base = loc.replace(/[?#].*$/, '').replace(/\/hub\/[^/]+$/, '');
+    return `${base}/data/cases/${runId}/report.docx`;
+  }
+  return `../data/cases/${runId}/report.docx`;
+}
+
 function openDrawer(c) {
   currentCase = c;
   activeTab = 'report';
@@ -1625,13 +1637,16 @@ function openDrawer(c) {
     [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
       .filter(Boolean).join(' · ');
 
-  // Word 报告按钮：file:// 和 server 模式均显示（相对路径两种模式都能打开本地 docx）
+  // Word 报告按钮：始终显示
+  // file:// 模式 → 计算绝对 file:/// 路径 → 浏览器直接用系统默认程序打开（无下载步骤）
+  // server 模式  → 相对 http 路径 → 浏览器下载后 OS 自动打开
   const wordBtn = document.getElementById('word-btn');
   if (wordBtn) {
-    const docxUrl = `../data/cases/${c.run_id}/report.docx`;
-    wordBtn.href = docxUrl;
-    wordBtn.style.display = 'inline-flex';   // 始终显示，不区分模式
-    wordBtn.title = `点击打开 Word 报告（${c.run_id.slice(-12)}）`;
+    wordBtn.href  = getDocxUrl(c.run_id);
+    wordBtn.style.display = 'inline-flex';
+    wordBtn.title = isServerMode
+      ? '点击下载并打开 Word 报告'
+      : '点击直接用 Word/Pages 打开（无需下载）';
   }
 
   document.querySelectorAll('.drawer-tab').forEach(t => {
@@ -1712,8 +1727,8 @@ function renderCachedReport(c, md) {
     return `<div class="md-content">${renderMarkdown(md)}</div>`;
   }
   if (!isServerMode) {
-    // file:// 模式：展示 AI 摘要 + 关键指标预览 + Word 打开引导
-    const wordUrl = `../data/cases/${c.run_id}/report.docx`;
+    // file:// 模式：展示 AI 摘要 + Word 直接打开（绝对 file:/// 路径，无需下载）
+    const wordUrl = getDocxUrl(c.run_id);
     return `
       <div style="margin-bottom:16px">
         <div class="video-title-box">${escHtml(c.video_title || '—')}</div>
