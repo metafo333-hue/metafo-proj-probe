@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated_at": "2026-06-22T00:52:22",
+  "updated_at": "2026-06-22T01:25:02",
   "cases": [
     {
       "run_id": "douyin-dingxiangyisheng-20260621-120000",
@@ -40,7 +40,10 @@
       "prev_run_id": null,
       "version_count": 1,
       "prev_vid_run_id": null,
-      "vid_version_count": 1
+      "vid_version_count": 1,
+      "video_comment": 5239,
+      "video_collect": 32990,
+      "video_share": 57384
     },
     {
       "run_id": "douyin-beichuanmoyujie-20260621-143200",
@@ -82,7 +85,10 @@
       "prev_run_id": null,
       "version_count": 1,
       "prev_vid_run_id": null,
-      "vid_version_count": 1
+      "vid_version_count": 1,
+      "video_comment": 8,
+      "video_collect": 1,
+      "video_share": 0
     },
     {
       "run_id": "douyin-chengduchihuo-20260621-150000",
@@ -122,7 +128,10 @@
       "prev_run_id": null,
       "version_count": 1,
       "prev_vid_run_id": null,
-      "vid_version_count": 1
+      "vid_version_count": 1,
+      "video_comment": 320,
+      "video_collect": 2300,
+      "video_share": 1200
     },
     {
       "run_id": "douyin-pifuanna-20260621-151000",
@@ -162,7 +171,10 @@
       "prev_run_id": null,
       "version_count": 1,
       "prev_vid_run_id": null,
-      "vid_version_count": 1
+      "vid_version_count": 1,
+      "video_comment": 186,
+      "video_collect": 890,
+      "video_share": 340
     },
     {
       "run_id": "douyin-chuanweipaojiao-20260621-152000",
@@ -203,7 +215,10 @@
       "prev_run_id": null,
       "version_count": 1,
       "prev_vid_run_id": null,
-      "vid_version_count": 1
+      "vid_version_count": 1,
+      "video_comment": 28,
+      "video_collect": 7,
+      "video_share": 15
     }
   ]
 }

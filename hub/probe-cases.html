@@ -828,6 +828,73 @@ mark {
   line-height: 1.5;
 }
 
+/* ── Word 打开按钮 ── */
+.word-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: var(--orange);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+  white-space: nowrap;
+  border: none;
+}
+.word-open-btn:hover { opacity: .85; transform: translateY(-1px); }
+.word-open-btn:active { transform: translateY(0); }
+
+/* ── 仪表盘新元素 ── */
+.video-title-box {
+  background: var(--blue-bg);
+  border-left: 3px solid var(--blue);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dark);
+  word-break: break-all;
+}
+.tier-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 6px;
+}
+.path-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--blue-bg);
+  color: var(--blue);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.burst-bar-wrap {
+  margin-top: 5px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.burst-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.eng-note {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.dashboard-wrap { padding-bottom: 16px; }
+
 /* ── 版本历史 tab ── */
 .timeline {
   position: relative;
@@ -1031,7 +1098,10 @@ mark {
   <div id="drawer-header">
     <div class="drawer-title-row">
       <div id="drawer-account-name">—</div>
-      <button id="drawer-close" title="关闭 (ESC)">×</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <a id="word-btn" class="word-open-btn" style="display:none" target="_blank" title="点击直接在 Word/Pages 中打开报告">📄 Word 报告</a>
+        <button id="drawer-close" title="关闭 (ESC)">×</button>
+      </div>
     </div>
     <div id="drawer-sub">—</div>
     <div id="drawer-tabs">
@@ -1555,6 +1625,17 @@ function openDrawer(c) {
     [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
       .filter(Boolean).join(' · ');
 
+  // Word 报告按钮：服务器模式下直接链接 docx（点击 → 下载 → OS 自动打开 Word/Pages）
+  const wordBtn = document.getElementById('word-btn');
+  if (wordBtn) {
+    const docxUrl = `../data/cases/${c.run_id}/report.docx`;
+    wordBtn.href = docxUrl;
+    wordBtn.style.display = isServerMode ? 'inline-flex' : 'none';
+    wordBtn.title = isServerMode
+      ? `点击在 Word/Pages 中打开：${docxUrl}`
+      : '服务器模式下可直接打开 Word 报告';
+  }
+
   document.querySelectorAll('.drawer-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === activeTab);
   });
@@ -1651,70 +1732,81 @@ python3 -m http.server 7890</code>
   return `<p class="no-report">报告文件加载失败，请检查 data/cases/${escHtml(c.run_id)}/report.md 是否存在。</p>`;
 }
 
-/* ── 数据仪表盘 Tab ── */
+/* ── 数据仪表盘 Tab（v3 · 五区块全量数据）── */
 function renderDashboardTab(c) {
-  /* ── 区块 A：账号层 ── */
+  /* ── 粉丝段位 ── */
   const follower = c.follower || 0;
-  let tierClass = 'tier-start', tierLabel = '起步', tierColor = 'var(--text-muted)';
-  if (follower >= 1000000) { tierClass = 'tier-head'; tierLabel = '头部'; tierColor = 'var(--green)'; }
-  else if (follower >= 100000) { tierClass = 'tier-growth'; tierLabel = '成长'; tierColor = 'var(--blue)'; }
+  let tierClass = 'tier-start', tierLabel = '冷启 (<1千)', tierColor = '#94A3B8';
+  if (follower >= 1000000)     { tierClass = 'tier-head';   tierLabel = '头部 (100万+)';  tierColor = 'var(--green)'; }
+  else if (follower >= 100000) { tierClass = 'tier-growth'; tierLabel = '成熟 (10-100万)'; tierColor = 'var(--blue)'; }
+  else if (follower >= 10000)  { tierClass = 'tier-growth'; tierLabel = '成长 (1-10万)';   tierColor = '#6366F1'; }
+  else if (follower >= 1000)   { tierClass = 'tier-start';  tierLabel = '起步 (1千-1万)';  tierColor = '#F59E0B'; }
 
-  const burstHot = c.burst_ratio != null && c.burst_ratio >= 10;
+  const burstHot  = c.burst_ratio != null && c.burst_ratio >= 10;
+  const burstWarm = c.burst_ratio != null && c.burst_ratio >= 5 && c.burst_ratio < 10;
+  const burstPct  = c.burst_ratio != null ? Math.min(100, (c.burst_ratio / 30) * 100).toFixed(0) : 0;
+  const burstColor = burstHot ? 'var(--orange)' : burstWarm ? '#F59E0B' : 'var(--blue-light)';
 
-  let sectionA = `
+  /* ── 区块 A：账号概况 ── */
+  const sectionA = `
     <div class="dashboard-section">
-      <div class="dashboard-section-title"><span class="section-icon">👤</span> 账号层</div>
+      <div class="dashboard-section-title">👤 账号概况</div>
       <div class="metrics-grid-3">
         <div class="metric-card ${tierClass}">
           <div class="m-label">粉丝数</div>
           <div class="m-value">${fmtFollowers(c.follower)}</div>
-          <div class="m-badge" style="background:${tierColor};color:#fff;">${tierLabel}</div>
+          <div class="m-badge" style="background:${tierColor};color:#fff;margin-top:4px">${tierLabel.split(' ')[0]}</div>
         </div>
         <div class="metric-card">
-          <div class="m-label">均赞</div>
-          <div class="m-value">${fmtFollowers(c.avg_like)}</div>
+          <div class="m-label">均赞 / 最高赞</div>
+          <div class="m-value" style="font-size:16px">${fmtFollowers(c.avg_like)}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">最高 ${fmtFollowers(c.max_like)}</div>
         </div>
-        <div class="metric-card">
-          <div class="m-label">最高赞</div>
-          <div class="m-value">${fmtFollowers(c.max_like)}</div>
-        </div>
-      </div>
-      <div class="metrics-grid-2">
-        <div class="metric-card ${burstHot ? 'burst-hot' : ''}">
+        <div class="metric-card ${burstHot ? 'burst-hot' : burstWarm ? '' : ''}">
           <div class="m-label">爆款比</div>
-          <div class="m-value">${c.burst_ratio != null ? c.burst_ratio : '—'}<span class="m-unit">x</span></div>
-          ${burstHot ? '<div class="m-badge" style="background:var(--orange);color:#fff;">高爆款</div>' : ''}
-        </div>
-        <div class="metric-card">
-          <div class="m-label">垂直度</div>
-          <div class="m-value">${c.vertical_score != null ? c.vertical_score : '—'}</div>
+          <div class="m-value">${c.burst_ratio != null ? c.burst_ratio + 'x' : '—'}</div>
+          ${c.burst_ratio != null ? `<div class="burst-bar-wrap"><div class="burst-bar-fill" style="width:${burstPct}%;background:${burstColor}"></div></div>` : ''}
+          ${burstHot ? '<div style="font-size:10px;color:var(--orange);margin-top:3px;font-weight:700">⚡ 高爆款</div>' : burstWarm ? '<div style="font-size:10px;color:#F59E0B;margin-top:3px">🔥 有爆款</div>' : ''}
         </div>
       </div>
+      <div class="detail-row">
+        <span class="dr-label">粉丝段位</span>
+        <span class="dr-value" style="color:${tierColor};font-weight:600">${tierLabel}</span>
+      </div>
+      ${c.vertical_score != null ? `<div class="detail-row">
+        <span class="dr-label">垂直度</span>
+        <span class="dr-value">${c.vertical_score} <span class="eng-note">(0-1 · 越高越聚焦)</span></span>
+      </div>` : ''}
     </div>`;
 
-  /* ── 区块 B：视频层 ── */
-  const vLike = c.video_like || 0;
-  const avgLike = c.avg_like || 0;
-  let vsClass = '', vsBadge = '';
+  /* ── 区块 B：本条视频 ── */
+  const vLike    = c.video_like    || 0;
+  const avgLike  = c.avg_like      || 0;
+  const vComment = c.video_comment || 0;
+  const vCollect = c.video_collect || 0;
+  const vShare   = c.video_share   || 0;
+
+  let vsText = '', vsColor = 'var(--text-muted)', vsIcon = '';
   if (avgLike > 0 && vLike > 0) {
-    const ratio = vLike / avgLike;
-    if (ratio >= 1.2) {
-      vsClass = 'vs-up';
-      vsBadge = `<div class="m-badge" style="background:var(--green);color:#fff;">高于均值 ${ratio.toFixed(1)}x ↑</div>`;
-    } else if (ratio < 0.8) {
-      vsClass = 'vs-down';
-      vsBadge = `<div class="m-badge" style="background:var(--blue-light);color:#fff;">低于均值 ↓</div>`;
-    }
+    const r = vLike / avgLike;
+    if      (r >= 2)   { vsText = `均值 ${r.toFixed(1)}x`; vsColor = 'var(--green)';  vsIcon = '↑↑'; }
+    else if (r >= 1.2) { vsText = `均值 ${r.toFixed(1)}x`; vsColor = '#059669';        vsIcon = '↑'; }
+    else if (r >= 0.8) { vsText = '持平均值';               vsColor = 'var(--text-muted)'; vsIcon = '→'; }
+    else               { vsText = `均值 ${r.toFixed(1)}x`; vsColor = 'var(--red)';    vsIcon = '↓'; }
   }
 
-  let sectionB = `
+  const engRate  = vLike > 0 ? ((vComment + vCollect) / vLike * 100) : null;
+  const engColor = engRate == null ? '' : engRate >= 20 ? 'color:var(--green)' : engRate >= 10 ? 'color:var(--orange)' : 'color:var(--text-muted)';
+
+  const sectionB = `
     <div class="dashboard-section">
-      <div class="dashboard-section-title"><span class="section-icon">🎬</span> 视频层</div>
-      <div class="metrics-grid-4">
-        <div class="metric-card ${vsClass}">
+      <div class="dashboard-section-title">🎬 本条视频表现</div>
+      <div class="video-title-box">${escHtml(c.video_title || '—')}</div>
+      <div class="metrics-grid-4" style="margin-top:10px">
+        <div class="metric-card ${vLike > avgLike * 1.2 ? 'vs-up' : vLike < avgLike * 0.8 ? 'vs-down' : ''}">
           <div class="m-label">点赞</div>
           <div class="m-value">${fmtNum(c.video_like)}</div>
-          ${vsBadge}
+          ${vsText ? `<div style="font-size:10px;color:${vsColor};font-weight:700;margin-top:2px">${vsIcon} ${vsText}</div>` : ''}
         </div>
         <div class="metric-card">
           <div class="m-label">评论</div>
@@ -1726,61 +1818,83 @@ function renderDashboardTab(c) {
         </div>
         <div class="metric-card">
           <div class="m-label">分享</div>
-          <div class="m-value">${fmtNum(c.video_share)}</div>
+          <div class="m-value">${vShare > 0 ? fmtNum(vShare) : '—'}</div>
         </div>
       </div>
-      <div class="detail-row" style="margin-top:8px">
-        <span class="dr-label">视频标题</span>
-        <span class="dr-value" style="font-size:12px;max-width:280px;text-align:right">${escHtml(c.video_title || '—')}</span>
+      ${engRate != null ? `<div class="detail-row" style="margin-top:4px">
+        <span class="dr-label">互动率</span>
+        <span class="dr-value" style="${engColor};font-weight:600">${engRate.toFixed(1)}% <span class="eng-note">(评论+收藏)÷点赞</span></span>
+      </div>` : ''}
+    </div>`;
+
+  /* ── 区块 C：商业价值（经验区间）── */
+  const COMM = {
+    '知识/健康':     { tier:'A档', tc:'#2563EB', desc:'知识付费·星图报价高',    cpm:'3–30元/粉',     paths:['知识付费','带货佣金'] },
+    '带货·B2B':     { tier:'S档', tc:'var(--green)', desc:'B端精准·私域天花板最高',cpm:'50–500元/线索', paths:['私域询单','知识付费'] },
+    '本地服务·探店': { tier:'A档', tc:'#2563EB', desc:'本地精准流量·带货+广告',  cpm:'2–15元/粉',     paths:['带货佣金','广告接洽'] },
+    '颜值·美妆':    { tier:'A档', tc:'#2563EB', desc:'美妆消费意愿高',          cpm:'3–20元/粉',     paths:['带货佣金','知识付费'] },
+    '带货':          { tier:'A档', tc:'#2563EB', desc:'带货直接变现',            cpm:'2–10元/粉',     paths:['带货佣金','直播带货'] },
+  };
+  const comm = COMM[c.account_type] || { tier:'B档', tc:'#64748B', desc:'—', cpm:'—', paths:['—'] };
+
+  const sectionC = `
+    <div class="dashboard-section">
+      <div class="dashboard-section-title">💰 商业价值参考 <span class="eng-note" style="font-size:10px">经验区间 · 非精确预测</span></div>
+      <div class="detail-row">
+        <span class="dr-label">赛道档位</span>
+        <span class="dr-value">
+          <span class="tier-pill" style="background:${comm.tc}">${comm.tier}</span>${escHtml(comm.desc)}
+        </span>
+      </div>
+      <div class="detail-row">
+        <span class="dr-label">单粉价值参考</span>
+        <span class="dr-value" style="font-weight:600;color:var(--blue)">${comm.cpm}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dr-label">变现优先路径</span>
+        <span class="dr-value">${comm.paths.map((p,i)=>`<span class="path-pill" style="opacity:${i===0?1:.65}">${p}</span>`).join('<span style="color:var(--text-muted);margin:0 2px">›</span>')}</span>
       </div>
     </div>`;
 
-  /* ── 区块 C：分析质量层 ── */
-  const ps = polishStatus(c.polish);
-  let polishDetail = '';
+  /* ── 区块 D：分析质量 ── */
+  let polishDetail = '—';
   if (c.polish) {
-    if (c.polish.ok && c.polish.segs_ok >= c.polish.segs_total) {
+    if (c.polish.ok && c.polish.segs_ok >= c.polish.segs_total)
       polishDetail = `✅ 全段 (${c.polish.segs_ok}/${c.polish.segs_total}段)`;
-    } else if (c.polish.ok) {
+    else if (c.polish.ok)
       polishDetail = `⚠️ 部分 (${c.polish.segs_ok}/${c.polish.segs_total}段)`;
-    } else {
-      polishDetail = `❌ 降级 · ${escHtml(c.polish.note || '未知原因')}`;
-    }
+    else
+      polishDetail = `❌ 降级 · ${escHtml(c.polish.note || '未知')}`;
   }
+  const sourceLabel = c.source === 'real_tikhub' ? '🟢 真实账号 (TikHub)' : c.source === 'fixture' ? '🟡 模拟数据 (fixture)' : escHtml(c.source || '—');
+  const gaps = c.validation_gaps || [];
 
-  const sourceLabel = c.source === 'real_tikhub' ? '真实账号 (TikHub)' : c.source === 'fixture' ? '模拟数据 (fixture)' : escHtml(c.source || '—');
-  const gaps = (c.validation_gaps || []).join('、') || null;
-
-  let sectionC = `
+  const sectionD = `
     <div class="dashboard-section">
-      <div class="dashboard-section-title"><span class="section-icon">🔬</span> 分析质量层</div>
-      <div class="detail-row">
-        <span class="dr-label">视听六层</span>
-        <span class="dr-value">${c.has_av ? '✅ 已采集' : '⚠️ 未采集'}${c.polish && c.polish.model && c.has_av ? ' · ' + escHtml(c.polish.model) : ''}</span>
-      </div>
-      <div class="detail-row">
-        <span class="dr-label">LLM 润色</span>
-        <span class="dr-value">${polishDetail || '—'}</span>
-      </div>
-      ${c.polish && c.polish.model ? `<div class="detail-row">
-        <span class="dr-label">润色模型</span>
-        <span class="dr-value">${escHtml(c.polish.model)}</span>
-      </div>` : ''}
-      <div class="detail-row">
-        <span class="dr-label">系统版本</span>
-        <span class="dr-value" style="font-family:monospace">${escHtml(c.probe_version || '—')}</span>
-      </div>
-      <div class="detail-row">
-        <span class="dr-label">验收结果</span>
-        <span class="dr-value">${c.validation_pass ? '✅ 全通' : '❌ 有缺口'}</span>
-      </div>
-      ${gaps ? `<div class="detail-row">
-        <span class="dr-label">缺口项</span>
-        <span class="dr-value" style="color:var(--red)">${escHtml(gaps)}</span>
-      </div>` : ''}
+      <div class="dashboard-section-title">🔬 分析质量</div>
       <div class="detail-row">
         <span class="dr-label">数据来源</span>
         <span class="dr-value">${sourceLabel}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dr-label">视听六层</span>
+        <span class="dr-value">${c.has_av ? '✅ 已采集 (Qwen3-Omni)' : '⚠️ 未采集（本次未开启）'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dr-label">LLM 润色</span>
+        <span class="dr-value">${polishDetail}</span>
+      </div>
+      ${c.polish?.model ? `<div class="detail-row">
+        <span class="dr-label">润色模型</span>
+        <span class="dr-value" style="font-family:monospace;font-size:11px">${escHtml(c.polish.model)}</span>
+      </div>` : ''}
+      <div class="detail-row">
+        <span class="dr-label">验收结果</span>
+        <span class="dr-value">${c.validation_pass ? '✅ 全通' : `❌ ${gaps.length} 项缺口`}${gaps.length ? `<br><span style="font-size:11px;color:var(--red)">${gaps.map(escHtml).join('、')}</span>` : ''}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dr-label">系统版本</span>
+        <span class="dr-value" style="font-family:monospace;font-size:11px">${escHtml(c.probe_version || '—')}</span>
       </div>
       <div class="detail-row">
         <span class="dr-label">报告字数</span>
@@ -1788,11 +1902,20 @@ function renderDashboardTab(c) {
       </div>
       <div class="detail-row">
         <span class="dr-label">分析日期</span>
-        <span class="dr-value">${escHtml(c.analyzed_at ? c.analyzed_at.slice(0,16).replace('T',' ') : '—')}</span>
+        <span class="dr-value">${escHtml(c.analyzed_date || '—')}</span>
       </div>
     </div>`;
 
-  return sectionA + sectionB + sectionC;
+  /* ── 区块 E：标签 ── */
+  const sectionE = c.tags && c.tags.length ? `
+    <div class="dashboard-section" style="padding-bottom:4px">
+      <div class="dashboard-section-title" style="margin-bottom:8px">🏷️ 标签</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${c.tags.map(t=>`<span class="tag-pill" style="cursor:pointer" onclick="event.stopPropagation();setSearch('${escHtml(t)}')" title="点击筛选此标签">${escHtml(t)}</span>`).join('')}
+      </div>
+    </div>` : '';
+
+  return `<div class="dashboard-wrap">${sectionA}${sectionB}${sectionC}${sectionD}${sectionE}</div>`;
 }
 
 /* ── 版本历史 Tab ── */
