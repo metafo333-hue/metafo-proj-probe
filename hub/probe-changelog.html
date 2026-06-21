@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>元探 · 更新日志</title>
+<style>
+:root {
+  --blue:      #1E3A8A;
+  --blue-mid:  #2563EB;
+  --blue-bg:   #EFF6FF;
+  --orange:    #FF7A1A;
+  --green:     #066C37;
+  --green-bg:  #F0FDF4;
+  --red:       #B91C1C;
+  --purple:    #6D28D9;
+  --purple-bg: #F5F3FF;
+  --text-dark: #1E293B;
+  --text-mid:  #334155;
+  --text-muted:#64748B;
+  --border:    #E2E8F0;
+  --bg:        #F8FAFC;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text-dark);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Header ── */
+#header {
+  background: var(--blue);
+  color: #fff;
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-logo { font-size: 18px; font-weight: 800; letter-spacing: -.3px; }
+.header-sub  { font-size: 12px; opacity: .75; margin-top: 1px; }
+.header-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  background: rgba(255,255,255,.15);
+  color: #fff; text-decoration: none;
+  border-radius: 6px; font-size: 12px; font-weight: 600;
+  transition: background .15s;
+}
+.header-back:hover { background: rgba(255,255,255,.25); }
+
+/* ── Main layout ── */
+#main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+/* ── 版本区块 ── */
+.version-block {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0 24px;
+  margin-bottom: 40px;
+  position: relative;
+}
+.version-block::before {
+  content: '';
+  position: absolute;
+  left: 168px;
+  top: 0; bottom: -40px;
+  width: 2px;
+  background: var(--border);
+}
+.version-block:last-child::before { display: none; }
+
+/* ── 版本侧栏 ── */
+.v-sidebar {
+  text-align: right;
+  padding-top: 2px;
+  padding-right: 16px;
+  position: relative;
+}
+.v-sidebar::after {
+  content: '';
+  position: absolute;
+  right: -8px; top: 8px;
+  width: 14px; height: 14px;
+  background: #fff;
+  border: 2px solid var(--blue-mid);
+  border-radius: 50%;
+  z-index: 1;
+}
+.version-block.major .v-sidebar::after {
+  background: var(--blue);
+  border-color: var(--blue);
+  width: 18px; height: 18px;
+  right: -10px; top: 6px;
+}
+.v-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px; font-weight: 700;
+  margin-bottom: 5px;
+}
+.v-tag.major { background: var(--blue);    color: #fff; }
+.v-tag.minor { background: var(--blue-bg); color: var(--blue); }
+.v-tag.patch { background: var(--bg);      color: var(--text-muted); border: 1px solid var(--border); }
+.v-date  { font-size: 11px; color: var(--text-muted); }
+.v-commit{
+  font-size: 10px; font-family: monospace;
+  color: var(--text-muted);
+  background: var(--border);
+  padding: 1px 5px; border-radius: 3px;
+  margin-top: 4px; display: inline-block;
+}
+
+/* ── 版本内容 ── */
+.v-content {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.v-title {
+  padding: 14px 18px 10px;
+  font-size: 15px; font-weight: 700;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.v-summary {
+  font-size: 12px; font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.v-body { padding: 14px 18px; }
+
+/* ── 变更条目 ── */
+.change-group { margin-bottom: 14px; }
+.change-group:last-child { margin-bottom: 0; }
+.change-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 4px;
+  font-size: 11px; font-weight: 700;
+  margin-bottom: 7px;
+}
+.feat  { background: #DBEAFE; color: var(--blue-mid); }
+.fix   { background: var(--green-bg); color: var(--green); }
+.impr  { background: var(--purple-bg); color: var(--purple); }
+.data  { background: #FFF7ED; color: var(--orange); }
+.perf  { background: #FEF9C3; color: #92400E; }
+
+.change-list { list-style: none; }
+.change-list li {
+  padding: 4px 0 4px 18px;
+  position: relative;
+  font-size: 13px;
+  color: var(--text-mid);
+  border-bottom: 1px solid var(--bg);
+}
+.change-list li:last-child { border-bottom: none; }
+.change-list li::before {
+  content: '·';
+  position: absolute; left: 6px;
+  color: var(--text-muted); font-weight: 700;
+}
+.change-list li strong { color: var(--text-dark); }
+.change-list li code {
+  background: var(--bg); border: 1px solid var(--border);
+  padding: 0 4px; border-radius: 3px;
+  font-size: 11px; font-family: monospace;
+}
+
+/* ── 类型 badges ── */
+.type-badge {
+  font-size: 10px; padding: 1px 6px;
+  border-radius: 3px; font-weight: 600;
+}
+
+/* ── Footer ── */
+#footer {
+  text-align: center; padding: 20px;
+  font-size: 11px; color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div class="header-left">
+    <div>
+      <div class="header-logo">元探 · 更新日志</div>
+      <div class="header-sub">MetaProbe Changelog · probe/hub/</div>
+    </div>
+  </div>
+  <a href="probe-cases.html" class="header-back">← 返回案例库</a>
+</div>
+
+<div id="main">
+
+  <!-- ══ Hub v3.x ══════════════════════════════════════════════ -->
+
+  <div class="version-block major">
+    <div class="v-sidebar">
+      <div class="v-tag major">Hub v3.1</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">21bf878</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">
+        Word 无下载直接打开
+        <span class="v-summary">file:// 模式下点击即用 Word/Pages 打开，不经下载流程</span>
+      </div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label fix">🔧 Fix</div>
+          <ul class="change-list">
+            <li><strong>file:// 模式 Word 按钮不显示</strong> → 现在两种模式均显示（去掉了 isServerMode 限制）</li>
+            <li><strong>新增 <code>getDocxUrl(runId)</code></strong>：file:// 模式计算绝对 <code>file:///</code> 路径，点击直接由 macOS LaunchServices 调 Word/Pages；server 模式保持相对路径</li>
+            <li>报告全文区（file:// 时）的「打开」按钮同步改用绝对路径</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="version-block">
+    <div class="v-sidebar">
+      <div class="v-tag minor">Hub v3.0</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">d9cacd0</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">
+        Word 按钮 + 五区块仪表盘 + 数据修复
+      </div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ 新增</div>
+          <ul class="change-list">
+            <li><strong>📄 Word 报告按钮</strong>：抽屉右上角橙色按钮，点击即打开 Word 报告</li>
+            <li><strong>仪表盘 A · 账号概况</strong>：粉丝/均赞+最高赞/爆款比进度条·段位彩色标签（头部/成熟/成长/起步/冷启）</li>
+            <li><strong>仪表盘 B · 视频表现</strong>：视频标题蓝色框·四格互动数·vs均值彩色 badge·<strong>互动率</strong>（评论+收藏÷点赞）</li>
+            <li><strong>仪表盘 C · 商业价值</strong>：赛道档位(S/A/B)·单粉价值区间·变现优先路径链</li>
+            <li><strong>仪表盘 D · 分析质量</strong>：数据来源/视听/润色/模型/验收/版本/字数/日期</li>
+            <li><strong>仪表盘 E · 标签</strong>：pill 可点击触发搜索</li>
+          </ul>
+        </div>
+        <div class="change-group">
+          <div class="change-label data">📊 数据修复</div>
+          <ul class="change-list">
+            <li><code>index.json</code> + <code>meta.json</code> 补全 <code>video_comment</code> / <code>video_collect</code> / <code>video_share</code></li>
+            <li>互动率现在正确：丁香医生 20.8% / 北川 11.7% / 成都探店 29.4% / Anna 43.9% / 泡椒 11.2%</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Hub v2.x ══════════════════════════════════════════════ -->
+
+  <div class="version-block major">
+    <div class="v-sidebar">
+      <div class="v-tag major">Hub v2.0</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">b4add35</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">
+        四大升级：平台分类 + 报告内容 + 数据仪表盘 + UX
+      </div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ 平台分类</div>
+          <ul class="change-list">
+            <li>筛选栏拆两层：<strong>平台行</strong>（🎵抖音 / ⚡快手 / 📕小红书 / 💬视频号）+ 类型行，AND 逻辑</li>
+            <li>卡片右上角平台徽标（抖音黑底/快手橙底）</li>
+          </ul>
+        </div>
+        <div class="change-group">
+          <div class="change-label feat">✨ 报告内容</div>
+          <ul class="change-list">
+            <li>「报告全文」Tab 懒加载，fetch <code>data/cases/{run_id}/report.md</code></li>
+            <li>自写 Markdown 渲染：H1-H4 带左边框 / <strong>粗体</strong>蓝色 / 引用橙边框 / 无序列表橙点 / 表格蓝表头 / 分隔线 / emoji</li>
+            <li>骨架屏 loading + file:// 模式友好提示</li>
+            <li>5 份 <code>report.md</code> 全部入库（真实账号+fixture·最新版本）</li>
+          </ul>
+        </div>
+        <div class="change-group">
+          <div class="change-label impr">⬆ UX 智能化</div>
+          <ul class="change-list">
+            <li>全卡可点击（<code>cursor:pointer</code>），去掉只有按钮可点的限制</li>
+            <li>键盘快捷键：<kbd>/</kbd> 聚焦搜索 · <kbd>ESC</kbd> 关闭/清空 · <kbd>←→</kbd> 切换 Tab</li>
+            <li>搜索高亮 <code>&lt;mark&gt;</code> 黄底，无结果友好空态</li>
+            <li>URL 参数同步（<code>?platform=&type=&q=</code>），刷新后状态保留</li>
+            <li>标签 pill 可点击过滤，Header 实时显示「已筛选 N / 共 M」</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Hub v1.x ══════════════════════════════════════════════ -->
+
+  <div class="version-block major">
+    <div class="v-sidebar">
+      <div class="v-tag major">Hub v1.0</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">b201089</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">
+        案例库首次发布 · 5 案例入库
+      </div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ 新建</div>
+          <ul class="change-list">
+            <li><strong>probe-cases.html</strong>：单文件网页仪表盘，零外部依赖</li>
+            <li>类型 chips 筛选 / 搜索 / 排序（日期/粉丝） / 系统版本下拉</li>
+            <li>详情抽屉三 Tab：报告全文 / 关键指标 / 版本历史时间轴</li>
+            <li>Server + File 双模数据加载（fetch 失败自动降级 embedded-data）</li>
+            <li><strong>save_case.py</strong>：案例入库脚本，三轴锚点（sec_uid/aweme_id/probe_version）+ SiliconFlow 摘要</li>
+            <li>首批 5 案例：丁香医生（643万粉·真实）/ 北川魔芋姐（4645粉·B2B·视听·真实）/ 成都探店 / 皮肤屏障 Anna / 川味泡椒（均 fixture）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ save_case 工具 ══════════════════════════════════════════ -->
+
+  <div class="version-block">
+    <div class="v-sidebar">
+      <div class="v-tag minor">save_case v1.1</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">3eea0a2</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">同 URL / 同账号重测提醒</div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ 新增</div>
+          <ul class="change-list">
+            <li><strong>🔴 同视频提醒</strong>（aweme_id 相同）：列出历史记录 + 润色状态 + 用途说明（迭代对比 / 检查润色改善）</li>
+            <li><strong>🟡 同账号提醒</strong>（sec_uid 相同·不同视频）：列出最近 3 条历史，便于追踪成长</li>
+            <li>全新账号：静默入库，不打扰</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ report_polish ══════════════════════════════════════════ -->
+
+  <div class="version-block">
+    <div class="v-sidebar">
+      <div class="v-tag minor">Polish v2.0</div>
+      <div class="v-date">2026-06-21</div>
+      <div class="v-commit">7e7c214</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">润色护栏 5 项修复 · 成功率 0/4 → 3/4</div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label fix">🔧 Fix</div>
+          <ul class="change-list">
+            <li><strong>max_tokens 动态扩展</strong>：固定 6000 → <code>max(8000, len×2)</code>，解决长报告截断</li>
+            <li><strong>过短阈值</strong>：50% → 40%，允许 LLM 合理归纳商业数据段</li>
+            <li><strong>_nums 阈值</strong>：4 位 → 5 位，不再误拦模板说教数字（"1000个客户"）</li>
+            <li><strong>禁中文单位替换</strong>：prompt 铁律 1 补充禁 "22万" 替代 "220000"</li>
+            <li><strong>诚实标注锚点</strong>："绝不瞎编" → 子串 "瞎编"，兼容措辞变化</li>
+            <li><strong>合规段保护</strong>："晒证据"/"虚假宣传" 加入 anchors，防润色删除法律底线</li>
+          </ul>
+        </div>
+        <div class="change-group">
+          <div class="change-label feat">✨ 新增</div>
+          <ul class="change-list">
+            <li><strong>分段润色</strong>（>7000字报告按 ## 切段）：部分段失败保留原文，优雅降级</li>
+            <li><code>tests/test_report_polish.py</code>：11 个离线单测，全覆盖上述修复项</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 模型路由层 ══════════════════════════════════════════════ -->
+
+  <div class="version-block">
+    <div class="v-sidebar">
+      <div class="v-tag minor">模型路由 v1.0</div>
+      <div class="v-date">2026-06-21</div>
+      <div class="v-commit">36d6c55</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">周更表自适应选型 · 成本×质量平衡</div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ 新增</div>
+          <ul class="change-list">
+            <li><strong>model_router.py</strong>：按任务类型（gates/polish/vision）从 <code>sf_models.json</code> 自动选最优国产模型</li>
+            <li>模型表每周更新 → 路由自动适应新模型，无需改代码</li>
+            <li>gates 走 Qwen3.5-35B（便宜够用）；polish 走 Qwen3.5-122B（质量优先）；vision 走 Qwen3-Omni（必须全模态）</li>
+            <li>铁律：只选国产（govcn=True），env 显式指定优先，注册表缺失硬编码 fallback</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 报告功能 ═══════════════════════════════════════════════ -->
+
+  <div class="version-block">
+    <div class="v-sidebar">
+      <div class="v-tag minor">报告 v2.0</div>
+      <div class="v-date">2026-06-21</div>
+      <div class="v-commit">0064139</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">商业转化 MVP · 三层诊断 + 精准转化方案</div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ 新增</div>
+          <ul class="change-list">
+            <li><strong>商业转化诊断三层</strong>：A 赛道价值 / B 变现路径 / C 月产出估算（经验区间）</li>
+            <li><strong>精准转化方案</strong>：转化漏斗卡点 / 三个钩子建议 / 私域优先策略</li>
+            <li><strong>商业数据参考</strong>：佣金率 / GMV档 / 星图报价区间（均公开来源）</li>
+            <li>L0 赛道大环境：平台高压线 / 赛道排名 / 热榜蹭热点建议</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div id="footer">
+  元探 MetaProbe · 元帅 metafo · 更新日志 ·
+  <a href="probe-cases.html" style="color:var(--blue-mid)">返回案例库</a>
+</div>
+
+</body>
+</html>

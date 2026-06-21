@@ -1024,6 +1024,7 @@ mark {
     <div class="stat-chip"><span>账号 </span><strong id="stat-accounts">0</strong></div>
     <div class="stat-chip"><span>成功率 </span><strong id="stat-pass-rate">—</strong></div>
     <div id="filter-count" style="display:none"></div>
+    <a href="probe-changelog.html" class="stat-chip" style="text-decoration:none;opacity:.85;font-size:11px" title="查看更新日志">📋 更新日志</a>
   </div>
 </header>
 
@@ -1617,15 +1618,39 @@ function buildCard(c, q) {
    详情抽屉
    ============================================================ */
 
-/* docx 路径：file:// → 绝对 file:/// 直接打开（无下载）；server → 相对路径 */
+/* docx 路径（file:// 模式用绝对路径）*/
 function getDocxUrl(runId) {
   const loc = window.location.href;
   if (loc.startsWith('file://')) {
-    // file:///…/probe/hub/probe-cases.html → file:///…/probe/data/cases/{runId}/report.docx
     const base = loc.replace(/[?#].*$/, '').replace(/\/hub\/[^/]+$/, '');
     return `${base}/data/cases/${runId}/report.docx`;
   }
   return `../data/cases/${runId}/report.docx`;
+}
+
+/* serve.py 模式：调 /open-file 端点 → 服务器 open → Word/Pages 直接弹出，零下载 */
+async function openWordFile(runId, btn) {
+  const prev = btn.textContent;
+  btn.textContent = '⏳ 打开中…';
+  btn.style.pointerEvents = 'none';
+  try {
+    const res = await fetch(`/open-file?run_id=${encodeURIComponent(runId)}`);
+    const data = await res.json();
+    if (data.ok) {
+      btn.textContent = '✅ 已打开';
+      setTimeout(() => { btn.textContent = prev; btn.style.pointerEvents = ''; }, 2000);
+    } else {
+      throw new Error(data.error || 'open failed');
+    }
+  } catch (err) {
+    // 降级：普通 href 下载
+    btn.textContent = prev;
+    btn.style.pointerEvents = '';
+    const a = document.createElement('a');
+    a.href = getDocxUrl(runId);
+    a.download = 'report.docx';
+    a.click();
+  }
 }
 
 function openDrawer(c) {
@@ -1637,16 +1662,26 @@ function openDrawer(c) {
     [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
       .filter(Boolean).join(' · ');
 
-  // Word 报告按钮：始终显示
-  // file:// 模式 → 计算绝对 file:/// 路径 → 浏览器直接用系统默认程序打开（无下载步骤）
-  // server 模式  → 相对 http 路径 → 浏览器下载后 OS 自动打开
+  // Word 按钮：始终显示
+  // serve.py 模式 → /open-file 端点 → 服务器直接 open，零下载弹窗
+  // file:// 模式  → file:/// 绝对路径（Chrome 仍会下载·但立即自动打开）
   const wordBtn = document.getElementById('word-btn');
   if (wordBtn) {
-    wordBtn.href  = getDocxUrl(c.run_id);
     wordBtn.style.display = 'inline-flex';
-    wordBtn.title = isServerMode
-      ? '点击下载并打开 Word 报告'
-      : '点击直接用 Word/Pages 打开（无需下载）';
+    if (isServerMode) {
+      // 用 /open-file 端点，click 时 fetch 而非 href 跳转
+      wordBtn.removeAttribute('href');
+      wordBtn.style.cursor = 'pointer';
+      wordBtn.onclick = (e) => {
+        e.preventDefault();
+        openWordFile(c.run_id, wordBtn);
+      };
+      wordBtn.title = '点击直接在 Word/Pages 打开（零下载·serve.py 模式）';
+    } else {
+      wordBtn.onclick = null;
+      wordBtn.href  = getDocxUrl(c.run_id);
+      wordBtn.title = '点击打开 Word 报告（Chrome 会下载后自动打开）';
+    }
   }
 
   document.querySelectorAll('.drawer-tab').forEach(t => {
@@ -1744,14 +1779,13 @@ function renderCachedReport(c, md) {
           <div style="font-size:13px;font-weight:600;color:var(--text-dark);margin-bottom:4px">点击上方橙色按钮打开完整 Word 报告</div>
           <div style="font-size:11px;color:var(--text-muted)">报告包含完整诊断、商业分析、视听六层（如有）。点击「📄 Word 报告」按钮即可用 Word/Pages 打开。</div>
         </div>
-        <a href="${wordUrl}" target="_blank" style="flex-shrink:0;padding:8px 14px;background:var(--orange);color:#fff;text-decoration:none;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap">
+        <a href="${wordUrl}" target="_blank" onclick="if(window.location.href.startsWith('file://')){return true;}event.preventDefault();openWordFile('${escHtml(c.run_id)}',this);" style="flex-shrink:0;padding:8px 14px;background:var(--orange);color:#fff;text-decoration:none;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap">
           📄 打开
         </a>
       </div>
       <div style="margin-top:12px;padding:10px 14px;background:var(--bg);border-radius:6px;font-size:11px;color:var(--text-muted)">
-        💡 想查看网页版完整报告：在终端执行
-        <code style="background:#E2E8F0;padding:2px 6px;border-radius:3px;font-family:monospace;color:var(--text-dark)">cd probe && python3 -m http.server 7890</code>
-        然后访问 http://localhost:7890/hub/probe-cases.html
+        💡 想查看完整网页报告：<code style="background:#E2E8F0;padding:2px 6px;border-radius:3px;font-family:monospace;color:var(--text-dark)">cd probe && python3 hub/serve.py</code>
+        → 访问 http://localhost:7890/hub/probe-cases.html（Word 零下载直接打开）
       </div>`;
   }
   return `<p class="no-report">报告文件加载失败，请检查 data/cases/${escHtml(c.run_id)}/report.md 是否存在。</p>`;
