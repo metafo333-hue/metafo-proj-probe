@@ -186,6 +186,15 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     works = rd.get("works_sample")
     report_md = build_report(video, account, audit, works=works,
                              av_md=av_md, compare_md=compare_md, l0_md=l0_md)
+
+    # 5.5 LLM 润色(内容方法论原则1真叙事感·REPORT_POLISH=1 启用·默认关·只重组不编造·失败降级原文)
+    if os.getenv("REPORT_POLISH") == "1":
+        from app.services.report_polish import polish_report
+        _pol = polish_report(report_md, must_keep=[
+            account.get("follower"), account.get("avg_like"),
+            account.get("max_like"), video.get("like")])
+        if _pol.get("ok"):
+            report_md = _pol["polished"]
     # works/six_layer 一并返回 → 供 Word 导出做动态图表 + 视听六层呈现
     return {"ok": True, "report_md": report_md, "video": video,
             "account": account, "audit": audit, "works": works, "six_layer": av_six}
