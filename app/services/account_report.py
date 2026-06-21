@@ -121,7 +121,8 @@ def _analyze_works(works: list, avg_like: int) -> dict | None:
 def build_report(video: dict[str, Any], account: dict[str, Any],
                  audit: dict[str, Any], works: list | None = None,
                  av_md: str | None = None, compare_md: str | None = None,
-                 l0_md: str | None = None, business_md: str | None = None) -> str:
+                 l0_md: str | None = None, business_md: str | None = None,
+                 attribution_md: str | None = None) -> str:
     nick = account.get("nickname") or "你"
     fol = account.get("follower") or 0
     avg = account.get("avg_like") or 0
@@ -201,6 +202,11 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     # —— 这条视频「看+听」六层拆解(L1·视听理解·有则插) ——
     if av_md:
         P(av_md)
+        P("")
+
+    # —— 归因飞轮：多条六层 → 爆款视听公式（积累 ≥5 条出公式·不足则提示还差几条）——
+    if attribution_md:
+        P(attribution_md)
         P("")
 
     # —— 二、多条找规律(L2·核心) ——

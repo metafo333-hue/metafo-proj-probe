@@ -167,6 +167,22 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
             av_six = av_out.get("six_layer")
             av_md = render_av_section(av_six)
 
+    # 4.6 归因缓存飞轮（存 → 积累 → 批量归因·零额外 API 成本）
+    # 每次 Omni 分析后把 {aweme_id, like, six_layer} 存本地；同账号积累 ≥5 条后自动出归因报告段。
+    attribution_md = None
+    if av_six and sec_uid and aweme_id:
+        from app.services.attribution_cache import (
+            save_av, load_account_av, cache_stats, render_attribution_progress)
+        from app.services.attribution import attribute, render_attribution_section
+        save_av(sec_uid, aweme_id, video.get("like", 0), av_six)
+        cached = load_account_av(sec_uid)
+        stats = cache_stats(sec_uid)
+        if stats["ready"]:
+            attr = attribute(cached)
+            attribution_md = render_attribution_section(attr)
+        else:
+            attribution_md = render_attribution_progress(sec_uid)
+
     # 4.7 L4 竞品圈对比(有竞品链接则各采账号 → 对比段·竞品不递归采竞品/不跑视听省钱)
     compare_md = None
     if competitor_urls:
@@ -198,10 +214,10 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         render_conversion_section(account, video, works, av_six),
     ]))
 
-    # 5. 确定性报告(works→L2;av_md→L1视听;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴)
+    # 5. 确定性报告(works→L2;av_md→L1视听;attribution_md→归因飞轮;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴)
     report_md = build_report(video, account, audit, works=works,
                              av_md=av_md, compare_md=compare_md, l0_md=l0_md,
-                             business_md=business_md)
+                             business_md=business_md, attribution_md=attribution_md)
 
     # 5.5 LLM 润色(内容方法论原则1真叙事感·REPORT_POLISH=1 启用·默认关·只重组不编造·失败降级原文)
     if os.getenv("REPORT_POLISH") == "1":
@@ -211,6 +227,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
             account.get("max_like"), video.get("like")])
         if _pol.get("ok"):
             report_md = _pol["polished"]
-    # works/six_layer 一并返回 → 供 Word 导出做动态图表 + 视听六层呈现
+    # works/six_layer/attribution 一并返回 → 供 Word 导出做动态图表 + 视听六层 + 归因
     return {"ok": True, "report_md": report_md, "video": video,
-            "account": account, "audit": audit, "works": works, "six_layer": av_six}
+            "account": account, "audit": audit, "works": works,
+            "six_layer": av_six, "attribution_md": attribution_md}
