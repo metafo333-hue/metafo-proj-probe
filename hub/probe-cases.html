@@ -1625,15 +1625,13 @@ function openDrawer(c) {
     [fmtFollowers(c.follower) + '粉', c.account_type, fmtDate(c.analyzed_date || c.analyzed_at)]
       .filter(Boolean).join(' · ');
 
-  // Word 报告按钮：服务器模式下直接链接 docx（点击 → 下载 → OS 自动打开 Word/Pages）
+  // Word 报告按钮：file:// 和 server 模式均显示（相对路径两种模式都能打开本地 docx）
   const wordBtn = document.getElementById('word-btn');
   if (wordBtn) {
     const docxUrl = `../data/cases/${c.run_id}/report.docx`;
     wordBtn.href = docxUrl;
-    wordBtn.style.display = isServerMode ? 'inline-flex' : 'none';
-    wordBtn.title = isServerMode
-      ? `点击在 Word/Pages 中打开：${docxUrl}`
-      : '服务器模式下可直接打开 Word 报告';
+    wordBtn.style.display = 'inline-flex';   // 始终显示，不区分模式
+    wordBtn.title = `点击打开 Word 报告（${c.run_id.slice(-12)}）`;
   }
 
   document.querySelectorAll('.drawer-tab').forEach(t => {
@@ -1714,20 +1712,32 @@ function renderCachedReport(c, md) {
     return `<div class="md-content">${renderMarkdown(md)}</div>`;
   }
   if (!isServerMode) {
+    // file:// 模式：展示 AI 摘要 + 关键指标预览 + Word 打开引导
+    const wordUrl = `../data/cases/${c.run_id}/report.docx`;
     return `
-      <div class="report-file-hint">
-        <p style="font-size:20px;margin-bottom:12px">⚠️</p>
-        <h4>报告全文需在服务器模式下查看</h4>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
-          当前以 file:// 方式打开，fetch 受 CORS 限制。请在终端启动本地服务器：
-        </p>
-        <code>cd ${escHtml('/path/to/probe/hub')}
-python3 -m http.server 7890</code>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:8px">
-          然后访问 <strong>http://localhost:7890/probe-cases.html</strong>
-        </p>
+      <div style="margin-bottom:16px">
+        <div class="video-title-box">${escHtml(c.video_title || '—')}</div>
       </div>
-      ${c.ai_summary ? `<div class="md-content" style="margin-top:16px"><h3>AI 摘要</h3><p>${escHtml(c.ai_summary)}</p></div>` : ''}`;
+      ${c.ai_summary ? `
+      <div style="background:var(--blue-bg);border-left:3px solid var(--blue);padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">AI 摘要</div>
+        <div style="font-size:14px;font-weight:500;color:var(--text-dark)">${escHtml(c.ai_summary)}</div>
+      </div>` : ''}
+      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+        <div style="font-size:28px;flex-shrink:0">📄</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text-dark);margin-bottom:4px">点击上方橙色按钮打开完整 Word 报告</div>
+          <div style="font-size:11px;color:var(--text-muted)">报告包含完整诊断、商业分析、视听六层（如有）。点击「📄 Word 报告」按钮即可用 Word/Pages 打开。</div>
+        </div>
+        <a href="${wordUrl}" target="_blank" style="flex-shrink:0;padding:8px 14px;background:var(--orange);color:#fff;text-decoration:none;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap">
+          📄 打开
+        </a>
+      </div>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--bg);border-radius:6px;font-size:11px;color:var(--text-muted)">
+        💡 想查看网页版完整报告：在终端执行
+        <code style="background:#E2E8F0;padding:2px 6px;border-radius:3px;font-family:monospace;color:var(--text-dark)">cd probe && python3 -m http.server 7890</code>
+        然后访问 http://localhost:7890/hub/probe-cases.html
+      </div>`;
   }
   return `<p class="no-report">报告文件加载失败，请检查 data/cases/${escHtml(c.run_id)}/report.md 是否存在。</p>`;
 }
