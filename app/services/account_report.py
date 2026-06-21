@@ -11,7 +11,12 @@ v3: 识别账号性质(商业/B2B vs 个人)→ 自适应叙事。
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
+
+# 报告有效期设计（盲点①）：账号状态会变，报告是快照。
+# 30天触发复诊提醒——刚好是创作者一个内容周期，也是平台算法完整考核窗口。
+_REPORT_VALID_DAYS = 30
 
 _TRACK_HINTS = [
     (("供货", "直供", "源头", "工厂", "批发", "代工", "OEM", "招商", "加盟", "产业带", "货源", "一手货源", "厂家", "餐饮食材"),
@@ -158,9 +163,16 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     L: list[str] = []
     P = L.append
 
+    today = date.today().isoformat()
+    expire = date.today().replace(day=min(date.today().day + _REPORT_VALID_DAYS, 28)) \
+        if date.today().day + _REPORT_VALID_DAYS <= 28 \
+        else date.fromordinal(date.today().toordinal() + _REPORT_VALID_DAYS)
+
     P(f"# 📋 账号诊断报告 · @{nick}")
     P("")
-    P("> 这份报告基于你抖音账号的真实公开数据生成。我尽量说人话,你拿着就能照着做。")
+    P(f"> 诊断截至 **{today}**（账号数据每天在变，本报告是当日快照）。")
+    P(f"> 建议 **{expire}** 前复诊一次，看改变后的数据有没有往对的方向走。")
+    P("> 我尽量说人话，你拿着就能照着做。")
     P("")
 
     P("## 一句话先说重点")
@@ -367,6 +379,22 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     P("- 但有两个诚实的提醒:")
     P("  1. 这次**只看了你一个号、一个数据来源**,没跟竞品交叉验证,所以给你的是「靠谱的方向」,别当成 100% 精确的结论。")
     P("  2. 有些关键数据抖音**不公开** —— 比如完播率、流量从哪来、有没有转化 —— 这些拿不到,我**宁可告诉你「拿不到」,也绝不瞎编**。")
+    P("")
+
+    # —— 复诊钩子（盲点①：报告时效性 → 订阅转化锚点）——
+    # 账号在变：执行建议后数据变化 = 验证闭环机会 = 复购/升订阅最强触发点
+    sec += 1
+    P(f"## {_cn(sec)}、{_REPORT_VALID_DAYS} 天后来复诊")
+    P(f"这份报告是 **{today}** 的快照，账号状态会随你的更新在变。")
+    P("")
+    P("**建议在以下任一情况下回来复诊：**")
+    P(f"- 📅 距今满 {_REPORT_VALID_DAYS} 天（约 {expire}）——看执行后有没有往对的方向走")
+    P("- 📈 粉丝或均赞出现明显变化（涨了 30%+ 或跌了 20%+）——数据变了，诊断结论也要更新")
+    P("- 🎯 换了内容方向，或新发了 10 条以上——积累了新样本才能看出新规律")
+    P("- 💡 照着建议做了一段时间，想验证到底有没有效——验证闭环，让数据说话")
+    P("")
+    P("> 越用越准：你的视听分析结果会积累到账号归因库——多分析几次，「爆款视听公式」的置信度会越来越高。")
+
     return "\n".join(L)
 
 
