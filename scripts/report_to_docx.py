@@ -283,10 +283,62 @@ def _data_table(doc, rows):
 # Markdown 解析器（正文）
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _today_task_box(doc, text):
+    """③ 今日执行框：蓝黑背景 + 橙色左边线·视觉停顿感。"""
+    p = doc.add_paragraph()
+    _shade(p, "1E293B")  # 深墨背景
+    p.paragraph_format.left_indent = Cm(0.4)
+    p.paragraph_format.right_indent = Cm(0.2)
+    p.paragraph_format.space_before = Pt(10)
+    p.paragraph_format.space_after = Pt(10)
+    pPr = p._p.get_or_add_pPr(); pbdr = OxmlElement("w:pBdr")
+    left = OxmlElement("w:left")
+    for k, val in (("w:val", "single"), ("w:sz", "32"), ("w:space", "8"), ("w:color", ORANGE)):
+        left.set(qn(k), val)
+    pbdr.append(left); pPr.append(pbdr)
+    # 解析 **粗体** 内容
+    for part in re.split(r"(\*\*[^*]+\*\*)", text):
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**"):
+            r = p.add_run(part[2:-2]); r.bold = True
+            r.font.color.rgb = ORANGE_RGB
+        else:
+            r = p.add_run(part)
+            r.font.color.rgb = RGBColor(0xCB, 0xD5, 0xE1)  # 浅灰白
+        _cn(r); r.font.size = Pt(10.5)
+
+
 def _parse_md(doc, md):
-    """解析 report_md 的主体段落，包括图表嵌入占位符（##CHART_1## 等）。"""
+    """解析 report_md 的主体段落。
+    特殊段落「📌 今天做这一件事」用深色高亮框渲染（③今日执行）。
+    """
+    in_task_block = False
+    task_lines: list[str] = []
+
+    def _flush_task():
+        nonlocal in_task_block, task_lines
+        if task_lines:
+            _today_task_box(doc, " ".join(task_lines))
+        in_task_block = False
+        task_lines = []
+
     for raw in md.split("\n"):
         s = raw.rstrip()
+
+        # ③ 今日执行框识别：以「📌 今天做这一件事」开头的段落
+        if "📌 今天做这一件事" in s or "今天做这一件事" in s:
+            _flush_task()
+            in_task_block = True
+            task_lines = [s.replace("**📌 今天做这一件事**", "📌 今天做这一件事")]
+            continue
+        if in_task_block:
+            if not s:  # 空行结束 task block
+                _flush_task()
+                continue
+            task_lines.append(s)
+            continue
+
         if not s or s.startswith("# "):
             continue
         if s.startswith("## "):
@@ -294,7 +346,6 @@ def _parse_md(doc, md):
         elif s.startswith("### "):
             _heading(doc, s[4:].strip(), INK, 11.5, 2)
         elif s.startswith("> "):
-            # 引用块：浅蓝背景 + 左边线效果
             p = doc.add_paragraph()
             _shade(p, "EFF6FF")
             p.paragraph_format.left_indent = Cm(0.5)
@@ -315,6 +366,8 @@ def _parse_md(doc, md):
             p = doc.add_paragraph()
             p.paragraph_format.space_after = Pt(4)
             _runs(p, s)
+
+    _flush_task()  # 末尾未关闭的 task block
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -429,6 +482,111 @@ def _make_charts(result: dict, tmpdir: str) -> dict:
         fig.savefig(p, dpi=140, bbox_inches="tight", facecolor="#F8FAFC")
         plt.close(fig)
         charts["interaction"] = p
+
+    # ④ 成就卡（可截图分享·带 metafo 品牌·500×280px）
+    nick = a.get("nickname", "")
+    fol  = a.get("follower", 0)
+    avg_like = a.get("avg_like", 0)
+    burst = a.get("burst_ratio")
+    vert  = a.get("vertical_score")
+    from app.services.commercial import classify_track_value
+    try:
+        tv = classify_track_value(a)
+        grade = tv.get("grade", "?")
+    except Exception:
+        grade = "—"
+
+    fig, ax = plt.subplots(figsize=(5.5, 2.6))
+    fig.patch.set_facecolor("#1E3A8A")
+    ax.set_facecolor("#1E3A8A")
+    ax.set_xlim(0, 10); ax.set_ylim(0, 6); ax.axis("off")
+
+    # 顶部橙色细线
+    ax.axhline(5.6, xmin=0, xmax=1, color=O, linewidth=2)
+
+    # 账号名（主标题）
+    ax.text(0.25, 5.1, f"@{nick}", fontsize=14, fontweight="bold",
+            color="white", va="top", ha="left")
+
+    # 副标题
+    from datetime import date as _date
+    ax.text(0.25, 4.35, f"账号深度诊断  ·  {_date.today().isoformat()}",
+            fontsize=8, color="#93C5FD", va="top", ha="left")
+
+    # 三格关键指标
+    metrics = [
+        (f"{fol:,}", "粉丝数"),
+        (f"{avg_like:,}", "平均点赞"),
+        (f"{burst}×" if burst else "—", "爆款比"),
+    ]
+    for i, (val, label) in enumerate(metrics):
+        x = 0.25 + i * 3.0
+        ax.text(x, 3.2, val, fontsize=16, fontweight="bold",
+                color=O, va="center", ha="left")
+        ax.text(x, 2.5, label, fontsize=8, color="#CBD5E1",
+                va="center", ha="left")
+
+    # 赛道价值档（底部左）
+    grade_colors = {"S": "#FF7A1A", "A": "#60A5FA", "B": "#A3E635", "C": "#94A3B8"}
+    gc = grade_colors.get(grade, "#94A3B8")
+    ax.text(0.25, 1.4, f"赛道价值  {grade}档", fontsize=9,
+            color=gc, va="center", ha="left", fontweight="bold")
+
+    # 垂直度进度条
+    if vert is not None:
+        ax.text(0.25, 0.9, f"垂直度  {vert:.0%}", fontsize=8.5,
+                color="#CBD5E1", va="center", ha="left")
+        bar_w = vert * 4.0
+        ax.barh([0.4], [bar_w], left=0.25, height=0.25,
+                color=O, alpha=0.8)
+        ax.barh([0.4], [4.0 - bar_w], left=0.25 + bar_w, height=0.25,
+                color="white", alpha=0.15)
+
+    # metafo 印章（右下）
+    ax.text(9.75, 0.35, "metafo", fontsize=8, color="#475569",
+            va="center", ha="right")
+
+    p = os.path.join(tmpdir, "card.png")
+    fig.savefig(p, dpi=150, bbox_inches="tight", facecolor="#1E3A8A")
+    plt.close(fig)
+    charts["achievement_card"] = p
+
+    # ② 视听六层雷达图（有 six_layer 数据时生成）
+    sl = result.get("six_layer") or {}
+    if sl:
+        _layer_labels = ["听觉", "视觉", "叙事", "人设", "心理", "文本"]
+        _layer_keys   = ["auditory", "visual", "narrative", "persona", "psychological", "text"]
+        scores = []
+        for key in _layer_keys:
+            layer = sl.get(key) or {}
+            # 取所有字段的 conf 均值作为"层的整体置信/完备度"
+            confs = [v.get("conf", 0) for v in layer.values() if isinstance(v, dict) and "conf" in v]
+            scores.append(sum(confs) / len(confs) if confs else 0.0)
+
+        if any(s > 0 for s in scores):
+            import math
+            N = len(scores)
+            angles = [math.pi / 2 + 2 * math.pi * i / N for i in range(N)]
+            angles_c = angles + [angles[0]]
+            vals_c = scores + [scores[0]]
+
+            fig, ax = plt.subplots(figsize=(4.2, 4.2), subplot_kw=dict(polar=True))
+            fig.patch.set_facecolor("#F8FAFC")
+            ax.set_facecolor("#F8FAFC")
+            ax.plot(angles_c, vals_c, color=B, linewidth=2)
+            ax.fill(angles_c, vals_c, color=B, alpha=0.15)
+            ax.set_xticks(angles)
+            ax.set_xticklabels(_layer_labels, fontsize=9)
+            ax.set_ylim(0, 1)
+            ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+            ax.set_yticklabels(["", "", "", ""], fontsize=7)
+            ax.grid(color="#CBD5E1", alpha=0.5)
+            ax.spines["polar"].set_color("#CBD5E1")
+            ax.set_title("视听六层解析分布", fontsize=10, color=B, pad=14)
+            p = os.path.join(tmpdir, "radar.png")
+            fig.savefig(p, dpi=140, bbox_inches="tight", facecolor="#F8FAFC")
+            plt.close(fig)
+            charts["sixlayer_radar"] = p
 
     return charts
 
@@ -603,12 +761,20 @@ def export_docx(result: dict, out_path: str, *, date: str = "", platform: str = 
     except Exception:
         pass  # 图表失败不阻塞
 
+    # ④ 成就卡（紧跟数据卡片·可截图分享·深蓝背景品牌卡）
+    if "achievement_card" in _charts:
+        _insert_chart(doc, _charts["achievement_card"],
+                      "账号诊断数据卡（可截图分享至创作者社群）", width_cm=13.5)
+
     # —— 诊断主体 ——
-    # 把 body 解析后，在「多条找规律」段插入趋势图，在「视频」段插入对比图
-    lines = body.split("\n")
     _parse_md(doc, body)
 
-    # 图1：在正文末尾的"这条视频"上下文中插入（简化：正文解析完后追加）
+    # ② 六层雷达图（有 six_layer 数据时·紧跟视听六层文字段）
+    if "sixlayer_radar" in _charts:
+        _insert_chart(doc, _charts["sixlayer_radar"],
+                      "视听六层分析完备度分布（置信度越高·该层分析越可靠）", width_cm=9)
+
+    # 数据图表（紧跟诊断正文）
     if "video_vs_avg" in _charts:
         _insert_chart(doc, _charts["video_vs_avg"],
                       "这条视频 vs 账号平均 vs 账号最高（点赞数）")
