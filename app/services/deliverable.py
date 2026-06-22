@@ -430,23 +430,92 @@ def _render_html(report: dict) -> str:
     return "".join(parts)
 
 
-# ─────────────────── stub 接口（向 MetaDesign / MetaCut 路由） ───────────────────
+# ─────────────────── 交付形态：image 真渲染 + PPT/视频诚实交接 ───────────────────
+
+def _extract_series(report: dict) -> list[tuple[str, float]]:
+    """从报告/情报包提取可视化的 (标签, 数值) 序列（自适应多种报告形态）。"""
+    # 1) 显式 metrics
+    m = report.get("metrics")
+    if isinstance(m, dict):
+        return [(str(k), float(v)) for k, v in m.items()
+                if isinstance(v, (int, float))]
+    if isinstance(m, list):
+        out = [(str(d.get("label")), float(d.get("value")))
+               for d in m if isinstance(d, dict) and isinstance(d.get("value"), (int, float))]
+        if out:
+            return out
+    # 2) 账号报告核心指标
+    acc = report.get("account")
+    if isinstance(acc, dict):
+        keys = [("粉丝", "follower"), ("均赞", "avg_like"),
+                ("最高赞", "max_like"), ("爆款比", "burst_ratio")]
+        out = [(lbl, float(acc[k])) for lbl, k in keys
+               if isinstance(acc.get(k), (int, float))]
+        if out:
+            return out
+    # 3) 多源情报包扇出摘要
+    s = report.get("sources")
+    if isinstance(s, dict):
+        keys = [("命中", "ok"), ("空", "empty"), ("超时", "timeout"), ("失败", "error")]
+        out = [(lbl, float(s[k])) for lbl, k in keys if isinstance(s.get(k), (int, float))]
+        if out:
+            return out
+    return []
+
+
+def _render_image(report: dict, out_path: str | None = None) -> dict:
+    """图表真渲染（probe 出数据→渲染·matplotlib Agg 无显示依赖）。
+
+    无数值数据 → 诚实返回 empty；有则产 PNG 横向条形图。
+    """
+    series = _extract_series(report)
+    if not series:
+        return {"status": "empty",
+                "message": "报告无可视化数值字段（metrics/account/sources 均空）"}
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib import font_manager
+
+        # CJK 字体探测（防中文标签变方框·跨平台兜底）
+        for _cand in ("PingFang SC", "Heiti SC", "STHeiti", "Arial Unicode MS",
+                      "Noto Sans CJK SC", "Microsoft YaHei", "WenQuanYi Zen Hei",
+                      "SimHei"):
+            try:
+                if font_manager.findfont(_cand, fallback_to_default=False):
+                    plt.rcParams["font.sans-serif"] = [_cand]
+                    break
+            except Exception:  # noqa: BLE001
+                continue
+        plt.rcParams["axes.unicode_minus"] = False
+
+        labels = [s[0] for s in series]
+        values = [s[1] for s in series]
+        fig, ax = plt.subplots(figsize=(7, max(2, 0.6 * len(series))))
+        ax.barh(labels, values, color="#1E3A8A")        # 破晓品牌蓝
+        ax.set_title(report.get("title") or report.get("scenario") or "probe 数据图表")
+        for i, v in enumerate(values):
+            ax.text(v, i, f" {v:g}", va="center", fontsize=9)
+        fig.tight_layout()
+
+        if out_path is None:
+            import tempfile
+            fd, out_path = tempfile.mkstemp(suffix=".png", prefix="probe-chart-")
+            import os as _os
+            _os.close(fd)
+        fig.savefig(out_path, dpi=120)
+        plt.close(fig)
+        return {"status": "ok", "format": "png", "path": out_path,
+                "series": series, "n": len(series)}
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "message": f"图表渲染失败: {type(e).__name__}: {e}",
+                "series": series}
+
 
 def _render_image_stub(report: dict) -> dict:
-    """图片渲染 stub → MetaDesign（spec-engine·排版交付）。
-
-    TODO(Wave N)：调用 MetaDesign L1 契约 /api/v1/invoke，传入七段报告结论，
-                  由 MetaDesign 负责排版产出 PNG/SVG。
-    """
-    return {
-        "status": "stub",
-        "message": "图片渲染需接入 MetaDesign 引擎（→ spec-engine / packages/metadesign-engine）",
-        "handoff": {
-            "engine": "MetaDesign",
-            "contract_endpoint": "/api/v1/invoke",
-            "payload_hint": "传入 七段报告 markdown 文本 + brand_anchor",
-        },
-    }
+    """向后兼容别名 → 现已真渲染。"""
+    return _render_image(report)
 
 
 def _render_ppt_stub(report: dict) -> dict:
@@ -455,9 +524,10 @@ def _render_ppt_stub(report: dict) -> dict:
     TODO(Wave N)：MetaDesign 支持 PPTX 输出模板后接入。
     """
     return {
-        "status": "stub",
-        "message": "PPT 渲染需接入 MetaDesign 引擎（PPTX 输出模板待 Wave N 开发）",
-        "handoff": {"engine": "MetaDesign", "output_format": "pptx"},
+        "status": "handoff",
+        "message": "PPT 按设计交 MetaDesign 引擎渲染（probe 交付责任止于 text/md/html/image）",
+        "handoff": {"engine": "MetaDesign", "output_format": "pptx",
+                    "contract_endpoint": "/api/v1/invoke"},
     }
 
 
@@ -467,8 +537,8 @@ def _render_video_stub(report: dict) -> dict:
     TODO(Wave N)：MetaCut 支持「脚本 → 视频」后，传入二创方案脚本 + 素材列表。
     """
     return {
-        "status": "stub",
-        "message": "视频渲染需接入 MetaCut 引擎（→ metafocut / MetaCut·元剪）",
+        "status": "handoff",
+        "message": "视频按设计交 MetaCut 引擎渲染（probe 交付责任止于 text/md/html/image）",
         "handoff": {
             "engine": "MetaCut",
             "contract_endpoint": "/api/v1/invoke",
@@ -498,7 +568,7 @@ def render(report: dict[str, Any], fmt: FmtLiteral = "markdown") -> Any:
     if fmt == "html":
         return _render_html(report)
     if fmt == "image":
-        return _render_image_stub(report)
+        return _render_image(report)
     if fmt == "ppt":
         return _render_ppt_stub(report)
     if fmt == "video":
