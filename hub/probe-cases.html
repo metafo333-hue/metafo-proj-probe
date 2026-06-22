@@ -954,6 +954,29 @@ mark {
   .metrics-grid-3 { grid-template-columns: repeat(2, 1fr); }
   .metrics-grid-4 { grid-template-columns: repeat(2, 1fr); }
   #toc-nav { display: none !important; }
+
+  /* ── 阅读模式单栏化：左栏收成顶部返回条，报告占满宽 ── */
+  body.mode-read #layout { flex-direction: column; overflow: auto; }
+  body.mode-read #sidebar {
+    width: 100% !important; height: auto !important;
+    padding: 6px 10px !important; overflow: visible;
+    border-right: none; border-bottom: 1px solid var(--border);
+  }
+  body.mode-read .sb-read { flex-direction: row !important; align-items: center; gap: 8px; }
+  body.mode-read .sb-read-type-head,
+  body.mode-read #read-type-chips,
+  body.mode-read #read-case-list { display: none !important; }
+  body.mode-read #back-btn { margin: 0; white-space: nowrap; }
+  body.mode-read #main-content,
+  body.mode-read #read-panel { width: 100% !important; }
+  body.mode-read #read-body.padded { padding: 12px !important; }
+  /* header 精简：隐藏 ESC 提示与更新日志链接，防溢出 */
+  body.mode-read .hn-shortcut { display: none; }
+  #read-header-nav .stat-chip { display: none; }
+  header { padding: 12px 14px !important; }
+  /* 移动端用 header 的 ◀ ▶ 切换案例（左栏案例列表已隐藏） */
+  .sibling-grid { grid-template-columns: 1fr; }
+  .acct-vid-meta-row, .metrics-grid-2 { grid-template-columns: 1fr 1fr; }
 }
 </style>
 </head>
