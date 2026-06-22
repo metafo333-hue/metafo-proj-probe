@@ -190,6 +190,88 @@ def record_datasource(
     return event
 
 
+def summarize_datasource(day: str | None = None) -> dict[str, Any]:
+    """汇总数据源付费调用（surface=datasource）· 看缓存命中率/省费/闸拦截。
+
+    PG 有数据时优先读 probe_cost_daily 视图；否则回落 JSONL 日志聚合。
+    day=None 统计全部；否则按 'YYYY-MM-DD' 过滤（JSONL 路径按 ts 当日）。
+    返回 {by_source: {sid: {calls, cache_hits, hit_rate, skipped, cost_cny, saved_cny}}, ...}。
+    """
+    rows = _daily_from_pg(day) or _daily_from_jsonl(day)
+    by_source: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        sid = r.get("source_id") or "unknown"
+        s = by_source.setdefault(sid, {"calls": 0, "cache_hits": 0, "skipped": 0, "cost_cny": 0.0})
+        s["calls"] += int(r.get("calls", 0))
+        s["cache_hits"] += int(r.get("cache_hits", 0))
+        s["skipped"] += int(r.get("skipped", 0))
+        s["cost_cny"] += float(r.get("cost_cny", 0.0))
+    for sid, s in by_source.items():
+        billable = s["calls"] - s["cache_hits"] - s["skipped"]
+        s["hit_rate"] = round(s["cache_hits"] / s["calls"], 4) if s["calls"] else 0.0
+        # 省费估算：命中数 × 该源平均单次成本（命中本应付费但没付）
+        avg_cost = (s["cost_cny"] / billable) if billable > 0 else 0.0
+        s["saved_cny"] = round(s["cache_hits"] * avg_cost, 4)
+        s["cost_cny"] = round(s["cost_cny"], 4)
+    return {"by_source": by_source, "day": day or "all"}
+
+
+def _daily_from_pg(day: str | None) -> list[dict[str, Any]] | None:
+    """读 probe_cost_daily 视图（datasource 行）。无 PG/无数据 → None（触发 JSONL 回落）。"""
+    if not _PG_DSN:
+        return None
+    try:
+        import psycopg
+    except ImportError:
+        return None
+    try:
+        sql = ("SELECT source_id, sum(calls) calls, sum(cache_hits) cache_hits, "
+               "sum(skipped) skipped, sum(cost_cny) cost_cny FROM probe_cost_daily "
+               "WHERE surface='datasource'")
+        params: list[Any] = []
+        if day:
+            sql += " AND day = %s"
+            params.append(day)
+        sql += " GROUP BY source_id"
+        with psycopg.connect(_PG_DSN, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                cols = [d[0] for d in cur.description]
+                rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        return rows or None
+    except Exception:
+        return None
+
+
+def _daily_from_jsonl(day: str | None) -> list[dict[str, Any]]:
+    """JSONL 回落聚合 datasource 事件 → 与 PG 行同结构。"""
+    if not _LOG_PATH.exists():
+        return []
+    agg: dict[str, dict[str, Any]] = {}
+    try:
+        with _LOG_PATH.open(encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                e = json.loads(line)
+                if e.get("surface") != "datasource":
+                    continue
+                if day and time.strftime("%Y-%m-%d", time.localtime(e.get("ts", 0))) != day:
+                    continue
+                sid = e.get("source_id") or e.get("provider") or "unknown"
+                a = agg.setdefault(sid, {"source_id": sid, "calls": 0, "cache_hits": 0,
+                                         "skipped": 0, "cost_cny": 0.0})
+                a["calls"] += 1
+                if e.get("cache_hit"):
+                    a["cache_hits"] += 1
+                if e.get("status") == "skipped":
+                    a["skipped"] += 1
+                a["cost_cny"] += float(e.get("cost_cny", 0.0))
+    except Exception:
+        pass
+    return list(agg.values())
+
+
 def summarize(task_id: str | None = None) -> dict[str, Any]:
     """从日志汇总指定 task 或全局的 token/cost 统计。"""
     if not _LOG_PATH.exists():

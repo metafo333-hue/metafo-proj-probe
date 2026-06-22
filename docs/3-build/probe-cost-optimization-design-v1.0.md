@@ -167,10 +167,20 @@ cached_call(source_id, endpoint, params, fetch_fn, cost_cny):
 |----|------|---------|--------|
 | **P0** | `source_cache.cached_call`（端点级缓存）+ 数据源 metering 埋点 | 重复对象省 50-80%；对账可见 | ✅ **已落地**（11 单测全过·零网络） |
 | **P0** | TikHub SDK 调用缓存 | 同 url 重复解析省 | ✅ 已落地（live 待 key） |
-| **P0+** | TikHub 批量 play_count（`fetch_batch_douyin_stats` 接 account_chain） | play_count 补充省 50% | ⏳ 待做（需改 account_chain·tikhub key pending） |
-| **P1** | 成本闸 + 日预算 + 高价端点白名单 | 防跑飞，硬上限 | ⏳ 待做（cached_call 真调前加预算检查） |
-| **P1** | `probe_cost_daily` 聚合 + ops 用量看板 | 逐笔明细 | ⏳ 待做 |
+| **P0+** | TikHub 单条 play_count 纳入缓存（同 aweme_id 1h 不重复扣费） | 重复 play_count 省 | ✅ 已落地 |
+| **P0+** | TikHub 批量 `fetch_batch_douyin_stats` 接 account 级多视频 | play_count 补充省 50% | 🚧 阻塞：account 级多视频 play_count 走 `combo_deep_probe` 独立包（不在 probe 仓），且 TikHub key pending。批量方法已就绪待该侧接入 |
+| **P1** | 成本闸 + 日预算（`PROBE_DAILY_BUDGET_CNY`，默认 ¥10·超则 fail-loud） | 防跑飞，硬上限 | ✅ 已落地（4 单测） |
+| **P1** | `probe_cost_daily` 聚合视图 + `summarize_datasource()`（命中率/省费/拦截） | 逐笔明细+省费量化 | ✅ 已落地（视图+PG/JSONL 双路·1 单测） |
+| **P1** | ops 用量看板（消费 `summarize_datasource`） | 可视化 | ⏳ 待做（需定 probe→ops 数据路径：probe HTTP 暴露 vs ops 连 probe-a PG） |
 | **P2** | 真账单对账回填 unit_cost | 桩值→真值 | ⏳ 待做 |
+
+### 落地补记（2026-06-22）
+
+- **新增 env 旋钮**：`PROBE_SOURCE_CACHE`（缓存总开关）、`PROBE_COST_GATE`（闸开关）、
+  `PROBE_DAILY_BUDGET_CNY`（日预算）、`PROBE_TTL_<端点>`（按端点调 TTL）。全部有保守默认。
+- **成本闸语义**：超日预算 → 抛 `source_cache.BudgetExceeded`（fail-loud），埋点 `status=skipped`，
+  绝不返回残缺数据冒充成功（守数据等价）。免费端点、缓存命中不受闸。
+- **DB migration**：`migrations/002_probe_cost_daily.sql`（视图·幂等·无需调度 job）。
 
 **单账号完整微信情报包**估算：现 ~¥0.95 → 优化后 ~¥0.3-0.5（**省 40-50%**），且数据完整度不变。
 

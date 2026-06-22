@@ -14,6 +14,7 @@ from app.datasources import source_cache
 class SourceCacheTest(unittest.TestCase):
     def setUp(self) -> None:
         source_cache.clear()
+        source_cache.reset_spend()
         # 埋点替换为 mock，避免真写 PG/JSONL，并可断言调用
         self._meter_patch = patch("app.services.metering.record_datasource")
         self.meter = self._meter_patch.start()
@@ -21,6 +22,7 @@ class SourceCacheTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._meter_patch.stop()
         source_cache.clear()
+        source_cache.reset_spend()
 
     def _counter(self, ret):
         calls = {"n": 0}
@@ -121,6 +123,68 @@ class SourceCacheTest(unittest.TestCase):
         self.assertEqual(calls["n"], 2)
 
 
+class CostGateTest(unittest.TestCase):
+    """成本闸：付费调用超日预算 fail-loud；缓存命中/免费调用不受闸。"""
+
+    def setUp(self) -> None:
+        source_cache.clear()
+        source_cache.reset_spend()
+        self._meter_patch = patch("app.services.metering.record_datasource")
+        self.meter = self._meter_patch.start()
+
+    def tearDown(self) -> None:
+        self._meter_patch.stop()
+        source_cache.clear()
+        source_cache.reset_spend()
+
+    def _fn(self, ret):
+        return lambda: dict(ret)
+
+    def test_budget_block(self):
+        """累计花费将超日预算 → 抛 BudgetExceeded，埋点 skipped，不真调。"""
+        net = {"n": 0}
+
+        def fn():
+            net["n"] += 1
+            return {"v": 1}
+        with patch.object(source_cache, "_DAILY_BUDGET", 0.05):
+            # 第一次 ¥0.045 通过（不同 url 避免命中缓存）
+            source_cache.cached_call("jzl", "/article_detail", {"url": "a"}, fn, cost_cny=0.045)
+            # 第二次 0.045+0.045=0.09 > 0.05 → 拦
+            with self.assertRaises(source_cache.BudgetExceeded):
+                source_cache.cached_call("jzl", "/article_detail", {"url": "b"}, fn, cost_cny=0.045)
+        self.assertEqual(net["n"], 1)                       # 被拦的没真调
+        self.assertAlmostEqual(source_cache.spent_today(), 0.045)
+        # 末次埋点 status=skipped
+        self.assertEqual(self.meter.call_args_list[-1].kwargs["status"], "skipped")
+
+    def test_free_endpoint_not_gated(self):
+        """免费端点（cost=0）不受预算闸。"""
+        with patch.object(source_cache, "_DAILY_BUDGET", 0.0):
+            for i in range(3):
+                source_cache.cached_call("jzl", "/principal_info", {"ghid": f"g{i}"},
+                                         self._fn({"v": i}), cost_cny=0.0)
+        self.assertEqual(source_cache.spent_today(), 0.0)   # 免费不计花费
+
+    def test_cache_hit_bypasses_gate(self):
+        """缓存命中不真花钱 → 即使预算耗尽也能返回。"""
+        with patch.object(source_cache, "_DAILY_BUDGET", 0.05):
+            source_cache.cached_call("jzl", "/article_detail", {"url": "u"},
+                                     self._fn({"v": 1}), cost_cny=0.045)
+            # 预算已近耗尽，但同 url 命中缓存 → 不触发闸
+            r = source_cache.cached_call("jzl", "/article_detail", {"url": "u"},
+                                         self._fn({"v": 999}), cost_cny=0.045)
+        self.assertEqual(r["v"], 1)                          # 命中首调值
+
+    def test_gate_disabled(self):
+        """PROBE_COST_GATE 关 → 不拦。"""
+        with patch.object(source_cache, "_COST_GATE", False), \
+             patch.object(source_cache, "_DAILY_BUDGET", 0.0):
+            source_cache.cached_call("jzl", "/article_detail", {"url": "x"},
+                                     self._fn({"v": 1}), cost_cny=0.045)   # 不抛
+        self.assertAlmostEqual(source_cache.spent_today(), 0.045)
+
+
 class JZLAdapterCacheTest(unittest.TestCase):
     """JZL adapter 经 _post_json 走缓存：同 url 第二次不打网络。"""
 
@@ -152,6 +216,54 @@ class JZLAdapterCacheTest(unittest.TestCase):
             r2 = ad.fetch_article_content("https://mp.weixin.qq.com/s/abc")
         self.assertEqual(net["n"], 1)             # 第二次命中缓存·不打网络
         self.assertEqual(r1["title"], r2["title"])
+
+
+class SummarizeDatasourceTest(unittest.TestCase):
+    """summarize_datasource：从 JSONL 聚合缓存命中率/省费/闸拦截。"""
+
+    def setUp(self) -> None:
+        import tempfile
+        from app.services import metering
+        self.metering = metering
+        self.tmp = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8")
+        # 5 次 article_detail：3 真调(¥0.045) + 2 命中
+        import json as _j
+        rows = [
+            {"surface": "datasource", "source_id": "jzl_wechat_channels", "status": "success",
+             "cache_hit": False, "cost_cny": 0.045, "ts": 0},
+            {"surface": "datasource", "source_id": "jzl_wechat_channels", "status": "success",
+             "cache_hit": False, "cost_cny": 0.045, "ts": 0},
+            {"surface": "datasource", "source_id": "jzl_wechat_channels", "status": "success",
+             "cache_hit": False, "cost_cny": 0.045, "ts": 0},
+            {"surface": "datasource", "source_id": "jzl_wechat_channels", "status": "cached",
+             "cache_hit": True, "cost_cny": 0.0, "ts": 0},
+            {"surface": "datasource", "source_id": "jzl_wechat_channels", "status": "cached",
+             "cache_hit": True, "cost_cny": 0.0, "ts": 0},
+            {"surface": "llm", "source_id": "cc-sonnet", "ts": 0},   # 非 datasource → 应被忽略
+        ]
+        for r in rows:
+            self.tmp.write(_j.dumps(r) + "\n")
+        self.tmp.close()
+        self._patch = patch.object(metering, "_LOG_PATH", __import__("pathlib").Path(self.tmp.name))
+        self._patch.start()
+        self._pg_patch = patch.object(metering, "_PG_DSN", "")   # 强制走 JSONL 路径
+        self._pg_patch.start()
+
+    def tearDown(self) -> None:
+        self._patch.stop()
+        self._pg_patch.stop()
+        import os as _os
+        _os.unlink(self.tmp.name)
+
+    def test_hit_rate_and_saved(self):
+        out = self.metering.summarize_datasource()
+        s = out["by_source"]["jzl_wechat_channels"]
+        self.assertEqual(s["calls"], 5)
+        self.assertEqual(s["cache_hits"], 2)
+        self.assertAlmostEqual(s["hit_rate"], 0.4)          # 2/5
+        self.assertAlmostEqual(s["cost_cny"], 0.135)         # 3×0.045
+        self.assertAlmostEqual(s["saved_cny"], 0.09)         # 2 命中 × 均价 0.045
+        self.assertNotIn("cc-sonnet", out["by_source"])      # llm 不计入
 
 
 if __name__ == "__main__":

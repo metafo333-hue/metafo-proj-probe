@@ -24,6 +24,31 @@ from typing import Any, Callable
 # 总开关：PROBE_SOURCE_CACHE=0 全关（回归裸调，用于对照/排障）
 _ENABLED = os.getenv("PROBE_SOURCE_CACHE", "1") != "0"
 
+# ── 成本闸（日预算 · 防跑飞）──────────────────────────────────────────────
+# PROBE_COST_GATE=0 关闸；PROBE_DAILY_BUDGET_CNY 设日预算上限（¥，默认 10）。
+_COST_GATE = os.getenv("PROBE_COST_GATE", "1") != "0"
+_DAILY_BUDGET = float(os.getenv("PROBE_DAILY_BUDGET_CNY", "10"))
+# 进程内当日累计真实花费（date → ¥）。跨进程精确累计由 probe_cost_daily 聚合兜（P1）。
+_spend: dict[str, float] = {}
+
+
+class BudgetExceeded(RuntimeError):
+    """当日付费调用累计将超日预算 → fail-loud 拦截（不返回脏数据）。"""
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
+def spent_today() -> float:
+    """本进程当日已累计真实花费（¥·观测/测试用）。"""
+    return _spend.get(_today(), 0.0)
+
+
+def reset_spend() -> None:
+    """清零花费累加器（测试用）。"""
+    _spend.clear()
+
 # 端点 → TTL 秒。**未登记端点默认 0（不缓存）**——只对明确安全的端点缓存。
 # 可经 env PROBE_TTL_<大写端点名> 覆盖（部署期按新鲜度需求调，不改代码）。
 _TTL: dict[str, int] = {
@@ -112,7 +137,15 @@ def cached_call(
                 return copy.deepcopy(value)
             _CACHE.pop(k, None)
 
-    # 2. 真调（计时）
+    # 2. 成本闸：付费调用（cost>0）真调前检查日预算，超则 fail-loud（不返回脏数据）
+    if _COST_GATE and cost_cny > 0 and (spent_today() + cost_cny) > _DAILY_BUDGET:
+        _meter(source_id, endpoint, params, status="skipped", cache_hit=False,
+               cost_cny=0.0, latency_ms=0, task_id=task_id)
+        raise BudgetExceeded(
+            f"日预算 ¥{_DAILY_BUDGET:.2f} 将超：已花 ¥{spent_today():.2f} + 本次 ¥{cost_cny:.3f}"
+            f"（{source_id}{endpoint}）。调高 PROBE_DAILY_BUDGET_CNY 或关闸 PROBE_COST_GATE=0")
+
+    # 3. 真调（计时）
     t0 = time.perf_counter()
     try:
         result = fetch_fn()
@@ -122,9 +155,11 @@ def cached_call(
         raise
     latency = int((time.perf_counter() - t0) * 1000)
 
-    # 3. 记账 + 缓存
+    # 4. 记账 + 累计花费 + 缓存
     _meter(source_id, endpoint, params, status="success", cache_hit=False,
            cost_cny=cost_cny, latency_ms=latency, task_id=task_id)
+    if cost_cny > 0:
+        _spend[_today()] = spent_today() + cost_cny
     if cache_on:
         _CACHE[k] = (copy.deepcopy(result), time.time() + ttl)
     return result
