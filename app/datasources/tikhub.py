@@ -26,6 +26,7 @@ import urllib.request
 from typing import Any
 
 from app.datasources.base import DataSourceAdapter
+from app.datasources import source_cache
 
 _TIKHUB_BASE = os.environ.get("TIKHUB_API_BASE", "https://api.tikhub.io")
 _DOUYIN_STAT_EP = "/api/v1/douyin/app/v3/fetch_video_statistics"
@@ -71,11 +72,15 @@ class TikHubAdapter(DataSourceAdapter):
         if plat is None:
             return {}                              # 非五平台 → 本适配器不处理
         c = self._get_client()
-        try:
+        ep = "tikhub:note_info" if plat == "xiaohongshu" else "tikhub:video_data"
+
+        def _do() -> Any:
             if plat == "xiaohongshu":
-                raw = c.xiaohongshu_web.get_note_info_v2(share_text=url)
-            else:  # douyin / bilibili / kuaishou / weibo → 通用解析
-                raw = c.hybrid_parsing.video_data(url=url)
+                return c.xiaohongshu_web.get_note_info_v2(share_text=url)
+            return c.hybrid_parsing.video_data(url=url)   # 通用解析（douyin/bilibili/kuaishou/weibo）
+        try:
+            # source_cache 收口：按 url 端点级缓存（省重复付费）+ 计费埋点
+            raw = source_cache.cached_call(self.source_id, ep, {"url": url}, _do, cost_cny=0.001)
         except Exception as e:
             return {"_error": f"{type(e).__name__}: {str(e)[:160]}"}
 

@@ -40,6 +40,19 @@ from codecs import encode
 from typing import Any
 
 from app.datasources.base import DataSourceAdapter
+from app.datasources import source_cache
+
+# 端点真实单价（¥·埋点用·待 P2 对账回填真值）。FREE/实时端点 0。
+_JZL_COST: dict[str, float] = {
+    "/wx_account/search":  0.2,
+    "/principal_info":     0.0,
+    "/history_by_ghid":    0.2,
+    "/article_detail":     0.045,
+    "/read_zan":           0.04,
+    "/article_comment2":   0.06,
+    "/wxvideo":            0.2,
+    "/get_remain_money":   0.0,
+}
 
 
 def _extract_v2_from_channels_url(url: str) -> str:
@@ -201,21 +214,27 @@ class JZLChannelsAdapter(DataSourceAdapter):
         """
         if not self._key:
             return {"_needs_key": True}
-        params = urllib.parse.urlencode({"key": self._key, "url": article_url})
-        conn = http.client.HTTPSConnection(self._HOST, timeout=30)
-        conn.request("GET", f"{self._BASE}/read_zan?{params}")
-        res = conn.getresponse()
-        raw = json.loads(res.read().decode("utf-8"))
-        if raw.get("code") != 0:
-            raise RuntimeError(
-                f"jzl read_zan error: {raw.get('msg')} (code={raw.get('code')})"
-            )
-        return {
-            "read": raw.get("read"),           # 微信限制最高显示 100001
-            "zan": raw.get("zan"),
-            "looking": raw.get("looking"),     # 在看数
-            "article_url": article_url,
-        }
+
+        def _do() -> dict[str, Any]:
+            params = urllib.parse.urlencode({"key": self._key, "url": article_url})
+            conn = http.client.HTTPSConnection(self._HOST, timeout=30)
+            conn.request("GET", f"{self._BASE}/read_zan?{params}")
+            res = conn.getresponse()
+            raw = json.loads(res.read().decode("utf-8"))
+            if raw.get("code") != 0:
+                raise RuntimeError(
+                    f"jzl read_zan error: {raw.get('msg')} (code={raw.get('code')})"
+                )
+            return {
+                "read": raw.get("read"),           # 微信限制最高显示 100001
+                "zan": raw.get("zan"),
+                "looking": raw.get("looking"),     # 在看数
+                "article_url": article_url,
+            }
+        # read_zan 时变（阅读量增长）→ 短 TTL（1h，源于 source_cache._TTL）
+        return source_cache.cached_call(
+            self.source_id, "/read_zan", {"url": article_url}, _do,
+            cost_cny=_JZL_COST.get("/read_zan", 0.0))
 
     def fetch_article_content(self, article_url: str) -> dict[str, Any]:
         """获取文章全文。¥0.045/次。
@@ -361,53 +380,61 @@ class JZLChannelsAdapter(DataSourceAdapter):
     # ──────────────────────────────────────────────────────────────────
 
     def _post_json(self, path: str, extra: dict) -> dict[str, Any]:
-        """公众号端点统一格式: JSON body {"key":..., "verifycode":"", ...extra}"""
-        body = json.dumps({"key": self._key, "verifycode": "", **extra}).encode("utf-8")
-        conn = http.client.HTTPSConnection(self._HOST, timeout=30)
-        conn.request(
-            "POST", self._BASE + path, body,
-            {"Content-Type": "application/json", "Content-Length": str(len(body))},
-        )
-        res = conn.getresponse()
-        raw = json.loads(res.read().decode("utf-8"))
-        if raw.get("code") != 0:
-            raise RuntimeError(
-                f"jzl {path} error: {raw.get('msg')} (code={raw.get('code')})"
+        """公众号端点统一格式: JSON body {"key":..., "verifycode":"", ...extra}。
+        经 source_cache 收口：端点级缓存（省重复付费）+ 计费埋点。"""
+        def _do() -> dict[str, Any]:
+            body = json.dumps({"key": self._key, "verifycode": "", **extra}).encode("utf-8")
+            conn = http.client.HTTPSConnection(self._HOST, timeout=30)
+            conn.request(
+                "POST", self._BASE + path, body,
+                {"Content-Type": "application/json", "Content-Length": str(len(body))},
             )
-        return raw
+            res = conn.getresponse()
+            raw = json.loads(res.read().decode("utf-8"))
+            if raw.get("code") != 0:
+                raise RuntimeError(
+                    f"jzl {path} error: {raw.get('msg')} (code={raw.get('code')})"
+                )
+            return raw
+        # 缓存键含 extra（业务参数·不含凭据 key），按端点 path 分 TTL
+        return source_cache.cached_call(
+            self.source_id, path, extra, _do, cost_cny=_JZL_COST.get(path, 0.0))
 
     def _post_form(self, path: str, fields: dict[str, str]) -> dict[str, Any]:
-        """视频号端点统一格式: multipart/form-data。"""
-        boundary = "probe_jzl_boundary_001"
+        """视频号端点统一格式: multipart/form-data。经 source_cache 收口。"""
+        def _do() -> dict[str, Any]:
+            boundary = "probe_jzl_boundary_001"
 
-        def _field(name: str, val: str) -> list[bytes]:
-            return [
-                encode("--" + boundary),
-                encode(f"Content-Disposition: form-data; name={name};"),
-                encode("Content-Type: text/plain"),
-                encode(""),
-                encode(val),
-            ]
+            def _field(name: str, val: str) -> list[bytes]:
+                return [
+                    encode("--" + boundary),
+                    encode(f"Content-Disposition: form-data; name={name};"),
+                    encode("Content-Type: text/plain"),
+                    encode(""),
+                    encode(val),
+                ]
 
-        parts: list[bytes] = []
-        for fname, fval in {"key": self._key, "verifycode": "", **fields}.items():
-            parts += _field(fname, fval)
-        parts.append(encode("--" + boundary + "--"))
-        parts.append(encode(""))
-        body = b"\r\n".join(parts)
+            parts: list[bytes] = []
+            for fname, fval in {"key": self._key, "verifycode": "", **fields}.items():
+                parts += _field(fname, fval)
+            parts.append(encode("--" + boundary + "--"))
+            parts.append(encode(""))
+            body = b"\r\n".join(parts)
 
-        conn = http.client.HTTPSConnection(self._HOST, timeout=30)
-        conn.request(
-            "POST", self._BASE + path, body,
-            {"Content-type": f"multipart/form-data; boundary={boundary}"},
-        )
-        res = conn.getresponse()
-        raw = json.loads(res.read().decode("utf-8"))
-        if raw.get("code") != 0:
-            raise RuntimeError(
-                f"jzl {path} error: {raw.get('msg')} (code={raw.get('code')})"
+            conn = http.client.HTTPSConnection(self._HOST, timeout=30)
+            conn.request(
+                "POST", self._BASE + path, body,
+                {"Content-type": f"multipart/form-data; boundary={boundary}"},
             )
-        return raw
+            res = conn.getresponse()
+            raw = json.loads(res.read().decode("utf-8"))
+            if raw.get("code") != 0:
+                raise RuntimeError(
+                    f"jzl {path} error: {raw.get('msg')} (code={raw.get('code')})"
+                )
+            return raw
+        return source_cache.cached_call(
+            self.source_id, path, fields, _do, cost_cny=_JZL_COST.get(path, 0.0))
 
     # ──────────────────────────────────────────────────────────────────
     # 标准化方法

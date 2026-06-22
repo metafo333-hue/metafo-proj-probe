@@ -53,10 +53,11 @@ def _pg_insert(event: dict[str, Any]) -> bool:
                         "surface":     event.get("surface", "llm"),
                         "source_id":   event.get("provider", event.get("source_id")),
                         "kind":        event.get("operation", event.get("kind")),
-                        "units":       json.dumps({"prompt_tokens": event.get("prompt_tokens", 0),
-                                                   "completion_tokens": event.get("completion_tokens", 0)}),
+                        "units":       json.dumps(event["units"]) if isinstance(event.get("units"), dict)
+                                       else json.dumps({"prompt_tokens": event.get("prompt_tokens", 0),
+                                                        "completion_tokens": event.get("completion_tokens", 0)}),
                         "unit_cost":   event.get("unit_cost", 0),
-                        "cost_real":   event.get("cost_usd", 0),
+                        "cost_real":   event.get("cost_real", event.get("cost_usd", 0)),
                         "cost_cny":    event.get("cost_cny", 0),
                         "billed":      event.get("billed", 0),
                         "status":      event.get("status", "success"),
@@ -138,6 +139,54 @@ def record(
         except Exception:
             pass  # 写日志失败不影响主流程
 
+    return event
+
+
+def record_datasource(
+    *,
+    task_id:    str = "",
+    source_id:  str,
+    kind:       str,
+    cost_cny:   float = 0.0,
+    status:     str = "success",
+    cache_hit:  bool = False,
+    latency_ms: int | None = None,
+    url_hash:   str | None = None,
+    retry_seq:  int = 0,
+) -> dict[str, Any]:
+    """记录一次付费数据源 API 调用成本（surface=datasource · 补 cost-metering 落码②）。
+
+    cost_cny = 该端点真实/估算单次成本（桩值·待 P2 对账回填真值）。
+    缓存命中(status=cached)或失败(fail/skipped) → cost=0、billed=0。
+    PG 主写 probe_cost_events → 失败回落 JSONL，不阻塞主流程。
+    """
+    billable = status == "success"
+    event: dict[str, Any] = {
+        "ts":         time.time(),
+        "call_id":    f"{source_id}:{kind}:{url_hash or ''}:{int(time.time() * 1000)}",
+        "task_id":    task_id,
+        "operation":  kind,
+        "surface":    "datasource",
+        "source_id":  source_id,
+        "provider":   source_id,        # _pg_insert 取 provider 作 source_id
+        "kind":       kind,
+        "units":      {"req": 1 if billable else 0},
+        "cost_real":  cost_cny if billable else 0.0,
+        "cost_cny":   cost_cny if billable else 0.0,
+        "billed":     0,
+        "status":     status,
+        "cache_hit":  cache_hit,
+        "retry_seq":  retry_seq,
+        "url_hash":   url_hash,
+        "latency_ms": latency_ms,
+    }
+    if not _pg_insert(event):
+        try:
+            _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with _LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
     return event
 
 
