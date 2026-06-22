@@ -374,13 +374,11 @@ def get_backend(name: str | None = None) -> ModelBackend:
     name=None → 自动选（优先级）：
       1. GATES_LIVE_MODEL=1 → AuditLLMBackend（使用 LITELLM_* 变量）
       2. PROBE_LITELLM_KEY 存在 → LiteLLMBackend（使用 PROBE_LITELLM_* 变量）
-      3. 否则 → StubBackend
+      3. PROBE_AUDIT_DEFAULT_LIVE=1 且有国产 LLM key（DEEPSEEK/BAILIAN）→ LiteLLMBackend
+         （走 llm._chat 国产 fallback·让生产默认八闸真跑·无 ufo2 proxy 也可）
+      4. 否则 → StubBackend
 
-    GATES_LIVE_MODEL 开关（仅 audit 层）：
-      - 0（默认）：不变，走原有逻辑
-      - 1：audit 闸强制走 AuditLLMBackend；若 LITELLM_BASE_URL/KEY 未配置则
-            AuditLLMBackend 内部调用 llm_caller.call() 返回 None，自动降级 stub，
-            行为与 GATES_LIVE_MODEL=0 完全一致（fail-safe）。
+    GATES_LIVE_MODEL 开关（仅 audit 层·fail-safe 降级 stub 不抛异常）。
     """
     import os
     if name is None:
@@ -388,7 +386,28 @@ def get_backend(name: str | None = None) -> ModelBackend:
             name = "audit_llm"
         elif os.getenv("PROBE_LITELLM_KEY"):
             name = "litellm"
+        elif (os.getenv("PROBE_AUDIT_DEFAULT_LIVE", "0") == "1"
+              and (os.getenv("DEEPSEEK_API_KEY") or os.getenv("BAILIAN_API_KEY"))):
+            name = "litellm"        # 生产默认 live·国产模型兜底
         else:
             name = "stub"
     cls = _REGISTRY.get(name, StubBackend)
     return cls()
+
+
+def backend_status() -> dict[str, Any]:
+    """八闸 backend 可观测（防"以为 live 其实 stub"·喂 health/ops）。"""
+    import os
+    be = get_backend()
+    live = be.name != "stub"
+    if be.name == "audit_llm":
+        reason = "GATES_LIVE_MODEL=1"
+    elif be.name == "litellm" and os.getenv("PROBE_LITELLM_KEY"):
+        reason = "PROBE_LITELLM_KEY(ufo2 proxy)"
+    elif be.name == "litellm":
+        reason = "PROBE_AUDIT_DEFAULT_LIVE=1 + 国产key兜底"
+    else:
+        reason = "无 key/开关·中性桩(可信度标签为占位)"
+    return {"backend": be.name, "live": live, "reason": reason,
+            "hint": "" if live else "设 GATES_LIVE_MODEL=1 或 PROBE_LITELLM_KEY 或 "
+                                    "PROBE_AUDIT_DEFAULT_LIVE=1+DEEPSEEK_API_KEY 启用真跑"}

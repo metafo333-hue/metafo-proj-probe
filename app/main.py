@@ -26,7 +26,9 @@ app.include_router(scenario.router)   # B/C/D/E 四赛道多源情报场景(OS1�
 
 @app.get("/api/v1/health")
 def health() -> dict:
+    from app.audit.backends import backend_status
     return {"code": 0,
             "data": {"service": "probe", "subdomain": config.SUBDOMAIN,
-                     "contract_version": config.CONTRACT_VERSION},
+                     "contract_version": config.CONTRACT_VERSION,
+                     "audit_backend": backend_status()},  # 八闸 live/stub 可观测
             "msg": "ok"}

@@ -21,5 +21,11 @@ RESULT_TTL_HOURS = int(os.getenv("PROBE_RESULT_TTL_HOURS", "24"))
 # PG（probe-a 本机 probe_collect · 成本明细 metering 落库 · 未配置则 metering 回落 JSONL）
 PG_DSN = os.getenv("PROBE_PG_DSN", "")
 
+# 八闸真模型策略（生产默认 live·护城河"对抗证伪"真跑而非中性桩）
+#   优先级见 audit/backends.get_backend：GATES_LIVE_MODEL=1 > PROBE_LITELLM_KEY >
+#   PROBE_AUDIT_DEFAULT_LIVE=1+国产key兜底(DEEPSEEK/BAILIAN) > stub
+#   生产(probe-a)建议设 PROBE_AUDIT_DEFAULT_LIVE=1·无 ufo2 proxy 也用国产模型真跑
+AUDIT_DEFAULT_LIVE = os.getenv("PROBE_AUDIT_DEFAULT_LIVE", "0") == "1"
+
 # 契约
 CONTRACT_VERSION = "1"
