@@ -76,14 +76,60 @@ def process_brief(brief, route_decision, principal, task_id: str) -> dict[str, A
 
 
 def _discover_stub(brief, route_decision, task_id: str, t0: float) -> dict:
-    """C 选题发现 · 首版占位（W5 接 L2 发现层 + 四路径 handler）。"""
+    """C 选题发现 · 搜索驱动版（SearXNG + HackerNews · W5 接 L2 发现层后可升为完整四路径）。"""
+    keyword = ""
+    if brief and brief.subject:
+        keyword = (getattr(brief.subject, "resolved_url", None) or
+                   getattr(brief.subject, "raw", None) or "")
+    if not keyword and brief:
+        keyword = (brief.instruction or "")[:60]
+
+    ideas: list[str] = []
+
+    # 路径1：SearXNG 联网搜索
+    try:
+        from app.datasources.public.searxng import search as sx_search
+        results = sx_search(keyword, max_results=5) if keyword else []
+        for r in results[:5]:
+            title = r.get("title") or ""
+            url = r.get("url") or ""
+            if title:
+                ideas.append(f"- [{title[:60]}]({url})")
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 路径2：HackerNews 热帖兜底（无 key 全免费）
+    if not ideas:
+        try:
+            from app.datasources.public.hackernews import search as hn_search
+            hn_results = hn_search(keyword or "trending", max_results=5)
+            for r in hn_results[:5]:
+                title = r.get("title") or ""
+                url = r.get("url") or r.get("story_url") or ""
+                if title:
+                    ideas.append(f"- [{title[:60]}]({url})")
+        except Exception:  # noqa: BLE001
+            pass
+
+    if ideas:
+        content = f"## 选题发现（C 路径）\n\n关键词：**{keyword[:50]}**\n\n" + \
+                  "### 相关内容线索\n" + "\n".join(ideas) + \
+                  "\n\n> 数据来源：SearXNG 联网搜索 · 完整选题四路径(L2发现层)待 W5 实现"
+        is_stub = False
+    else:
+        content = (f"选题发现（C 路径）· 关键词：{keyword[:50] or '未指定'}\n"
+                   "当前搜索层无结果或未配置·完整四路径 L2 发现层待 W5 实现。")
+        is_stub = True
+
     return {
         "deliverable": {
-            "type": "notice", "kind": "discover", "depth": guards.DEPTH_PUBLIC,
-            "content": "选题灵感（C 路径）发现层 W5 实现 · 当前占位返回。",
+            "type": "discover", "kind": "discover", "depth": guards.DEPTH_PUBLIC,
+            "content": content,
             "_path": "C", "_circles": route_decision.circles if route_decision else [],
+            "_stub": is_stub,
         },
-        "meta": _meta([], [], 0.0, t0, aigc=False, extra={"path": "C", "stub": True}),
+        "meta": _meta([], [], 0.0, t0, aigc=False,
+                      extra={"path": "C", "stub": is_stub, "ideas_count": len(ideas)}),
         "cost": billing.cost_public(),
     }
 

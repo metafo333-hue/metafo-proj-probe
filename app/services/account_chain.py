@@ -68,36 +68,110 @@ _PLATFORM_CN = {
 }
 
 
+_HOT_TOPICS_CACHE: dict = {"ts": 0, "data": None}
+_HOT_TOPICS_TTL = 3600  # 1小时
+
+
 def fetch_douyin_hot_topics(tikhub_key: str | None, limit: int = 8) -> list[str] | None:
-    """TikHub 抖音热榜(app/v3) → 当前平台热点词(供 L0 蹭热点参考·失败 None 不阻塞)。"""
+    """TikHub 抖音热榜(app/v3) → 当前平台热点词(供 L0 蹭热点参考·失败 None 不阻塞)。
+    模块级缓存 1 小时·同进程内多次调用不重复打 API。
+    """
+    import time
     key = tikhub_key or os.getenv("TIKHUB_API_KEY") or os.getenv("PROBE_TIKHUB_KEY")
     if not key:
         return None
+    now = time.time()
+    if _HOT_TOPICS_CACHE["data"] and now - _HOT_TOPICS_CACHE["ts"] < _HOT_TOPICS_TTL:
+        return _HOT_TOPICS_CACHE["data"][:limit] or None
     try:
         _ensure_combo()
         from combo_deep_probe.adapters.tikhub_adapter import tikhub_get
         raw = tikhub_get("/api/v1/douyin/app/v3/fetch_hot_search_list", {}, key)
         tl = (((raw.get("data") or {}).get("data") or {}).get("trending_list")) or []
         words = [w.get("word") for w in tl if isinstance(w, dict) and w.get("word")]
-        return words[:limit] or None
+        result = words[:limit] or None
+        _HOT_TOPICS_CACHE["ts"] = now
+        _HOT_TOPICS_CACHE["data"] = words  # 存全量·按 limit 切片
+        return result
     except Exception:  # noqa: BLE001 — 热点是 L0 增强·失败不阻塞主报告
         return None
 
 
+def _calc_ratio(works: list, key: str) -> float:
+    """计算 works 中指定字段为 True 的比例。"""
+    if not works:
+        return 0.0
+    return round(sum(1 for w in works if w.get(key)) / len(works), 3)
+
+
+def _agg_video_tags(works: list) -> list[str]:
+    """聚合 works 中 video_tag 的 level-1 标签，返回出现次数最多的前3个。"""
+    counts: dict[str, int] = {}
+    for w in works:
+        for level, tag_name in (w.get("video_tag") or []):
+            if level == 1 and tag_name:
+                counts[tag_name] = counts.get(tag_name, 0) + 1
+    return [t for t, _ in sorted(counts.items(), key=lambda x: -x[1])[:3]]
+
+
 def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                        with_audiovisual: bool = True,
-                       competitor_urls: list[str] | None = None) -> dict[str, Any]:
+                       competitor_urls: list[str] | None = None,
+                       _depth: int = 0) -> dict[str, Any]:
     """主入口:抖音视频链接 → {ok, report_md, video, account, audit, works, six_layer}。
 
     with_audiovisual=True 且有 SILICONFLOW_API_KEY 时,下载视频走 Qwen3-Omni 产视听六层并插入报告。
     competitor_urls 给定时,各采竞品账号 → L4 竞品圈对比段插入报告(三圈参照·竞品不递归采竞品)。
+    _depth 内部递归深度计数器（外部调用方不传）：depth>0 时禁止再递归竞品圈，防无限循环。
     """
-    # 平台门（实测驱动）：probe 现状 TikHub 仅抖音·非抖音友好报错·不浪费付费调用
+    if _depth > 1:
+        return {"ok": False, "error": "递归深度超限·竞品链路最多一层(depth>1)"}
+
+    # 平台门（实测驱动）：TikHub 仅抖音·非抖音走专属数据源或轻量分析
     platform = _detect_platform(url)
     if platform != "douyin":
-        return {"ok": False, "platform": platform,
-                "error": f"暂仅支持抖音链路（TikHub 抖音源）·{_PLATFORM_CN.get(platform, platform)}待接入。"
-                         f"请提供抖音视频链接（www.douyin.com/video/... 或 v.douyin.com 短链）。"}
+        from app.services.cross_platform_render import render_platform
+        report_md = None
+
+        # 微信视频号：优先走 JZL 付费数据（13字段·¥0.2/页）
+        if platform == "wechat_channels":
+            jzl_key = os.getenv("PROBE_JZL_KEY")
+            if jzl_key:
+                try:
+                    from app.datasources.jzl_channels import JZLChannelsAdapter
+                    jzl = JZLChannelsAdapter()
+                    flat = jzl.fetch_metadata(url, "social")
+                    if not flat.get("_error") and not flat.get("_needs_key"):
+                        flat["_source"] = "jzl"
+                        flat["platform"] = platform
+                        report_md = render_platform(platform, flat)
+                except Exception:  # noqa: BLE001
+                    pass
+
+        # 其他平台（或 JZL 不可用时）：combo-deep-probe 通用轻量分析
+        if not report_md:
+            try:
+                _ensure_combo()
+                from combo_deep_probe import build_default
+                key = tikhub_key or os.getenv("TIKHUB_API_KEY") or os.getenv("PROBE_TIKHUB_KEY")
+                probe = build_default(tikhub_key=key)
+                packet = probe.collect(url)
+                flat_c: dict[str, Any] = {"_source": "combo", "platform": platform}
+                for _dim, fields in (packet.dimensions or {}).items():
+                    for name, fld in fields.items():
+                        flat_c[name] = fld.value
+                report_md = render_platform(platform, flat_c)
+            except Exception:  # noqa: BLE001
+                pass
+
+        return {
+            "ok": bool(report_md),
+            "platform": platform,
+            "report_md": report_md,
+            "error": None if report_md else (
+                f"暂仅深度支持抖音·{_PLATFORM_CN.get(platform, platform)} 已出基础报告"
+            ),
+        }
     _ensure_combo()
     from combo_deep_probe import build_account_probe
     from combo_deep_probe.adapters.tikhub_adapter import tikhub_get
@@ -132,19 +206,55 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     # 2. 账号 + 兄弟视频(works)
     rep = build_account_probe(tikhub_key=key).analyze(sec_user_id=sec_uid, count=20)
     rd = rep.to_dict()
+    # 字段契约校验：combo-deep-probe to_dict() 必须返回这四个顶层键（版本漂移早发现）
+    _CONTRACT_FIELDS = ("profile", "diagnosis", "works_sample", "works_analyzed")
+    _missing_fields = [f for f in _CONTRACT_FIELDS if f not in rd]
+    if _missing_fields:
+        import logging as _clog
+        _clog.getLogger(__name__).warning(
+            "combo-deep-probe.to_dict() 字段缺失: %s · 可能版本漂移，请检查两仓字段契约",
+            _missing_fields)
     prof = rd.get("profile") or {}
     diag = rd.get("diagnosis") or {}
+    works = rd.get("works_sample")  # 提前到 account dict 之前供新字段使用
     account = {
+        # ── 基础档案 ──
         "nickname": prof.get("nickname") or author.get("nickname"),
         "follower": prof.get("follower_count") or author.get("follower_count"),
         "aweme_count": prof.get("aweme_count"),
         "works_analyzed": rd.get("works_analyzed"),
         "signature": prof.get("signature"),
+        # ── 诊断指标 ──
         "avg_like": (diag.get("like") or {}).get("avg"),
         "max_like": (diag.get("like") or {}).get("max"),
         "burst_ratio": diag.get("burst_ratio"),
         "vertical_score": diag.get("vertical_score"),
         "hashtags": [t[0] for t in (diag.get("top_hashtags") or []) if t],
+        # ── 商业化信号 ──
+        "max_follower": prof.get("max_follower_count"),             # 历史峰值粉丝
+        "mplatform_followers": prof.get("mplatform_followers_count"),  # 多平台汇总
+        "with_commerce_entry": prof.get("with_commerce_entry"),     # 橱窗是否开通
+        "live_commerce": prof.get("live_commerce"),                 # 直播带货是否开通
+        "commerce_user_level": prof.get("commerce_user_level"),     # 商业化等级
+        "star_atlas": prof.get("star_atlas"),                       # 星图状态
+        # ── 直播状态 ──
+        "live_status": prof.get("live_status"),                     # 直播状态
+        "room_id": prof.get("room_id"),                             # 直播间ID
+        # ── 账号身份 ──
+        "role_id": prof.get("role_id"),                             # 角色ID
+        "is_gov_media_vip": prof.get("is_gov_media_vip"),           # 政府/媒体认证
+        # ── 内容体系 ──
+        "mix_count": prof.get("mix_count"),                         # 合集数
+        "series_count": prof.get("series_count"),                   # 系列数
+        "dog_card_rank": (prof.get("dog_card_info") or {}).get("rank"),        # 榜单排名
+        "dog_card_text": (prof.get("dog_card_info") or {}).get("dog_card_text"),  # 榜单名称
+        # ── works 统计指标 ──
+        "ads_ratio": _calc_ratio(works, "is_ads") if works else None,
+        "anchor_ratio": _calc_ratio(works, "has_anchor") if works else None,
+        "pgc_ratio": _calc_ratio(works, "music_is_pgc") if works else None,
+        "risk_warned_count": sum(1 for w in (works or []) if w.get("risk_warn")),
+        "pinned_work": next((w for w in (works or []) if w.get("is_top")), None),
+        "platform_tags": _agg_video_tags(works) if works else [],   # 聚合平台三级标签
     }
 
     # 3. 担保:账号 → 转换器 → 八闸
@@ -185,17 +295,19 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
 
     # 4.7 L4 竞品圈对比(有竞品链接则各采账号 → 对比段·竞品不递归采竞品/不跑视听省钱)
     compare_md = None
-    if competitor_urls:
+    if competitor_urls and _depth == 0:  # 铁律：只在顶层递归竞品，depth>0 禁止
         comp_accts = []
         for cu in competitor_urls:
-            cr = run_from_video_url(cu, tikhub_key, with_audiovisual=False)
+            cr = run_from_video_url(cu, tikhub_key, with_audiovisual=False,
+                                    _depth=_depth + 1)
             if cr.get("ok") and cr.get("account"):
                 comp_accts.append(cr["account"])
         if comp_accts:
             compare_md = compare_accounts(account, comp_accts)
 
     # 4.8 L0 环境层(赛道大环境·种子平台规则+粉丝分层+TikHub 热榜热点·趋势待半自动)
-    _blob = " ".join(account.get("hashtags") or []) + (account.get("signature") or "")
+    _blob = " ".join(account.get("hashtags") or []) + (account.get("signature") or "") + \
+            " ".join(account.get("platform_tags") or [])  # 平台三级标签优先增强赛道判断
     _track_name, _ = _track(_blob)
     _hot = fetch_douyin_hot_topics(key)   # 当前平台热点(失败 None·L0 诚实标)
     l0 = build_l0_environment(account, track=_track_name, is_business=_is_business(_blob),
@@ -203,7 +315,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     l0_md = render_l0_section(l0)
 
     # 4.9 商业转化诊断(战略主轴·三层诊断+商业数据增强+精准转化方案)
-    works = rd.get("works_sample")
+    # works 已在步骤2提前赋值，此处直接使用
     _tv = classify_track_value(account)
     _biz_data = {"commission": category_commission(_track_name),
                  "gmv": category_gmv_tier(_track_name),
@@ -248,7 +360,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         _log.warning("homepage_diagnose 降级: %s", _e)
     try:  # 分析层:趋势轨迹(作品自带时间戳·单次即可)
         from app.services import trend_analysis as _tr
-        trend_md = _tr.render_trend_section(works or [], industry=_track_name)
+        trend_md = _tr.render_trend_section(works or [], industry=_track_name, account=account)
     except Exception as _e:  # noqa: BLE001
         _log.warning("trend_analysis 降级: %s", _e)
     try:  # 标准层:同赛道对标(repo 默认经验兜底·灰度feed换 repo=·每次诊断脱敏沉淀自建库)
@@ -284,7 +396,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         try:
             from app.datasources.tikhub_comment_source import TikHubCommentSource
             from app.services import comment_insight as _ci
-            _comments = _ci.load_comments(TikHubCommentSource(key), aweme_id)
+            _comments = _ci.load_comments(TikHubCommentSource(key), aweme_id, limit=100)
             comment_md = _ci.render_comment_section(
                 _ci.analyze_comments(_comments, _track_name))
         except Exception as _e:  # noqa: BLE001
@@ -293,7 +405,51 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     #   真正的灰色/个人侧通路走 audience_source.register_source 隔离注册(不在商业链自建抓取·
     #   中性指针)·当前自动管线无授权数据 → audience_md 留 None(安全·有授权源时在此接)
 
-    # 5. 确定性报告(works→L2;av_md→L1视听;attribution_md→归因飞轮;compare_md→L4竞品;l0_md→L0;business_md→商业转化主轴;+11缺口段)
+    # 4.11 轮动分析（行业板块轮动·五维·零 LLM·失败降级 None）
+    rotation_result = None
+    rotation_md = None
+    try:
+        from app.services.rotation_analysis import analyze_rotation, render_rotation_section
+        rotation_result = analyze_rotation(account, works or [], _hot)
+        # 接入历史账本：把三周期历史轮动数据注入轮动段
+        ledger_section = None
+        try:
+            from app.services.rotation_ledger import render_ledger_section
+            if sec_uid:
+                ledger_section = render_ledger_section(sec_uid)
+        except Exception as _le:  # noqa: BLE001
+            _log.warning("rotation_ledger 降级: %s", _le)
+        base_rotation = render_rotation_section(account, works or [], _hot)
+        rotation_md = (base_rotation + "\n\n" + ledger_section) if ledger_section else base_rotation
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("rotation_analysis 降级: %s", _e)
+
+    # 4.11b 保存轮动快照（每次分析后自动记录·积累历史数据供三周期分析）
+    try:
+        from app.services.rotation_ledger import save_snapshot
+        if sec_uid:
+            _rot_phase = (rotation_result or {}).get("phase", "")
+            _rot_window = (rotation_result or {}).get("window_open", False)
+            save_snapshot(sec_uid, account, rotation_phase=_rot_phase, window_open=_rot_window)
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("rotation_ledger save_snapshot 降级: %s", _e)
+
+    # 4.12 综合决策层（联动分析·时效标注·30天预判·失败降级 None）
+    synthesis_md = None
+    try:
+        from app.services.synthesis_engine import render_synthesis_section
+        from app.services.commercial import _commerce_maturity_score
+        synthesis_md = render_synthesis_section(
+            account=account,
+            works=works,
+            risk_findings=_risk_findings,
+            rotation_result=rotation_result,
+            commerce_maturity=_commerce_maturity_score(account),
+        )
+    except Exception as _e:  # noqa: BLE001
+        _log.warning("synthesis_engine 降级: %s", _e)
+
+    # 5. 确定性报告
     report_md = build_report(video, account, audit, works=works,
                              av_md=av_md, compare_md=compare_md, l0_md=l0_md,
                              business_md=business_md, attribution_md=attribution_md,
@@ -301,7 +457,8 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                              audience_md=audience_md, comment_md=comment_md,
                              homepage_md=homepage_md, trend_md=trend_md,
                              benchmark_md=benchmark_md, risk_md=risk_md,
-                             verify_md=verify_md, action_md=action_md)
+                             verify_md=verify_md, action_md=action_md,
+                             rotation_md=rotation_md, synthesis_md=synthesis_md)
 
     # 5.5 LLM 润色(内容方法论原则1真叙事感·REPORT_POLISH=1 启用·默认关·只重组不编造·失败降级原文)
     if os.getenv("REPORT_POLISH") == "1":
