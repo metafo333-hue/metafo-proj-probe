@@ -176,6 +176,92 @@ def _track_competition(keyword: str, key: str) -> dict | None:
         return None
 
 
+def _parse_intake_extras(results: dict) -> dict:
+    """解析 MetaIntake L0 环境层 + 批A 粉丝洞察数据 → account 扩展字段（C9-C13 用）。
+
+    真实信封结构经 2026-06-22 逐端点实测：
+      video.data.aweme_detail.{desc,text_extra[].hashtag_name}  视频话题
+      hot_topic.data.{current,rocketing}[]                       全局热点榜
+      hot_words.data.hot_words[]                                 热搜词
+      creator_hotspot.data.item_list[]                           创作者热点(选题)
+      fans_interest_account.data[]                               粉丝同关账号(竞品)
+      fans_interest_search.data[]                                粉丝搜索词(需求)
+      mission_task.[data.]total_num                              商单生态密度
+      acc_item_analysis.data.avg_*                               账号作品均值对标
+    空维度(该账号无数据)graceful 返回空·端点已通即可。
+    """
+    out: dict = {}
+
+    def _data(ep):
+        """剥 TikHub envelope 到业务数据。部分端点是二次信封(粉丝洞察/作品分析)：
+        外层 {...,data:{code,data,extra,message}}·业务真值在 data.data·再剥一层。"""
+        e = results.get(ep)
+        if not isinstance(e, dict):
+            return None
+        d = e.get("data")
+        if isinstance(d, dict) and "code" in d and "extra" in d and "data" in d:
+            return d.get("data")   # 二次信封·剥到业务层(fans_interest_*/acc_item_analysis)
+        return d if d is not None else e
+
+    # ── 视频话题(C9 热点契合种子) ──
+    v = results.get("video") or {}
+    ad = (v.get("data") or v).get("aweme_detail") or {}
+    if ad:
+        out["video_desc"] = ad.get("desc")
+        out["video_hashtags"] = [t.get("hashtag_name") for t in (ad.get("text_extra") or [])
+                                 if t.get("hashtag_name")]
+
+    # ── L0 全局热点(C9/C10) ──
+    ht = _data("hot_topic")
+    if isinstance(ht, dict):
+        out["hot_topics_current"] = [{"name": x.get("topic_name"), "index": x.get("topic_index"),
+                                      "vv": x.get("vv"), "cat": x.get("category")}
+                                     for x in (ht.get("current") or [])[:30]]
+        out["hot_topics_rocketing"] = [{"name": x.get("topic_name"), "cat": x.get("category")}
+                                       for x in (ht.get("rocketing") or [])[:30]]
+    hw = _data("hot_words")
+    if isinstance(hw, dict):
+        out["hot_words"] = [{"word": x.get("keyword"), "growth_rate": x.get("growth_rate")}
+                            for x in (hw.get("hot_words") or [])[:20]]
+
+    # ── L0 创作者热点(C10 选题机会) ──
+    ch = _data("creator_hotspot")
+    if isinstance(ch, dict):
+        out["creator_hotspots"] = [{"cat": x.get("category"), "score": x.get("hot_score"),
+                                    "rank": x.get("rank"), "diff": x.get("rank_diff")}
+                                   for x in (ch.get("item_list") or [])[:50]]
+
+    # ── 批A 粉丝洞察(C11/C13) ──
+    fia = _data("fans_interest_account")
+    if isinstance(fia, list):
+        out["fans_interest_accounts"] = [{"name": x.get("nick_name"), "fans": x.get("fans_cnt"),
+                                          "like": x.get("like_cnt"), "uid": x.get("user_id")}
+                                         for x in fia[:20]]
+    fis = _data("fans_interest_search")
+    if isinstance(fis, list):
+        out["fans_interest_searches"] = [{"word": x.get("word"), "hot": x.get("hot_score")}
+                                         for x in fis[:50]]
+    fit = _data("fans_interest_topic")
+    if isinstance(fit, list):
+        out["fans_interest_topics"] = [{"name": x.get("topic_name") or x.get("name")}
+                                       for x in fit[:20]]
+
+    # ── 批A 商单变现(C12) ──
+    mt_body = _data("mission_task")
+    if isinstance(mt_body, dict):
+        out["mission_total"] = mt_body.get("total_num")
+
+    # ── 批A 账号作品均值对标(C12/C13) ──
+    ai = _data("acc_item_analysis")
+    if isinstance(ai, dict) and ai.get("avg_like_count") is not None:
+        out["item_benchmark"] = {
+            "avg_like": ai.get("avg_like_count"), "avg_comment": ai.get("avg_comment_count"),
+            "avg_share": ai.get("avg_share_count"), "avg_follower": ai.get("avg_follower_count"),
+            "avg_aweme": ai.get("avg_aweme_count"),
+        }
+    return out
+
+
 def _build_account_for_diagnosis(sec_uid: str, key: str | None,
                                  aweme_id: str | None = None) -> tuple[dict, Any]:
     """采集账号+星图→ (account dict, xprof适配dict)。供诊断卡/复合指标用。
@@ -192,7 +278,10 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
     if aweme_id:
         try:
             from combo_deep_probe.harness import run_full_harvest
-            r = run_full_harvest({"aweme_id": aweme_id}, key, cache=cache, tier="full")
+            # enable_layer3: 采 L0 环境层(全局热点·跨账号共享缓存) + mission_task(商单)
+            # C9-C13 复合指标依赖这些。L0 高缓存命中·边际成本≈0。
+            r = run_full_harvest({"aweme_id": aweme_id}, key, cache=cache, tier="full",
+                                 enable_layer3=True)
             results = r.get("results", {})
             seeds = r.get("seeds") or {}
             sec_uid = sec_uid or seeds.get("sec_uid")
@@ -275,6 +364,12 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
                 tc = _track_competition(track_kw, key)
                 if tc:
                     account["track_competition"] = tc
+    except Exception:  # noqa: BLE001
+        pass
+
+    # ── MetaIntake L0 环境层 + 批A 粉丝洞察 → C9-C13 复合指标用 ──
+    try:
+        account.update(_parse_intake_extras(results))
     except Exception:  # noqa: BLE001
         pass
     return account, xprof_adapter

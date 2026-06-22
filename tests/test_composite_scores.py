@@ -35,6 +35,11 @@ from app.services.composite_scores import (
     score_c6_breakout,
     score_c7_grade,
     score_c8_private,
+    score_c9_hot_fit,
+    score_c10_topic_opp,
+    score_c11_fans_insight,
+    score_c12_monetize,
+    score_c13_competitor_pos,
     compute_all,
     render_composite_section,
 )
@@ -252,13 +257,14 @@ class TestC8Private:
 
 
 class TestComputeAll:
-    def test_returns_8_keys(self):
+    def test_returns_13_keys(self):
         result = compute_all(_full_account(), _full_xprof())
-        assert set(result.keys()) == {"c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"}
+        assert set(result.keys()) == {f"c{i}" for i in range(1, 14)}
 
     def test_all_scores_in_range(self):
         result = compute_all(_full_account(), _full_xprof())
-        for k in ("c1", "c2", "c3", "c4", "c5", "c6", "c8"):
+        for k in ("c1", "c2", "c3", "c4", "c5", "c6", "c8",
+                  "c9", "c10", "c11", "c12", "c13"):
             assert 0 <= result[k]["score"] <= 100, f"{k}.score 超范围"
         assert 0 <= result["c7"]["score"] <= 100
         assert result["c7"]["grade"] in ("A", "B", "C", "D", "F")
@@ -460,3 +466,71 @@ class TestDeepenedSubitems:
         acc["track_competition"] = {"keyword": "美食", "result_count": 5, "has_more": False}
         md = render_composite_section(acc, _xprof_dual_portrait())
         assert "深化子项洞察" in md
+
+
+# ── C9-C13: MetaIntake 环境层指标(批B·热点/选题/粉丝洞察/变现/竞品) ──────────────
+
+def _env_account() -> dict:
+    """合成带 MetaIntake L0环境+批A粉丝洞察数据的 account。"""
+    return {
+        "follower": 50000, "avg_like": 3000, "vertical_score": 0.7,
+        "video_hashtags": ["家常菜", "下饭菜"],
+        "hot_topics_current": [{"name": "家常菜做法", "cat": "美食"}],
+        "hot_topics_rocketing": [{"name": "下饭菜教程", "cat": "美食"}],
+        "hot_words": [{"word": "美食", "growth_rate": 5}],
+        "creator_hotspots": [
+            {"cat": "美食", "score": 9000, "rank": 1, "diff": 0},   # rank_diff 全0(实测坑)
+            {"cat": "旅行", "score": 12000, "rank": 2, "diff": 0},
+        ],
+        "fans_interest_accounts": [
+            {"name": "竞品A", "fans": 30000, "uid": "x"},
+            {"name": "竞品B", "fans": 80000, "uid": "y"},
+        ],
+        "fans_interest_searches": [{"word": "鲍汁", "hot": 20}],
+        "fans_interest_topics": [],
+        "mission_total": 5,
+        "item_benchmark": {"avg_like": 2000, "avg_comment": 100, "avg_share": 50,
+                           "avg_follower": 40000, "avg_aweme": 200},
+    }
+
+
+class TestC9toC13:
+    def test_c9_hits_rocketing(self):
+        # video_hashtags '下饭菜' 命中 rocketing '下饭菜教程'
+        r = score_c9_hot_fit(_env_account())
+        assert not r.get("degraded")
+        assert r["hit_rocketing"] and r["score"] > 25
+
+    def test_c9_degraded_without_hot_data(self):
+        assert score_c9_hot_fit({"video_hashtags": ["x"]}).get("degraded")
+
+    def test_c10_recommends_track_topics(self):
+        # rank_diff 全0·仍应按 hot_score 出赛道匹配选题(美食)
+        r = score_c10_topic_opp(_env_account(), {"industry_tags": ["美食"]})
+        assert not r.get("degraded")
+        assert any("美食" in t for t in r["topics"])
+
+    def test_c11_fans_insight_competitors(self):
+        r = score_c11_fans_insight(_env_account())
+        assert not r.get("degraded") and r["score"] > 0
+        assert r["competitor_accounts"]   # 粉丝同关账号=天然竞品
+
+    def test_c11_degraded_when_empty(self):
+        assert score_c11_fans_insight({}).get("degraded")
+
+    def test_c12_monetize_benchmarks_likes(self):
+        r = score_c12_monetize(_env_account())
+        assert not r.get("degraded")
+        assert any("赞均值" in e for e in r["evidence"])   # 对标 acc_item_analysis
+
+    def test_c13_relative_position(self):
+        # follower 50000 > 竞品 30000·< 80000 → 超过 1/2
+        r = score_c13_competitor_pos(_env_account())
+        assert not r.get("degraded")
+        assert r["competitors"]
+        assert any("同关竞品" in e for e in r["evidence"])
+
+    def test_c9_to_c13_in_render(self):
+        md = render_composite_section(_env_account(), {"industry_tags": ["美食"]})
+        assert "C9 热点契合度" in md and "C13 竞品位置" in md
+        assert "环境/机会洞察" in md

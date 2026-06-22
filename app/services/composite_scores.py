@@ -1312,8 +1312,228 @@ def _private_intent(account: dict[str, Any]) -> dict[str, Any]:
 
 # ── 汇总接口 ──────────────────────────────────────────────────────────────────
 
+# ══ C9-C13：MetaIntake L0 环境层 + 批A 粉丝洞察驱动的环境/机会类指标 ══════════
+# 数据源: account 由 _parse_intake_extras 注入(hot_topic/hot_words/creator_hotspot/
+#         fans_interest_*/mission_task/acc_item_analysis)。空维度 graceful 降级。
+
+
+def _fmt_w(n) -> str:
+    """粉丝数 → 万 缩写。"""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return "?"
+    return f"{n / 10000:.1f}w" if n >= 10000 else str(int(n))
+
+
+def _kw_tokens(text) -> set[str]:
+    """中文文案/话题 → 2-4 gram token 集(粗匹配热点·无分词依赖)。"""
+    if not text:
+        return set()
+    s = "".join(ch for ch in str(text) if "一" <= ch <= "鿿" or ch.isalnum())
+    toks: set[str] = set()
+    for n in (2, 3, 4):
+        for i in range(len(s) - n + 1):
+            toks.add(s[i:i + n])
+    return toks
+
+
+def _hot_hit(seed_tokens: set[str], names: list) -> list:
+    """seed_tokens 命中 names(热点名列表) → 返回命中的热点名。"""
+    return [nm for nm in names if nm and (seed_tokens & _kw_tokens(nm))]
+
+
+def score_c9_hot_fit(account: dict[str, Any], xprof=None) -> dict[str, Any]:
+    """C9 热点契合度(0-100)：视频话题/赛道 × 全局热点榜命中。
+    踩中飙升榜=风口·命中热榜/热搜=蹭热点·全不中=偏离(小众未必差)。
+    """
+    # 种子只用话题标签+行业标签(提炼词)·不用 desc 全文(2-gram 噪音误撞热榜)
+    seeds: set[str] = set()
+    for h in (account.get("video_hashtags") or []):
+        seeds |= _kw_tokens(h)
+    for t in (_xattr(xprof, "industry_tags") or []):
+        seeds |= _kw_tokens(t)
+
+    cur = [x.get("name") for x in (account.get("hot_topics_current") or [])]
+    roc = [x.get("name") for x in (account.get("hot_topics_rocketing") or [])]
+    words = [x.get("word") for x in (account.get("hot_words") or [])]
+    if not (cur or roc or words):
+        return {"score": 50.0, "verdict": "待 L0 热点数据", "evidence": [],
+                "degraded": True, "missing": "hot_topic/hot_words #需L0环境层"}
+    if not seeds:
+        return {"score": 40.0, "verdict": "无视频话题种子·无法匹配热点",
+                "evidence": [], "degraded": False, "missing": []}
+
+    hit_roc = _hot_hit(seeds, roc)
+    hit_cur = _hot_hit(seeds, cur)
+    hit_word = _hot_hit(seeds, words)
+    raw = len(hit_roc) * 40 + len(hit_cur) * 20 + len(hit_word) * 15
+    score = round(_clamp(min(100, raw) if raw else 25.0))
+    if hit_roc:
+        verdict = f"踩中飙升风口({len(hit_roc)}个)"
+    elif hit_cur or hit_word:
+        verdict = "蹭到当前热点"
+    else:
+        verdict = "偏离热点(小众赛道或选题保守)"
+    ev = []
+    if hit_roc:
+        ev.append("飙升榜命中:" + " ".join(hit_roc[:3]))
+    if hit_cur:
+        ev.append("热榜命中:" + " ".join(hit_cur[:3]))
+    if hit_word:
+        ev.append("热搜词命中:" + " ".join(hit_word[:3]))
+    if not ev:
+        tags = account.get("video_hashtags") or []
+        ev.append(f"视频话题「{'·'.join(tags[:3]) or '无'}」未命中当前热榜/飙升/热搜")
+    return {"score": score, "verdict": verdict, "evidence": ev,
+            "hit_rocketing": hit_roc, "hit_current": hit_cur, "missing": []}
+
+
+def score_c10_topic_opp(account: dict[str, Any], xprof=None) -> dict[str, Any]:
+    """C10 选题机会(0-100)：创作者热点榜(赛道匹配·上升) + 粉丝搜索词(未满足需求)。
+    输出可直接拍的选题方向。
+    """
+    hotspots = account.get("creator_hotspots") or []
+    searches = account.get("fans_interest_searches") or []
+    if not hotspots and not searches:
+        return {"score": 50.0, "verdict": "待选题数据", "evidence": [], "topics": [],
+                "degraded": True, "missing": "creator_hotspot/fans_interest_search #需L0+批A"}
+
+    track_tokens: set[str] = set()
+    for t in (_xattr(xprof, "industry_tags") or []):
+        track_tokens |= _kw_tokens(t)
+    for h in (account.get("video_hashtags") or []):
+        track_tokens |= _kw_tokens(h)
+
+    # rank_diff 实测常为0·按 hot_score 排序取热点·diff>0 仅作上升标注
+    ranked = sorted([h for h in hotspots if (h.get("score") or 0) > 0],
+                    key=lambda h: -(h.get("score") or 0))
+    matched = [h for h in ranked
+               if track_tokens and (_kw_tokens(h.get("cat") or "") & track_tokens)]
+    def _tp(h):
+        up = f"·↑{h['diff']}" if (h.get("diff") or 0) > 0 else ""
+        return f"{h.get('cat')}(热度{h.get('score')}{up})"
+    # 全局热点多为泛大类(旅行/财经)·只推赛道匹配的·避免给垂类账号推无关大类
+    topics = [_tp(h) for h in matched[:5]]
+
+    top_search = sorted(searches, key=lambda x: -(x.get("hot") or 0))[:8]
+    fan_words = [s.get("word") for s in top_search if s.get("word")]
+
+    raw = len(matched) * 15 + min(len(fan_words), 20) * 3 + (20 if ranked else 0)
+    score = round(_clamp(min(100, raw) if (ranked or fan_words) else 30.0))
+    verdict = (f"{len(matched)}个赛道内选题机会" if matched
+               else f"{len(ranked)}个全局热点·{len(fan_words)}个粉丝搜索需求")
+    ev = []
+    if topics:
+        ev.append("推荐选题:" + " / ".join(topics[:3]))
+    if fan_words:
+        ev.append("粉丝在搜:" + " ".join(fan_words[:5]))
+    return {"score": score, "verdict": verdict, "evidence": ev,
+            "topics": topics, "fan_searches": fan_words, "missing": []}
+
+
+def score_c11_fans_insight(account: dict[str, Any], xprof=None) -> dict[str, Any]:
+    """C11 粉丝洞察深度(0-100)：粉丝同关账号+搜索词+兴趣话题的可挖掘度。
+    深度=能挖出多少可行动信息(竞品/需求)。
+    """
+    accts = account.get("fans_interest_accounts") or []
+    searches = account.get("fans_interest_searches") or []
+    topics = account.get("fans_interest_topics") or []
+    if not (accts or searches or topics):
+        return {"score": 40.0, "verdict": "粉丝洞察数据空(粉丝量小或风控)",
+                "evidence": [], "degraded": True,
+                "missing": "fans_interest_* #需批A粉丝洞察"}
+
+    dims = sum(1 for x in (accts, searches, topics) if x)
+    raw = len(accts) * 3 + min(len(searches), 30) * 1.5 + dims * 10
+    score = round(_clamp(min(100, raw)))
+    top_acct = sorted(accts, key=lambda x: -(x.get("fans") or 0))[:5]
+    top_search = sorted(searches, key=lambda x: -(x.get("hot") or 0))[:6]
+    ev = []
+    if top_acct:
+        ev.append("粉丝还关注:" + " ".join(
+            f"{a.get('name')}({_fmt_w(a.get('fans'))})" for a in top_acct[:4]))
+    if top_search:
+        ev.append("粉丝搜索需求:" + " ".join(s.get("word") for s in top_search if s.get("word")))
+    verdict = f"{dims}/3维可洞察·{len(accts)}同关账号·{len(searches)}搜索词"
+    return {"score": score, "verdict": verdict, "evidence": ev,
+            "competitor_accounts": top_acct, "missing": []}
+
+
+def score_c12_monetize(account: dict[str, Any], xprof=None) -> dict[str, Any]:
+    """C12 变现机会(0-100)：商单生态密度 + 账号互动对标 + 星图报价/带货指数。"""
+    mission = account.get("mission_total")
+    bench = account.get("item_benchmark") or {}
+    lsi = _idx(xprof, "link_shopping_index", "avg_value")
+    has_price = bool(_xattr(xprof, "price_info"))
+    if mission is None and not bench and lsi is None:
+        return {"score": 50.0, "verdict": "待变现数据", "evidence": [],
+                "degraded": True, "missing": "mission_task/acc_item_analysis #需批A+L3"}
+
+    parts, ev = [], []
+    if mission is not None:
+        parts.append(_clamp(min(100, mission * 2)))
+        ev.append(f"可接商单 {mission} 个" if mission
+                  else "当前无可接商单(赛道商单稀疏或账号未达准入)")
+    my_like, bench_like = account.get("avg_like"), bench.get("avg_like")
+    if bench_like and my_like:
+        ratio = my_like / bench_like
+        parts.append(_clamp(min(100, ratio * 50)))
+        ev.append(f"赞均值 {my_like:.0f} vs 同类 {bench_like:.0f}"
+                  f"({'高' if ratio >= 1 else '低'}于均值 {ratio:.1f}x)")
+    if lsi is not None:
+        parts.append(_clamp(float(lsi)))
+        ev.append(f"星图带货指数 {float(lsi):.0f}")
+    if has_price:
+        ev.append("已有星图报价(可商接)")
+
+    score = round(_clamp(sum(parts) / len(parts))) if parts else 50.0
+    verdict = ("变现就绪(有报价+承接力)" if has_price and score >= 60
+               else "变现潜力中等" if score >= 45 else "变现待培育")
+    return {"score": score, "verdict": verdict, "evidence": ev, "missing": []}
+
+
+def score_c13_competitor_pos(account: dict[str, Any], xprof=None) -> dict[str, Any]:
+    """C13 竞品位置(0-100)：粉丝同关账号(竞品)粉丝量对标 + 互动 vs 赛道均值。
+    输出账号在赛道的相对位置(领先/腰部/追赶)。
+    """
+    comps = account.get("fans_interest_accounts") or []
+    bench = account.get("item_benchmark") or {}
+    my_fans = account.get("follower")
+    if not comps and not bench:
+        return {"score": 50.0, "verdict": "待竞品数据", "evidence": [], "competitors": [],
+                "degraded": True, "missing": "fans_interest_account/acc_item_analysis #需批A"}
+
+    parts, ev = [], []
+    comp_fans = [c.get("fans") for c in comps if c.get("fans")]
+    if comp_fans and my_fans:
+        below = sum(1 for f in comp_fans if f < my_fans)
+        pct = below / len(comp_fans) * 100
+        parts.append(_clamp(pct))
+        pos = "领先" if pct >= 66 else "跟随" if pct >= 33 else "落后"
+        ev.append(f"粉丝量超过 {below}/{len(comp_fans)} 同关竞品({pos}·{pct:.0f}%位)")
+    my_like, bench_like = account.get("avg_like"), bench.get("avg_like")
+    if bench_like and my_like:
+        ratio = my_like / bench_like
+        parts.append(_clamp(min(100, ratio * 50)))
+        ev.append(f"互动 {ratio:.1f}x 赛道均值")
+    top_comp = sorted(comps, key=lambda x: -(x.get("fans") or 0))[:5]
+    if top_comp:
+        ev.append("主要竞品:" + " ".join(
+            f"{c.get('name')}({_fmt_w(c.get('fans'))})" for c in top_comp[:4]))
+
+    score = round(_clamp(sum(parts) / len(parts))) if parts else 50.0
+    verdict = ("赛道领先" if score >= 66 else "赛道腰部" if score >= 40 else "赛道追赶")
+    return {"score": score, "verdict": verdict, "evidence": ev,
+            "competitors": top_comp, "missing": []}
+
+
 def compute_all(account: dict[str, Any], xprof=None) -> dict[str, Any]:
-    """一次性计算8个复合指标·返回 {c1..c8} 字典。"""
+    """一次性计算13个复合指标·返回 {c1..c13} 字典。
+
+    C1-C8: 账号自身诊断(健康/粉丝/转化/内容/赛道/破圈/评级/私域)。
+    C9-C13: MetaIntake 环境层驱动(热点契合/选题机会/粉丝洞察/变现/竞品位置)。
+    """
     return {
         "c1": score_c1_health(account),
         "c2": score_c2_fans_quality(account, xprof),
@@ -1323,6 +1543,11 @@ def compute_all(account: dict[str, Any], xprof=None) -> dict[str, Any]:
         "c6": score_c6_breakout(account, xprof),
         "c7": score_c7_grade(account, xprof),
         "c8": score_c8_private(account, xprof),
+        "c9": score_c9_hot_fit(account, xprof),
+        "c10": score_c10_topic_opp(account, xprof),
+        "c11": score_c11_fans_insight(account, xprof),
+        "c12": score_c12_monetize(account, xprof),
+        "c13": score_c13_competitor_pos(account, xprof),
     }
 
 
@@ -1332,11 +1557,12 @@ _GRADE_EMOJI = {"A": "🏆", "B": "✅", "C": "⚠️", "D": "🔴", "F": "❌"}
 
 
 def render_composite_section(account: dict[str, Any], xprof=None) -> str:
-    """串8个复合指标成 markdown 报告段·供 account_report 调用。"""
+    """串13个复合指标成 markdown 报告段·供 account_report 调用。"""
     r = compute_all(account, xprof)
 
     c1, c2, c3, c4 = r["c1"], r["c2"], r["c3"], r["c4"]
     c5, c6, c7, c8 = r["c5"], r["c6"], r["c7"], r["c8"]
+    c9, c10, c11, c12, c13 = r["c9"], r["c10"], r["c11"], r["c12"], r["c13"]
 
     grade_icon = _GRADE_EMOJI.get(c7["grade"], "")
 
@@ -1353,6 +1579,11 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
         f"| C6 破圈能力 | **{c6['score']}分** | {c6['type']} |",
         f"| C7 商业价值评级 | **{grade_icon}{c7['grade']}级**({c7['score']}分) | {c7['desc']} |",
         f"| C8 私域成熟度 | **{c8['score']}分** | {c8['path']} |",
+        f"| C9 热点契合度 | **{c9['score']}分** | {c9['verdict']} |",
+        f"| C10 选题机会 | **{c10['score']}分** | {c10['verdict']} |",
+        f"| C11 粉丝洞察深度 | **{c11['score']}分** | {c11['verdict']} |",
+        f"| C12 变现机会 | **{c12['score']}分** | {c12['verdict']} |",
+        f"| C13 竞品位置 | **{c13['score']}分** | {c13['verdict']} |",
         "",
     ]
 
@@ -1396,9 +1627,25 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
             lines.append(f"- **破圈方向汇总**：{' / '.join(dirs)}")
         lines.append("")
 
+    # MetaIntake 环境/机会洞察（C9-C13·接通真实环境数据才渲染）
+    env_specs = [
+        ("C9 热点契合", c9), ("C10 选题机会", c10), ("C11 粉丝洞察", c11),
+        ("C12 变现机会", c12), ("C13 竞品位置", c13),
+    ]
+    env_rendered = [(t, d) for t, d in env_specs
+                    if isinstance(d, dict) and not d.get("degraded") and d.get("evidence")]
+    if env_rendered:
+        lines.append("### 环境/机会洞察（MetaIntake 环境层）")
+        for title, d in env_rendered:
+            lines.append(f"- **{title}** {d.get('score')}分 · {d.get('verdict', '')}")
+            for ev in (d.get("evidence") or [])[:3]:
+                lines.append(f"  - {ev}")
+        lines.append("")
+
     # 降级说明汇总
     all_missing: list[str] = []
-    for k in ("c1", "c2", "c3", "c4", "c5", "c6", "c8"):
+    for k in ("c1", "c2", "c3", "c4", "c5", "c6", "c8",
+              "c9", "c10", "c11", "c12", "c13"):
         all_missing.extend(r[k].get("missing", []))
     # C7 已是C2+C3的聚合·不重复列
 
