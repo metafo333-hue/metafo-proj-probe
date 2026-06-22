@@ -1528,11 +1528,60 @@ def score_c13_competitor_pos(account: dict[str, Any], xprof=None) -> dict[str, A
             "competitors": top_comp, "missing": []}
 
 
+def score_c14_dark_horse(account: dict[str, Any], xprof=None) -> dict[str, Any]:
+    """C14 黑马选题机会(0-100)：低粉爆款/涨粉榜 + 话题榜 → 以小博大的可复制选题。
+    低粉账号能爆款=该赛道有机会·提取黑马选题方向(高频话题标签)+高效话题(篇均播放高·投产比)。
+    数据源: board_low_fan/board_high_fan/board_topics(billboard POST 榜单)。
+    """
+    import re
+    horse = (account.get("board_low_fan") or []) + (account.get("board_high_fan") or [])
+    low_fan = account.get("board_low_fan") or []
+    topics = account.get("board_topics") or []
+    if not horse and not topics:
+        return {"score": 50.0, "verdict": "待黑马榜数据", "evidence": [],
+                "degraded": True, "missing": "board_* #需billboard POST榜单"}
+
+    # 黑马视频话题标签(从 item_title 提 #标签·高频=热门黑马选题方向)
+    tagc: dict[str, int] = {}
+    for v in horse:
+        for t in re.findall(r"#([^#\s]+)", v.get("title") or ""):
+            tagc[t] = tagc.get(t, 0) + 1
+    hot_tags = [t for t, _ in sorted(tagc.items(), key=lambda x: -x[1])[:6]]
+
+    # 高效话题(篇均播放高=投入产出比好·容易出量)
+    eff = sorted([t for t in topics if t.get("avg_play")],
+                 key=lambda t: -(t.get("avg_play") or 0))[:5]
+
+    # 黑马对标(低粉也能爆·证明赛道有机会):最低粉但高播放的样本
+    proof = None
+    cand = sorted([v for v in low_fan if v.get("fans") and v.get("play")],
+                  key=lambda v: (v.get("fans") or 10 ** 9))[:1]
+    if cand:
+        proof = cand[0]
+
+    raw = len(hot_tags) * 8 + len(eff) * 6 + (20 if proof else 0)
+    score = round(_clamp(min(100, raw) if (hot_tags or eff) else 40.0))
+    verdict = (f"{len(hot_tags)}个黑马选题方向·{len(eff)}个高效话题"
+               if (hot_tags or eff) else "黑马榜已采·暂无可提炼选题")
+    ev = []
+    if hot_tags:
+        ev.append("黑马选题方向:" + " ".join(hot_tags[:5]))
+    if eff:
+        ev.append("高效话题(篇均播放):" + " ".join(
+            f"{t['name']}({_fmt_w(t['avg_play'])})" for t in eff[:4]))
+    if proof:
+        ev.append(f"对标:'{proof.get('nick') or '某号'}' {_fmt_w(proof.get('fans'))}粉"
+                  f" 爆 {_fmt_w(proof.get('play'))}播放(低粉可爆·赛道有机会)")
+    return {"score": score, "verdict": verdict, "evidence": ev,
+            "dark_horse_tags": hot_tags, "missing": []}
+
+
 def compute_all(account: dict[str, Any], xprof=None) -> dict[str, Any]:
-    """一次性计算13个复合指标·返回 {c1..c13} 字典。
+    """一次性计算14个复合指标·返回 {c1..c14} 字典。
 
     C1-C8: 账号自身诊断(健康/粉丝/转化/内容/赛道/破圈/评级/私域)。
     C9-C13: MetaIntake 环境层驱动(热点契合/选题机会/粉丝洞察/变现/竞品位置)。
+    C14: billboard 黑马榜单驱动(以小博大的可复制选题)。
     """
     return {
         "c1": score_c1_health(account),
@@ -1548,6 +1597,7 @@ def compute_all(account: dict[str, Any], xprof=None) -> dict[str, Any]:
         "c11": score_c11_fans_insight(account, xprof),
         "c12": score_c12_monetize(account, xprof),
         "c13": score_c13_competitor_pos(account, xprof),
+        "c14": score_c14_dark_horse(account, xprof),
     }
 
 
@@ -1563,6 +1613,7 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
     c1, c2, c3, c4 = r["c1"], r["c2"], r["c3"], r["c4"]
     c5, c6, c7, c8 = r["c5"], r["c6"], r["c7"], r["c8"]
     c9, c10, c11, c12, c13 = r["c9"], r["c10"], r["c11"], r["c12"], r["c13"]
+    c14 = r["c14"]
 
     grade_icon = _GRADE_EMOJI.get(c7["grade"], "")
 
@@ -1584,6 +1635,7 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
         f"| C11 粉丝洞察深度 | **{c11['score']}分** | {c11['verdict']} |",
         f"| C12 变现机会 | **{c12['score']}分** | {c12['verdict']} |",
         f"| C13 竞品位置 | **{c13['score']}分** | {c13['verdict']} |",
+        f"| C14 黑马选题机会 | **{c14['score']}分** | {c14['verdict']} |",
         "",
     ]
 
@@ -1630,7 +1682,7 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
     # MetaIntake 环境/机会洞察（C9-C13·接通真实环境数据才渲染）
     env_specs = [
         ("C9 热点契合", c9), ("C10 选题机会", c10), ("C11 粉丝洞察", c11),
-        ("C12 变现机会", c12), ("C13 竞品位置", c13),
+        ("C12 变现机会", c12), ("C13 竞品位置", c13), ("C14 黑马选题", c14),
     ]
     env_rendered = [(t, d) for t, d in env_specs
                     if isinstance(d, dict) and not d.get("degraded") and d.get("evidence")]
@@ -1645,7 +1697,7 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
     # 降级说明汇总
     all_missing: list[str] = []
     for k in ("c1", "c2", "c3", "c4", "c5", "c6", "c8",
-              "c9", "c10", "c11", "c12", "c13"):
+              "c9", "c10", "c11", "c12", "c13", "c14"):
         all_missing.extend(r[k].get("missing", []))
     # C7 已是C2+C3的聚合·不重复列
 

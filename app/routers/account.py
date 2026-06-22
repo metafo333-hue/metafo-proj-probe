@@ -259,6 +259,24 @@ def _parse_intake_extras(results: dict) -> dict:
             "avg_share": ai.get("avg_share_count"), "avg_follower": ai.get("avg_follower_count"),
             "avg_aweme": ai.get("avg_aweme_count"),
         }
+
+    # ── billboard 黑马榜单(C14 黑马选题·POST·data.data.objs) ──
+    def _objs(ep):
+        d = _data(ep)   # 已剥二次信封 → {page, objs}
+        return (d.get("objs") or []) if isinstance(d, dict) else []
+
+    for ep in ("board_low_fan", "board_high_play", "board_high_like", "board_high_fan"):
+        objs = _objs(ep)
+        if objs:
+            out[ep] = [{"title": o.get("item_title"), "nick": o.get("nick_name"),
+                        "fans": o.get("fans_cnt"), "play": o.get("play_cnt"),
+                        "follow_rate": o.get("follow_rate"), "like_rate": o.get("like_rate")}
+                       for o in objs[:20]]
+    tobjs = _objs("board_topic")
+    if tobjs:
+        out["board_topics"] = [{"name": o.get("challenge_name"), "play": o.get("play_cnt"),
+                                "publish": o.get("publish_cnt"), "avg_play": o.get("avg_play_cnt")}
+                               for o in tobjs[:20]]
     return out
 
 

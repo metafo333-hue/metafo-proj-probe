@@ -40,6 +40,7 @@ from app.services.composite_scores import (
     score_c11_fans_insight,
     score_c12_monetize,
     score_c13_competitor_pos,
+    score_c14_dark_horse,
     compute_all,
     render_composite_section,
 )
@@ -257,14 +258,14 @@ class TestC8Private:
 
 
 class TestComputeAll:
-    def test_returns_13_keys(self):
+    def test_returns_14_keys(self):
         result = compute_all(_full_account(), _full_xprof())
-        assert set(result.keys()) == {f"c{i}" for i in range(1, 14)}
+        assert set(result.keys()) == {f"c{i}" for i in range(1, 15)}
 
     def test_all_scores_in_range(self):
         result = compute_all(_full_account(), _full_xprof())
         for k in ("c1", "c2", "c3", "c4", "c5", "c6", "c8",
-                  "c9", "c10", "c11", "c12", "c13"):
+                  "c9", "c10", "c11", "c12", "c13", "c14"):
             assert 0 <= result[k]["score"] <= 100, f"{k}.score 超范围"
         assert 0 <= result["c7"]["score"] <= 100
         assert result["c7"]["grade"] in ("A", "B", "C", "D", "F")
@@ -491,6 +492,17 @@ def _env_account() -> dict:
         "mission_total": 5,
         "item_benchmark": {"avg_like": 2000, "avg_comment": 100, "avg_share": 50,
                            "avg_follower": 40000, "avg_aweme": 200},
+        "board_low_fan": [
+            {"title": "家常菜也能爆 #家常菜 #下饭菜", "nick": "小号A",
+             "fans": 1200, "play": 5000000, "follow_rate": 0.05, "like_rate": 0.08},
+        ],
+        "board_high_fan": [
+            {"title": "涨粉神器 #家常菜 #教程", "nick": "小号B",
+             "fans": 3000, "play": 2000000, "follow_rate": 0.1, "like_rate": 0.06},
+        ],
+        "board_topics": [
+            {"name": "家常菜挑战", "play": 100000000, "publish": 5000, "avg_play": 50000},
+        ],
     }
 
 
@@ -530,7 +542,18 @@ class TestC9toC13:
         assert r["competitors"]
         assert any("同关竞品" in e for e in r["evidence"])
 
-    def test_c9_to_c13_in_render(self):
+    def test_c14_dark_horse_topics(self):
+        # 低粉爆款(1200粉爆500万)→黑马选题方向+对标
+        r = score_c14_dark_horse(_env_account())
+        assert not r.get("degraded")
+        assert r["dark_horse_tags"]                       # 提取到选题方向
+        assert any("对标" in e for e in r["evidence"])    # 低粉可爆对标
+
+    def test_c14_degraded_without_board(self):
+        assert score_c14_dark_horse({}).get("degraded")
+
+    def test_c9_to_c14_in_render(self):
         md = render_composite_section(_env_account(), {"industry_tags": ["美食"]})
         assert "C9 热点契合度" in md and "C13 竞品位置" in md
+        assert "C14 黑马选题机会" in md
         assert "环境/机会洞察" in md
