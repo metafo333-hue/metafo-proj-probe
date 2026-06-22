@@ -323,3 +323,199 @@ def render_fans_portrait_section(prof: XingtuProfile | None) -> str | None:
     L.append("")
     L.append("> 星图官方粉丝画像·非评论估算·可直接用于投放人群匹配。")
     return "\n".join(L)
+
+
+# ── 章四 §4.5 内容×商业桥接 ─────────────────────────────────────────────────
+
+# 单千粉报价行业参考区间（元/千粉）
+_PER_FAN_LOW = 5.0
+_PER_FAN_HIGH = 10.0
+
+
+def _av_quality_score(av_six: dict | None) -> float | None:
+    """视听六层质量均分·取各层 score × conf 加权均值。av_six=None → None。"""
+    if not isinstance(av_six, dict):
+        return None
+    scores = []
+    for layer, info in av_six.items():
+        if isinstance(info, dict):
+            s = info.get("score")
+            c = info.get("conf", 1.0)
+            if s is not None:
+                scores.append(float(s) * float(c))
+    return round(sum(scores) / len(scores), 3) if scores else None
+
+
+def bridge_content_commercial(
+    prof: XingtuProfile,
+    account: dict,
+    av_six: dict | None = None,
+) -> dict:
+    """内容×商业桥接·章四 §4.5·把星图商业层与内容层交叉分析。
+
+    Args:
+        prof:    XingtuProfile（星图商业层）
+        account: 内容层 dict，含 follower(int)·avg_like(int)·video_stats(list) 等。
+                 字段缺失则对应子项降级为 None。
+        av_six:  视听六层 {layer: {score, conf}} 或 None（跳过 style_vs_price）。
+
+    Returns:
+        {per_fan_value, style_vs_price, portrait_consistency, roi, signals}
+    """
+    result: dict = {}
+    signals: list[str] = []
+
+    # ── Q4 单千粉报价 ──────────────────────────────────────────────────────────
+    follower = account.get("follower")
+    if prof.price_short and follower and follower > 0:
+        pfv = prof.price_short / follower * 1000
+        pfv_r = round(pfv, 1)
+        if pfv > _PER_FAN_HIGH:
+            label = "溢价"
+            sig = f"单千粉报价 ¥{pfv_r}·高于行业均值(¥{_PER_FAN_LOW}-{_PER_FAN_HIGH})·品牌溢价或头部效应"
+        elif pfv < _PER_FAN_LOW:
+            label = "偏低"
+            sig = f"单千粉报价 ¥{pfv_r}·低于行业均值(¥{_PER_FAN_LOW}-{_PER_FAN_HIGH})·性价比高·需确认真实活跃度"
+        else:
+            label = "合理"
+            sig = f"单千粉报价 ¥{pfv_r}·处行业均值区间(¥{_PER_FAN_LOW}-{_PER_FAN_HIGH})·报价合理"
+        result["per_fan_value"] = {
+            "price_short": prof.price_short,
+            "follower": follower,
+            "per_fan_k": pfv_r,
+            "benchmark": f"¥{_PER_FAN_LOW}-{_PER_FAN_HIGH}/千粉",
+            "label": label,
+        }
+        signals.append(sig)
+    else:
+        result["per_fan_value"] = None
+
+    # ── Q1 视听风格 × 报价档位 ────────────────────────────────────────────────
+    if av_six is not None and prof.price_short:
+        quality = _av_quality_score(av_six)
+        # 报价档位：A>=10000 / B 5000-9999 / C <5000
+        if prof.price_short >= 10000:
+            tier = "A"
+        elif prof.price_short >= 5000:
+            tier = "B"
+        else:
+            tier = "C"
+        if quality is not None:
+            if quality >= 0.45 and tier in ("A", "B"):
+                match = "匹配"
+                sig2 = f"视听质量分 {quality}·报价 {tier} 级·风格与报价相符"
+            elif quality < 0.35 and tier == "A":
+                match = "偏低"
+                sig2 = f"视听质量分 {quality} 偏低·但报价 A 级·内容品质与价位存在落差"
+            else:
+                match = "待观察"
+                sig2 = f"视听质量分 {quality}·报价 {tier} 级·可接受范围内"
+            signals.append(sig2)
+        else:
+            match = "无法评估"
+        result["style_vs_price"] = {
+            "av_quality": quality,
+            "price_tier": tier,
+            "price_short": prof.price_short,
+            "match": match,
+        }
+    else:
+        result["style_vs_price"] = None
+
+    # ── Q2 官方画像 vs 评论画像一致性 ────────────────────────────────────────
+    fans_top_gender: str | None = None
+    fans_top_city: str | None = None
+    for d in prof.fans_portrait:
+        if d.get("type") == 0 and d.get("top5"):  # 性别
+            fans_top_gender = d["top5"][0][0]
+        if d.get("type") in (2, 8) and d.get("top5"):  # 省份/城市
+            if fans_top_city is None:
+                fans_top_city = d["top5"][0][0]
+
+    comment_gender: str | None = account.get("comment_top_gender")
+    comment_city: str | None = account.get("comment_top_city")
+
+    consistency_items: dict = {}
+    if fans_top_gender and comment_gender:
+        ok = fans_top_gender == comment_gender
+        consistency_items["gender"] = {
+            "xingtu": fans_top_gender,
+            "comment": comment_gender,
+            "match": ok,
+        }
+        if not ok:
+            signals.append(f"性别画像不一致：星图官方={fans_top_gender}·评论估算={comment_gender}·观察受众实际构成")
+    if fans_top_city and comment_city:
+        ok = fans_top_city == comment_city
+        consistency_items["city"] = {
+            "xingtu": fans_top_city,
+            "comment": comment_city,
+            "match": ok,
+        }
+        if not ok:
+            signals.append(f"城市画像不一致：星图={fans_top_city}·评论={comment_city}")
+
+    result["portrait_consistency"] = consistency_items if consistency_items else None
+
+    # ── Q3/C1 ROI 三角（复用现有函数） ────────────────────────────────────────
+    roi = roi_triangle(prof)
+    result["roi"] = roi
+    if roi:
+        signals.append(f"ROI核验：{roi['verdict']}（实际CPM ¥{roi['actual_cpm']} vs 官方 ¥{roi['official_cpm']}）")
+
+    result["signals"] = signals
+    return result
+
+
+def render_bridge_section(bridge: dict | None) -> str | None:
+    """跨层洞察 → markdown 段·渲染单粉价值/ROI/风格匹配。bridge=None或空→返回None。"""
+    if not bridge:
+        return None
+    lines = ["### 🔗 内容×商业桥接洞察（章四 §4.5）", ""]
+
+    pfv = bridge.get("per_fan_value")
+    if pfv:
+        lines.append(
+            f"- **单千粉报价**：¥{pfv['per_fan_k']}/千粉"
+            f"（报价¥{pfv['price_short']:,}·粉丝{pfv['follower']:,}）"
+            f"·参考均值{pfv['benchmark']}·**{pfv['label']}**"
+        )
+
+    svp = bridge.get("style_vs_price")
+    if svp:
+        q = f"质量分{svp['av_quality']}" if svp["av_quality"] is not None else "质量分N/A"
+        lines.append(
+            f"- **视听×报价**：{q}·报价{svp['price_tier']}级（¥{svp['price_short']:,}）"
+            f"·{svp['match']}"
+        )
+
+    roi = bridge.get("roi")
+    if roi:
+        lines.append(
+            f"- **投放ROI核验**：实际CPM ¥{roi['actual_cpm']}"
+            + (f" vs 官方 ¥{roi['official_cpm']}" if roi.get("official_cpm") else "")
+            + f"·{roi['verdict']}"
+        )
+
+    pc = bridge.get("portrait_consistency")
+    if pc:
+        for dim, v in pc.items():
+            tag = "✓一致" if v.get("match") else "✗不一致"
+            lines.append(
+                f"- **画像对比({dim})**：星图={v['xingtu']}·评论={v['comment']}·{tag}"
+            )
+
+    sigs = bridge.get("signals", [])
+    if sigs:
+        lines.append("")
+        lines.append("**综合信号**：")
+        for s in sigs:
+            lines.append(f"- {s}")
+
+    lines.append("")
+    lines.append("> 内容层(follower/视听六层/评论画像) × 商业层(星图真值) 交叉诊断。")
+
+    # 若除标题外无实质内容则返回 None
+    if len(lines) <= 3:
+        return None
+    return "\n".join(lines)
