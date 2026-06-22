@@ -215,6 +215,40 @@ body {
 
   <div class="version-block major">
     <div class="v-sidebar">
+      <div class="v-tag major">Hub v4.0</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">本次</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">
+        阅读体验重构 · 三栏 + 内嵌报告
+        <span class="v-summary">点击网页报告在页面中间渲染，不再跳新标签；按用户打开/阅读习惯整体调整</span>
+      </div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ Feature</div>
+          <ul class="change-list">
+            <li><strong>三栏阅读布局</strong>：左案例导航 + 中报告全文 + 右目录（180px，原过宽已收窄）</li>
+            <li><strong>阅读模式可切品类</strong>：5 类 chips（全部/知识健康/带货B2B/本地服务/颜值美妆），左栏直接换案例</li>
+            <li><strong>数据仪表盘扩为 7 区块</strong>：账号概况(+简介/标签/垂直度) · 本条视频(+阅读时长) · 商业价值 · 分析质量(+复诊日期) · 关键标签 · 快捷操作 · 完整性评分</li>
+            <li><strong>Word 统一为单一下载按钮</strong>（原 2 处合一）</li>
+            <li>时间精确到秒；键盘快捷键 <code>/ ESC A D ←→ 1/2/3</code></li>
+          </ul>
+        </div>
+        <div class="change-group">
+          <div class="change-label fix">🔧 Fix</div>
+          <ul class="change-list">
+            <li><strong>file:// 双击模式点击网页报告仍跳新标签页</strong> → 根因：浏览器禁 fetch 同级文件，落到 <code>target="_blank"</code> 链接</li>
+            <li>新增 <code>hub/build_embed.py</code>：把各案例 report.html 内嵌进页面（<code>embedded-reports</code> 块），file:// 模式经 Shadow DOM 在中间栏直接渲染，<strong>彻底去掉跳转</strong></li>
+            <li>报告重生成后跑 <code>python3 hub/build_embed.py</code> 刷新内嵌即可</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="version-block major">
+    <div class="v-sidebar">
       <div class="v-tag major">Hub v3.1</div>
       <div class="v-date">2026-06-22</div>
       <div class="v-commit">21bf878</div>
