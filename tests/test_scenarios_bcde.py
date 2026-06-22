@@ -135,3 +135,23 @@ def test_blocked_scenarios_not_in_registry():
     blocked = [k for k, v in sc.COVERAGE_27.items() if v.startswith("blocked")]
     for k in blocked:
         assert k not in sc.REGISTRY
+
+
+# ── A1: OS3 真值融合接进场景（建了真用上）──────────────────────
+def test_scenario_carries_os3_fusion():
+    """场景输出含 OS3 融合真值 + 冲突检测·内部 _fused_claims 不外露。"""
+    out = sc.scenario_b1_company(
+        "Acme Inc",
+        _oc=lambda q: [{"name": q, "country": "US"}],      # B 权威
+        _edgar=lambda q: [{"name": q, "country": "US"}],   # A 权威
+        _wiki=lambda q: [{"name": q, "country": "UK"}],    # C 二手
+    )
+    fused = {f["key"]: f for f in out["fused"]}
+    # country: US(oc B + edgar A) 加权胜 UK(wiki C)·且检出冲突
+    assert fused["country"]["value"] == "US"
+    assert fused["country"]["conflict"] is True
+    assert fused["country"]["corroboration"] == 2
+    assert any("country 多源冲突" in c for c in out["conflicts"])
+    assert "_fused_claims" not in out                        # 内部字段已清理
+    # name 三源一致·无冲突
+    assert fused["name"]["conflict"] is False

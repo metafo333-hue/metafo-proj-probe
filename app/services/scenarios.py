@@ -14,10 +14,13 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.datasources.orchestrator import SourceSpec, fan_out, FanOutResult
+from dataclasses import asdict
+
+from app.datasources.orchestrator import (
+    SourceSpec, fan_out, FanOutResult, fuse_fanout, to_audit_claims)
 
 
-# 源权威度映射（喂闸1 Admiralty reliability_hint·官方/权威源高分）
+# 源权威度映射（喂闸1 Admiralty reliability_hint + OS3 真值发现投票权重）
 _SOURCE_RELIABILITY = {
     "edgar": "A", "ofac_sdn": "A", "osv": "A",          # 官方/权威披露
     "opencorporates": "B", "github": "B", "openalex": "B",
@@ -25,36 +28,37 @@ _SOURCE_RELIABILITY = {
 }
 
 
-def _to_audit_inputs(packet: dict[str, Any]) -> tuple[list[str], list[dict]]:
-    """情报包 findings → 八闸输入(claims + sources)。"""
-    sources = []
-    for f in packet["findings"]:
-        sid = f["source"]
-        sources.append({
-            "url": f"probe://source/{sid}",
-            "title": f"{sid}·{f.get('domain', '')}",
-            "text": str(f.get("data"))[:600],
-            "timestamp": "",
-            "reliability_hint": _SOURCE_RELIABILITY.get(sid, "C"),
-            "source_type": "api",
-        })
-    n = len(sources)
-    claim = (f"{packet['query']}·{packet['scenario']}：经 {n} 个授权源采集"
-             + ("（部分源缺失）" if packet["partial"] else "（全源命中）"))
-    return [claim], sources
+def _build_sources(packet: dict[str, Any]) -> list[dict]:
+    """情报包 findings → 八闸 sources（每源一条·带 Admiralty 权威 hint）。"""
+    return [{
+        "url": f"probe://source/{f['source']}",
+        "title": f"{f['source']}·{f.get('domain', '')}",
+        "text": str(f.get("data"))[:600],
+        "timestamp": "",
+        "reliability_hint": _SOURCE_RELIABILITY.get(f["source"], "C"),
+        "source_type": "api",
+    } for f in packet["findings"]]
 
 
 def enrich_with_audit(packet: dict[str, Any], *, tier: str = "paid") -> dict[str, Any]:
-    """情报包 → 过八闸 → 附「可信度三标签」(probe 护城河：带可信度的结论)。
+    """情报包 → OS3 真值融合 → 过八闸 → 附「可信度三标签」(probe 护城河)。
 
-    失败降级：审核异常不阻塞情报包，标 conclusion_label.error。
+    claims 优先用 OS3 加权融合后的高置信真值 + 冲突项（而非简单铺平），
+    让八闸 NLI/对抗证伪吃到真正的多源消解结果。失败降级标 error。
     """
-    claims, sources = _to_audit_inputs(packet)
+    sources = _build_sources(packet)
     if not sources:
         packet["conclusion_label"] = {
             "source_reliability": None, "confidence_level": "无源·不可出",
             "evidence_strength": None}
         return packet
+
+    # OS3 真值融合优先；融合 claims 为空时回落「N 源采集」概括句
+    fused_claims = packet.get("_fused_claims") or []
+    conflicts = packet.get("conflicts") or []
+    claims = (fused_claims + conflicts) or [
+        f"{packet['query']}·{packet['scenario']}：经 {len(sources)} 个授权源采集"
+        + ("（部分源缺失）" if packet["partial"] else "（全源命中）")]
     try:
         from app.audit.gates import run_audit
         res = run_audit(claims, sources, tier=tier)
@@ -89,6 +93,10 @@ def _assemble(scenario: str, query: str, domains: list[str],
          "elapsed_ms": r.elapsed_ms, "data": r.data}
         for r in out.ok
     ]
+    # OS3 多源融合·真值发现（源加权投票 + 冲突检测·喂八闸前消解多源分歧）
+    fused = fuse_fanout(out, reliability=_SOURCE_RELIABILITY)
+    good_claims, conflicts = to_audit_claims(fused)
+
     packet = {
         "scenario": scenario,
         "query": query,
@@ -98,10 +106,15 @@ def _assemble(scenario: str, query: str, domains: list[str],
         "sources": out.summary(),
         "findings": findings,
         "credibility_note": _credibility_note(out),
+        # OS3 融合产物：高置信真值 + 冲突项（呈现层可直接展示「多源消解后结论」）
+        "fused": [asdict(f) for f in fused],
+        "conflicts": conflicts,
+        "_fused_claims": good_claims,        # 内部·喂八闸（enrich 用后不必外露）
     }
     # 过八闸出可信度三标签（probe 价值：带可信度的结论·非裸数据堆）
     if audit:
         packet = enrich_with_audit(packet, tier=tier)
+    packet.pop("_fused_claims", None)        # 内部字段不外露
     return packet
 
 
