@@ -17,6 +17,164 @@ from app.services import account_chain, diagnosis_cards
 
 router = APIRouter(prefix="/api/v1/account", tags=["account"])
 
+# ── 深化数据接通辅助(纯函数·实测字段·2026-06-22) ──────────────────────────────
+
+# 私域意图高频词停用集(口语虚词·表情占位)
+_STOPWORDS = frozenset(
+    "的 了 是 我 你 他 她 们 也 都 在 有 和 与 就 不 这 那 个 啊 吧 呢 吗 哦 嗯 "
+    "什么 怎么 这个 那个 真的 一个 可以 没有 就是 已经 还是 但是 因为 所以".split()
+)
+
+
+def _extract_comments(comments_envelope) -> list[dict]:
+    """从 comments 端点信封取评论列表。
+
+    实测真值路径(2026-06-22): envelope["data"]["comments"][]。
+    harness 把整个信封(含顶层 code/data)存入 results["comments"]·故须先下钻 .data。
+    兼容 comment_list / aweme_comments 别名(防 spec 漂移)。
+    """
+    if not isinstance(comments_envelope, dict):
+        return []
+    data = comments_envelope.get("data")
+    if not isinstance(data, dict):
+        data = comments_envelope  # 已是 data 体(降级兜底)
+    cmts = (data.get("comments") or data.get("comment_list")
+            or data.get("aweme_comments") or [])
+    return [c for c in cmts if isinstance(c, dict)]
+
+
+def _build_comment_deep(cmts: list[dict]) -> dict:
+    """评论列表 → comment_deep(水军/真实性/私域意图 3 子项)。字段全实测。"""
+    import re
+    from collections import Counter
+
+    n = len(cmts)
+    # 地域(ip_label·省份)集中度 + 多元度
+    ips = Counter(c.get("ip_label") for c in cmts if c.get("ip_label"))
+    ip_total = sum(ips.values())
+    ip_concentration = round(max(ips.values()) / ip_total, 2) if ip_total else None
+    ip_diversity = round(len(ips) / n, 2) if n else None
+
+    # 评论层级分布(level·int)
+    level_dist: dict[str, int] = {}
+    for c in cmts:
+        lv = c.get("level")
+        if lv is not None:
+            level_dist[str(lv)] = level_dist.get(str(lv), 0) + 1
+
+    # 作者互动度(is_author_digged True 占比·作者是否回赞评论)
+    author_reply_rate = (
+        round(sum(1 for c in cmts if c.get("is_author_digged")) / n, 2) if n else None
+    )
+    # 评论平均点赞(digg_count·异常检测)
+    diggs = [int(c.get("digg_count") or 0) for c in cmts]
+    avg_digg = round(sum(diggs) / n, 1) if n else None
+    # 被回复活跃度(reply_comment_total>0 占比)
+    reply_active_rate = (
+        round(sum(1 for c in cmts if (c.get("reply_comment_total") or 0) > 0) / n, 2)
+        if n else None
+    )
+    # 高频词 top10(text·私域意图)。无分词依赖→对中文连续串做 2/3/4-gram 滑窗
+    # 取词,过停用词;频次≥2 才入(单次出现无聚合意义)。
+    words: Counter = Counter()
+    for c in cmts:
+        for seg in re.findall(r"[一-鿿]+", str(c.get("text") or "")):
+            for size in (4, 3, 2):                 # 长词优先(更具体)
+                for i in range(len(seg) - size + 1):
+                    g = seg[i:i + size]
+                    if g not in _STOPWORDS:
+                        words[g] += 1
+    top_keywords = [{"word": w, "count": ct}
+                    for w, ct in words.most_common(30) if ct >= 2][:10]
+
+    return {
+        "sample_size": n,
+        "ip_concentration": ip_concentration,        # 最高省份占比(0-1·水军)
+        "ip_diversity": ip_diversity,                # unique 省份/总评论(0-1)
+        "level_dist": level_dist,                    # {层级str: 计数}
+        "author_reply_rate": author_reply_rate,      # 作者回赞占比(0-1·互动度)
+        "avg_digg": avg_digg,                        # 评论平均点赞(异常检测)
+        "reply_active_rate": reply_active_rate,      # 被回复占比(0-1)
+        "top_keywords": top_keywords,                # [{word,count}]·私域意图
+    }
+
+
+def _rec_interact_rates(rec_videos) -> list[float]:
+    """代表作互动率列表(竞品互动·1 子项)。
+
+    masterpiece_videos[] 实测两形态:
+      A 扁平: 顶层 interact_rate / like / play / comment / share。
+      B 嵌套: stats{interact_rate, like_cnt, watch_cnt, ...}。
+    优先用官方 interact_rate·缺失则 like/play 兜底估算。非法值跳过。
+    """
+    rates: list[float] = []
+    for v in (rec_videos or []):
+        if not isinstance(v, dict):
+            continue
+        st = v.get("stats") if isinstance(v.get("stats"), dict) else {}
+        ir = v.get("interact_rate")
+        if ir is None:
+            ir = st.get("interact_rate")
+        if ir is not None:
+            try:
+                rates.append(round(float(ir), 4))
+                continue
+            except (TypeError, ValueError):
+                pass
+        # 兜底: like/play
+        like = v.get("like") if v.get("like") is not None else st.get("like_cnt")
+        play = v.get("play") if v.get("play") is not None else st.get("watch_cnt")
+        try:
+            play_f = float(play or 0)
+            if play_f > 0:
+                rates.append(round(float(like or 0) / play_f, 4))
+        except (TypeError, ValueError):
+            pass
+    return rates
+
+
+def _track_competition(keyword: str, key: str) -> dict | None:
+    """赛道竞争度(赛道蓝海·1 子项)。
+
+    POST /api/v1/douyin/search/fetch_general_search_v1 {keyword,cursor:0}
+      → data(list·结果) + has_more + cursor。
+    返回 {keyword, result_count, has_more}。失败/无结果返回 None。
+    harness 仅 GET·此端点 POST·故直接 httpx 调用。
+    """
+    import os as _os
+
+    import httpx
+    base = _os.environ.get("TIKHUB_API_BASE", "https://api.tikhub.io")
+    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+    try:
+        r = httpx.post(
+            f"{base}/api/v1/douyin/search/fetch_general_search_v1",
+            json={"keyword": keyword, "cursor": 0},
+            headers={"Authorization": f"Bearer {key}", "User-Agent": ua,
+                     "accept": "application/json"},
+            timeout=20.0,
+        )
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        if body.get("code") not in (0, 200, None):
+            return None
+        data = body.get("data")
+        results = data if isinstance(data, list) else (
+            data.get("data") if isinstance(data, dict) else None)
+        has_more = (data.get("has_more") if isinstance(data, dict)
+                    else body.get("has_more"))
+        if not isinstance(results, list):
+            return None
+        return {
+            "keyword": keyword,
+            "result_count": len(results),       # 当页结果数(竞争密度代理)
+            "has_more": bool(has_more),          # 是否海量竞争(红海信号)
+        }
+    except Exception:  # noqa: BLE001
+        return None
+
 
 def _build_account_for_diagnosis(sec_uid: str, key: str | None,
                                  aweme_id: str | None = None) -> tuple[dict, Any]:
@@ -30,12 +188,14 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
     cache = ResponseCache(cache_dir="data/cache", ttl_sec=86400)
 
     results: dict = {}
+    seeds: dict = {}
     if aweme_id:
         try:
             from combo_deep_probe.harness import run_full_harvest
             r = run_full_harvest({"aweme_id": aweme_id}, key, cache=cache, tier="full")
             results = r.get("results", {})
-            sec_uid = sec_uid or (r.get("seeds") or {}).get("sec_uid")
+            seeds = r.get("seeds") or {}
+            sec_uid = sec_uid or seeds.get("sec_uid")
         except Exception:  # noqa: BLE001
             pass
 
@@ -65,13 +225,25 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
         "commerce_density": diag.get("commerce_density"),
         "update_gap_days": round(_itv / 24, 1) if _itv else None,
     }
-    # 评论 IP 集中度(水军风险·满血·从全量 comments)
-    cmts = (results.get("comments") or {}).get("comments") or []
+    # ── 评论深化(水军/真实性/私域意图·3 子项·满血) ───────────────────────────
+    # 真实信封路径: results["comments"]["data"]["comments"][] (实测 2026-06-22)。
+    cmts = _extract_comments(results.get("comments"))
+    _aid = seeds.get("aweme_id") or aweme_id
+    if not cmts and _aid:
+        # comments 偶发空(风控/采集失败)→ force_refresh 重取一次(跳缓存)。
+        try:
+            from combo_deep_probe.harness import run_full_harvest as _rfh
+            r2 = _rfh({"aweme_id": _aid}, key, cache=cache, tier="full",
+                      force_refresh=True)
+            cmts = _extract_comments((r2.get("results") or {}).get("comments"))
+        except Exception:  # noqa: BLE001
+            pass
     if cmts:
-        from collections import Counter
-        ips = Counter(c.get("ip_label") for c in cmts if c.get("ip_label"))
-        if ips:
-            account["ip_concentration"] = round(max(ips.values()) / sum(ips.values()), 2)
+        cd = _build_comment_deep(cmts)
+        account["comment_deep"] = cd
+        # composite c2 直接读 account["ip_concentration"](0-1·水军风险)·向后兼容。
+        if cd.get("ip_concentration") is not None:
+            account["ip_concentration"] = cd["ip_concentration"]
 
     xprof_adapter = None
     try:
@@ -93,8 +265,16 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
                 "link_shopping_index_avg": _lsi.avg_value if _lsi else None,
                 "fans_portrait": _p2c(xp.fans_portrait),          # 满血:消费力/地域
                 "audience_portrait": _p2c(xp.audience_portrait),  # 满血:双画像破圈
-                "rec_videos": xp.rec_videos,                      # 满血:竞品互动
+                "rec_videos": xp.rec_videos,                      # 满血:竞品互动(raw·composite c4 直读 interact_rate)
+                # 代表作互动率(已算·deepening 直读·robust 兼容 stats 嵌套/扁平两形态)。
+                "rec_interact_rates": _rec_interact_rates(xp.rec_videos),
             }
+            # ── 赛道竞争度(赛道蓝海·1 子项)·搜行业词看结果海量度 ────────────
+            track_kw = (xp.industry_tags or [None])[0]
+            if track_kw and key:
+                tc = _track_competition(track_kw, key)
+                if tc:
+                    account["track_competition"] = tc
     except Exception:  # noqa: BLE001
         pass
     return account, xprof_adapter
