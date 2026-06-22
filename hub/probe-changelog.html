@@ -211,6 +211,31 @@ body {
 
 <div id="main">
 
+  <div class="version-block">
+    <div class="v-sidebar">
+      <div class="v-tag">Hub v4.1</div>
+      <div class="v-date">2026-06-22</div>
+      <div class="v-commit">本次</div>
+    </div>
+    <div class="v-content">
+      <div class="v-title">
+        同账号多视频聚合展示
+        <span class="v-summary">同一账号下不同链接/视频，首页聚合成单卡，阅读模式区分「其它视频」与「本视频历史版本」</span>
+      </div>
+      <div class="v-body">
+        <div class="change-group">
+          <div class="change-label feat">✨ Feature</div>
+          <ul class="change-list">
+            <li><strong>三坐标锚点</strong>：sec_uid(账号) · aweme_id(视频) · probe_version(版本)，据此判定「同账号不同视频」vs「同视频不同版本」</li>
+            <li><strong>首页账号聚合(B)</strong>：同 sec_uid 的多条视频折叠成单张账号卡，标 <code>📹 N 条视频</code> + 聚合数据，可展开/收起逐条点入</li>
+            <li><strong>阅读模式两段历史(A)</strong>：<code>🎬 同账号其它视频</code>（同账号其它 aweme，每视频取最新版）与 <code>🔄 本视频历史版本</code>（同 aweme 多次复诊时间轴）语义拆分；单条视频显示「仅此 1 次分析」</li>
+            <li>两段均可点击跳转到对应案例；URL 同步 <code>?case=</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ Hub v3.x ══════════════════════════════════════════════ -->
 
   <div class="version-block major">
