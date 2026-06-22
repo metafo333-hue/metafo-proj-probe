@@ -66,6 +66,75 @@ def _score_range(v: float | None, lo: float, hi: float) -> float:
     return _clamp((v - lo) / (hi - lo) * 100)
 
 
+# ── 画像/评论 取值工具（兼容上游两种 top5 形态） ──────────────────────────────
+# origin_type 实测映射(2026-06-22)：0性别 1年龄 2省份 3设备 5城市等级
+#   6兴趣 8城市 10八大人群 11消费品类 12客单价
+_OT_GENDER, _OT_AGE, _OT_PROVINCE, _OT_DEVICE = 0, 1, 2, 3
+_OT_CITY_LEVEL, _OT_INTEREST, _OT_CITY, _OT_CROWD8 = 5, 6, 8, 10
+_OT_CATEGORY, _OT_AOV = 11, 12
+
+
+def _top5_pairs(item: dict) -> list[tuple[str, float]]:
+    """归一化一个画像维度的 top5 为 [(name, value)]·兼容两种上游形态。
+
+    上游两形态(实测)：
+      A XingtuProfile.fans_portrait → top5 = [(distribution_key, int_value)]  (元组)
+      B account.py _p2c 适配后        → top5 = [{"name":k,"value":v}]          (字典)
+    value 为百分比整数(distribution_value)·非法值跳过。
+    """
+    out: list[tuple[str, float]] = []
+    for t5 in (item.get("top5") or []):
+        if isinstance(t5, dict):
+            name, val = t5.get("name"), t5.get("value")
+        elif isinstance(t5, (list, tuple)) and len(t5) >= 2:
+            name, val = t5[0], t5[1]
+        else:
+            continue
+        if name is None:
+            continue
+        try:
+            out.append((str(name), float(val or 0)))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _portrait_dim(xprof, attr: str, origin_type: int) -> list[tuple[str, float]] | None:
+    """从 fans_portrait / audience_portrait 取指定 origin_type 维的 [(name,value)]。
+
+    attr ∈ {"fans_portrait","audience_portrait"}。维度不存在 → None。
+    """
+    dims = _xattr(xprof, attr) or []
+    for item in dims:
+        if not isinstance(item, dict):
+            continue
+        ot = item.get("origin_type")
+        if ot is None:
+            ot = item.get("type")
+        if ot == origin_type:
+            pairs = _top5_pairs(item)
+            return pairs if pairs else None
+    return None
+
+
+def _herfindahl(pairs: list[tuple[str, float]]) -> float | None:
+    """集中度 HHI 代理：返回归一化占比的平方和(0-1)·越高越集中。
+
+    pairs 的 value 为百分比·内部按和归一化(只取到 top5 故和可能 <100)。
+    返回 None 当无有效项。
+    """
+    total = sum(v for _, v in pairs if v > 0)
+    if total <= 0:
+        return None
+    return sum((v / total) ** 2 for _, v in pairs if v > 0)
+
+
+def _comment_deep(account: dict) -> dict | None:
+    """安全取 account['comment_deep']（评论深化·account.py _build_comment_deep 产出）。"""
+    cd = account.get("comment_deep")
+    return cd if isinstance(cd, dict) else None
+
+
 # ── C1：账号综合健康分 ────────────────────────────────────────────────────────
 
 def score_c1_health(account: dict[str, Any]) -> dict[str, Any]:
@@ -188,10 +257,10 @@ def score_c2_fans_quality(account: dict[str, Any], xprof=None) -> dict[str, Any]
 
     子项:
       互动真实度  30%  like_per_follower [0.01, 0.05]
-      水军风险    25%  1 - IP集中度 (需评论数据·降级)  #需全量数据
-      评论真实性  15%  engagement_structure 中 level1_pct (需评论)  #需全量数据
-      消费力等级  20%  iPhone占比 * (1 - 低客单价占比) (需星图画像)  #需全量数据
-      地域多元度  10%  1 - 单省份最高占比 (需星图画像)  #需全量数据
+      水军风险    25%  多维综合(IP集中/多样/digg异常/作者互动/回复活跃)
+      评论真实性  15%  level_dist 真实评论占比(level1 主楼占比·楼层结构)
+      消费力等级  20%  iPhone占比 * (1 - 低客单价占比) (星图画像)
+      地域多元度  10%  省份集中度 + 城市层级分布 (星图画像)
     """
     missing: list[str] = []
 
@@ -211,57 +280,44 @@ def score_c2_fans_quality(account: dict[str, Any], xprof=None) -> dict[str, Any]
         s_real = 0.0
         missing.append("avg_like/follower(互动真实度)")
 
-    # 2. 水军风险：需评论 IP 数据·此处从 engagement_structure 推断
-    es = account.get("engagement_structure") or {}
-    es_label = (es if isinstance(es, str) else _g(es, "label") or _g(es, "type") or "")
-    ip_concentration = None  # #需全量数据
-    if ip_concentration is not None:
-        s_bot = _clamp((1 - ip_concentration / 100) * 100)
-    else:
-        # 有争议标签时降低
-        s_bot = 40.0 if ("争议" in es_label or "risk" in es_label.lower()) else 60.0
-        missing.append("ip_concentration #需全量数据(水军风险·评论IP)")
+    # 2. 水军风险：多维综合（account.comment_deep·满血评论深化）
+    bot = _bot_risk(account)
+    s_bot = bot["score"]
+    if bot.get("degraded"):
+        missing.append(bot["missing"])
 
-    # 3. 评论真实性：#需全量数据
-    s_comment = 50.0
-    missing.append("level1_pct #需全量数据(评论层级真实性)")
+    # 3. 评论层级真实性：comment_deep.level_dist 真实评论占比
+    creal = _comment_realness(account)
+    s_comment = creal["score"]
+    if creal.get("degraded"):
+        missing.append(creal["missing"])
 
-    # 4. 消费力等级：从 xprof 粉丝画像取 iPhone 占比
+    # 4. 消费力等级：从 xprof 粉丝画像取 iPhone 占比 × (1-低客单占比)
     iphone_pct: float | None = None
+    device = _portrait_dim(xprof, "fans_portrait", _OT_DEVICE)
+    if device:
+        for name, val in device:
+            if "iPhone" in name or "苹果" in name:
+                iphone_pct = val
+                break
     low_aov_pct: float | None = None
-    if xprof is not None:
-        fp: list = _xattr(xprof, "fans_portrait") or []
-        for item in fp:
-            if not isinstance(item, dict):
-                continue
-            # origin_type=3 设备分布
-            if item.get("type") == 3 or item.get("origin_type") == 3:
-                top5 = item.get("top5") or []
-                for t5 in top5:
-                    if "iPhone" in str(t5.get("name", "")):
-                        try:
-                            iphone_pct = float(t5.get("value") or 0)
-                        except (ValueError, TypeError):
-                            pass
-            # origin_type=12 客单价·0-50占比
-            if item.get("type") == 12 or item.get("origin_type") == 12:
-                top5 = item.get("top5") or []
-                for t5 in top5:
-                    name = str(t5.get("name", ""))
-                    if "0-50" in name or "50以下" in name:
-                        try:
-                            low_aov_pct = float(t5.get("value") or 0)
-                        except (ValueError, TypeError):
-                            pass
+    aov = _portrait_dim(xprof, "fans_portrait", _OT_AOV)
+    if aov:
+        for name, val in aov:
+            if "0-50" in name or "50以下" in name or "0~50" in name:
+                low_aov_pct = val
+                break
     if iphone_pct is not None:
         s_consume = _clamp(iphone_pct * (1 - (low_aov_pct or 0) / 100))
     else:
         s_consume = 40.0
-        missing.append("fans_portrait #需全量数据(消费力等级)")
+        missing.append("fans_portrait.device #需全量数据(消费力等级)")
 
-    # 5. 地域多元度：需画像数据
-    s_geo = 55.0
-    missing.append("fans_portrait.province #需全量数据(地域多元度)")
+    # 5. 地域多元度：省份集中度(HHI) + 城市层级分布
+    geo = _geo_diversity(xprof)
+    s_geo = geo["score"]
+    if geo.get("degraded"):
+        missing.append(geo["missing"])
 
     raw = (
         s_real * 0.30
@@ -279,7 +335,234 @@ def score_c2_fans_quality(account: dict[str, Any], xprof=None) -> dict[str, Any]
     else:
         label = "刷量风险"
 
-    return {"score": score, "label": label, "missing": missing}
+    return {
+        "score": score,
+        "label": label,
+        "bot_risk": bot,        # 水军风险多维细项+证据+结论
+        "comment_realness": creal,
+        "geo_diversity": geo,   # 地域多元多维细项+结论
+        "missing": missing,
+    }
+
+
+# ── C2 子项算法：水军风险（多维综合·评论深化） ───────────────────────────────
+
+def _bot_risk(account: dict[str, Any]) -> dict[str, Any]:
+    """水军风险多维评分（0-100·越高越健康）。
+
+    维度(comment_deep·account.py _build_comment_deep 实测真值)：
+      ip_concentration  最高省份占比(0-1)·越高越像集中刷量      权重 0.30(反向)
+      ip_diversity      unique省份/总评论(0-1)·越高越自然        权重 0.25(正向)
+      avg_digg          评论平均点赞·异常高(>50)疑刷赞           权重 0.15(异常惩罚)
+      author_reply_rate 作者回赞占比(0-1)·适度=真实运营          权重 0.15(正向·过高也疑)
+      reply_active_rate 被回复占比(0-1)·有真实讨论               权重 0.15(正向)
+    无 comment_deep → 降级用 engagement_structure 标签代理。
+    ⚠️阈值(ip_concentration>0.6疑/avg_digg>50疑)待真实样本校准。
+    """
+    cd = _comment_deep(account)
+    evidence: list[str] = []
+    dims: dict[str, Any] = {}
+
+    if not cd or not cd.get("sample_size"):
+        # 降级：engagement_structure 标签
+        es = account.get("engagement_structure") or {}
+        es_label = (es if isinstance(es, str)
+                    else _g(es, "label") or _g(es, "type") or "")
+        ip_c = account.get("ip_concentration")  # account.py 镜像(0-1)
+        if ip_c is not None:
+            s = _clamp((1 - float(ip_c)) * 100)
+            evidence.append(f"评论IP最高省份占比 {float(ip_c) * 100:.0f}%(仅此一维)")
+            return {"score": round(s), "dims": {"ip_concentration": ip_c},
+                    "evidence": evidence,
+                    "verdict": _bot_verdict(s),
+                    "degraded": True,
+                    "missing": "comment_deep #需全量数据(水军风险其余4维)"}
+        s = 40.0 if ("争议" in es_label or "risk" in es_label.lower()) else 60.0
+        return {"score": round(s), "dims": {}, "evidence": ["无评论深化·用互动结构标签代理"],
+                "verdict": _bot_verdict(s), "degraded": True,
+                "missing": "comment_deep #需全量数据(水军风险·评论IP/digg/回复)"}
+
+    n = cd.get("sample_size") or 0
+    parts: list[tuple[float, float]] = []  # (score, weight)
+
+    ip_c = cd.get("ip_concentration")
+    if ip_c is not None:
+        # 0.6+ 高度集中疑刷·0.2- 自然
+        s_ipc = _clamp((1 - _clamp(float(ip_c), 0, 1)) * 100)
+        dims["ip_concentration"] = round(float(ip_c), 2)
+        parts.append((s_ipc, 0.30))
+        if float(ip_c) > 0.6:
+            evidence.append(f"⚠️IP高度集中:最高省份占 {float(ip_c) * 100:.0f}%(>60%疑刷)")
+        else:
+            evidence.append(f"IP分布:最高省份占 {float(ip_c) * 100:.0f}%")
+
+    ip_d = cd.get("ip_diversity")
+    if ip_d is not None:
+        s_ipd = _clamp(float(ip_d) * 100)
+        dims["ip_diversity"] = round(float(ip_d), 2)
+        parts.append((s_ipd, 0.25))
+        evidence.append(f"IP多样性:约 {int(float(ip_d) * n)} 个省份/{n} 评论({float(ip_d) * 100:.0f}%)")
+
+    avg_digg = cd.get("avg_digg")
+    if avg_digg is not None:
+        ad = float(avg_digg)
+        # 正常评论点赞 0-20·>50 疑刷赞·线性惩罚
+        if ad <= 20:
+            s_digg = 100.0
+        elif ad >= 100:
+            s_digg = 10.0
+        else:
+            s_digg = _clamp(100 - (ad - 20) / 80 * 90)
+        dims["avg_digg"] = ad
+        parts.append((s_digg, 0.15))
+        if ad > 50:
+            evidence.append(f"⚠️评论平均点赞 {ad:.0f}(>50疑刷赞)")
+
+    arr = cd.get("author_reply_rate")
+    if arr is not None:
+        a = float(arr)
+        # 0.1-0.5 健康运营·0=冷漠·>0.8 疑自导自演
+        if 0.1 <= a <= 0.5:
+            s_arr = 100.0
+        elif a < 0.1:
+            s_arr = _clamp(a / 0.1 * 70)
+        else:  # >0.5
+            s_arr = _clamp(100 - (a - 0.5) / 0.5 * 50)
+        dims["author_reply_rate"] = round(a, 2)
+        parts.append((s_arr, 0.15))
+        if a > 0.8:
+            evidence.append(f"⚠️作者回赞率 {a * 100:.0f}%偏高(疑自导自演)")
+
+    rar = cd.get("reply_active_rate")
+    if rar is not None:
+        s_rar = _clamp(float(rar) * 200)  # 0.5 → 满分
+        dims["reply_active_rate"] = round(float(rar), 2)
+        parts.append((s_rar, 0.15))
+        evidence.append(f"评论被回复活跃度 {float(rar) * 100:.0f}%")
+
+    if parts:
+        tw = sum(w for _, w in parts)
+        s = sum(sc * w for sc, w in parts) / tw if tw else 50.0
+    else:
+        s = 50.0
+    s = round(_clamp(s))
+    return {"score": s, "dims": dims, "evidence": evidence,
+            "verdict": _bot_verdict(s), "sample_size": n, "degraded": False}
+
+
+def _bot_verdict(s: float) -> str:
+    if s >= 70:
+        return "健康(无明显水军特征)"
+    if s >= 45:
+        return "可疑(部分维度异常·建议二次核验)"
+    return "高风险(多维异常·疑刷量/控评)"
+
+
+# ── C2 子项算法：评论层级真实性 ──────────────────────────────────────────────
+
+def _comment_realness(account: dict[str, Any]) -> dict[str, Any]:
+    """评论层级真实性(0-100)·comment_deep.level_dist。
+
+    level=1 为主楼真实评论·level≥2 为楼中楼(回复)。
+    主楼占比适中(0.6-0.9)=自然讨论；过低=灌水回复堆叠；过高(=1.0)=无互动深度。
+    返回 {score, level_dist, level1_ratio, evidence, verdict}。
+    """
+    cd = _comment_deep(account)
+    if not cd or not cd.get("level_dist"):
+        return {"score": 50.0, "level1_ratio": None, "evidence": [],
+                "verdict": "待评论数据", "degraded": True,
+                "missing": "comment_deep.level_dist #需全量数据(评论层级真实性)"}
+    ld = cd["level_dist"]
+    total = sum(int(v) for v in ld.values()) or 0
+    if total <= 0:
+        return {"score": 50.0, "level1_ratio": None, "evidence": [],
+                "verdict": "评论层级缺失", "degraded": True,
+                "missing": "comment_deep.level_dist #需全量数据(评论层级真实性)"}
+    l1 = int(ld.get("1", 0))
+    l1_ratio = l1 / total
+    # 0.6-0.9 健康区·线性偏离惩罚
+    if 0.6 <= l1_ratio <= 0.9:
+        s = 90.0 + (1 - abs(l1_ratio - 0.75) / 0.15) * 10
+    elif l1_ratio < 0.6:
+        s = _clamp(l1_ratio / 0.6 * 90)
+    else:  # >0.9·无楼中楼深度互动
+        s = _clamp(90 - (l1_ratio - 0.9) / 0.1 * 30)
+    s = round(_clamp(s))
+    ev = [f"主楼评论(level1)占 {l1_ratio * 100:.0f}%({l1}/{total})·楼层分布 {dict(sorted(ld.items()))}"]
+    if l1_ratio > 0.95:
+        verdict = "几乎无楼中楼·互动深度浅"
+    elif l1_ratio < 0.5:
+        verdict = "回复堆叠多·疑控评/水楼"
+    else:
+        verdict = "评论层级自然·真实讨论"
+    return {"score": s, "level_dist": ld, "level1_ratio": round(l1_ratio, 2),
+            "evidence": ev, "verdict": verdict, "degraded": False}
+
+
+# ── C2 子项算法：地域多元度 ──────────────────────────────────────────────────
+
+def _geo_diversity(xprof) -> dict[str, Any]:
+    """地域多元度(0-100)·星图省份分布(origin_type=2) + 城市层级(origin_type=5)。
+
+    多维：
+      省份集中度(HHI)  越低越分散·1-HHI 映射                权重 0.65
+      城市层级分布     高线(一二线)占比·分布越均衡越多元    权重 0.35
+    结论：全国型 / 区域型 / 本地型。
+    返回 {score, top_province, province_hhi, city_levels, evidence, verdict}。
+    """
+    prov = _portrait_dim(xprof, "fans_portrait", _OT_PROVINCE)
+    city_lvl = _portrait_dim(xprof, "fans_portrait", _OT_CITY_LEVEL)
+    if not prov and not city_lvl:
+        return {"score": 55.0, "evidence": [], "verdict": "待画像数据",
+                "degraded": True,
+                "missing": "fans_portrait.province #需全量数据(地域多元度)"}
+
+    evidence: list[str] = []
+    parts: list[tuple[float, float]] = []
+    top_province = None
+    province_hhi = None
+    if prov:
+        top_province, top_val = prov[0]
+        hhi = _herfindahl(prov)
+        province_hhi = round(hhi, 3) if hhi is not None else None
+        if hhi is not None:
+            # HHI: 0.05(极分散)~0.5(单省主导)·1-归一化
+            s_prov = _clamp((1 - _score_range(hhi, 0.05, 0.5) / 100) * 100)
+            parts.append((s_prov, 0.65))
+            evidence.append(
+                f"省份分布:top1={top_province}({top_val:.0f}%)·集中度HHI={province_hhi}")
+
+    city_levels: dict[str, float] = {}
+    if city_lvl:
+        city_levels = {k: v for k, v in city_lvl}
+        # 高线(新一线/一线/二线)占比·越高消费力越强·分布均衡=多元
+        hhi_c = _herfindahl(city_lvl)
+        if hhi_c is not None:
+            s_city = _clamp((1 - _score_range(hhi_c, 0.2, 0.6) / 100) * 100)
+            parts.append((s_city, 0.35))
+            evidence.append(f"城市层级:{'·'.join(f'{k}{v:.0f}%' for k, v in city_lvl[:3])}")
+
+    if parts:
+        tw = sum(w for _, w in parts)
+        s = sum(sc * w for sc, w in parts) / tw if tw else 55.0
+    else:
+        s = 55.0
+    s = round(_clamp(s))
+
+    # 结论：基于省份集中度
+    if province_hhi is not None:
+        if province_hhi <= 0.12:
+            verdict = "全国型(粉丝地域高度分散)"
+        elif province_hhi <= 0.30:
+            verdict = "区域型(若干省份主导)"
+        else:
+            verdict = f"本地型(以{top_province}为核心)"
+    else:
+        verdict = "城市层级多元(省份维缺失)"
+
+    return {"score": s, "top_province": top_province, "province_hhi": province_hhi,
+            "city_levels": city_levels, "evidence": evidence, "verdict": verdict,
+            "degraded": False}
 
 
 # ── C3：商业转化潜力分 ────────────────────────────────────────────────────────
@@ -416,31 +699,11 @@ def score_c4_content(account: dict[str, Any], xprof=None) -> dict[str, Any]:
     s_av = 50.0
     missing.append("av_six #需全量数据(probe视听六层质量)")
 
-    # 4. 竞品互动率差距·#需全量数据(xingtu rec_videos)
-    rec = _xattr(xprof, "rec_videos") or []
-    if rec:
-        rates = []
-        for v in rec:
-            if isinstance(v, dict):
-                r = v.get("interact_rate")
-                if r is not None:
-                    try:
-                        rates.append(float(r))
-                    except (ValueError, TypeError):
-                        pass
-        if rates:
-            avg_rate = sum(rates) / len(rates)
-            # 自身代理：avg_like / follower
-            follower = account.get("follower") or 1
-            self_rate = (float(avg_like) / follower) if avg_like else 0.01
-            ratio = self_rate / max(avg_rate, 0.001)
-            s_comp = _clamp(min(ratio, 2.0) / 2.0 * 100)
-        else:
-            s_comp = 40.0
-            missing.append("rec_videos.interact_rate #需星图数据")
-    else:
-        s_comp = 40.0
-        missing.append("rec_videos #需星图数据(竞品互动率)")
+    # 4. 竞品互动率差距（多维·xprof.rec_interact_rates 已算·robust）
+    comp = _competitor_gap(account, xprof)
+    s_comp = comp["score"]
+    if comp.get("degraded"):
+        missing.append(comp["missing"])
 
     # 5. 话题选择质量：vertical_score [0,1]
     vs = account.get("vertical_score")
@@ -468,7 +731,108 @@ def score_c4_content(account: dict[str, Any], xprof=None) -> dict[str, Any]:
         "视听质量": s_av, "竞品差距": s_comp, "话题质量": s_topic,
     }
     weak = min(parts, key=parts.get)
-    return {"score": score, "weak": weak, "missing": missing}
+    return {"score": score, "weak": weak, "competitor_gap": comp, "missing": missing}
+
+
+# ── C4 子项算法：竞品互动差（多维 + 归因） ───────────────────────────────────
+
+def _competitor_gap(account: dict[str, Any], xprof) -> dict[str, Any]:
+    """竞品互动差(0-100)·xprof.rec_interact_rates(星图代表作互动率·已算) vs 自身。
+
+    多维：
+      相对差距   self_rate / 竞品中位数·>1 占优             权重 0.55
+      绝对水平   自身互动率落在 [0.01,0.08] 行业带的位置     权重 0.25
+      离散惩罚   竞品互动率方差大→赛道波动·稳定性参考        权重 0.20
+    归因：领先/持平/落后 + 落后归因(互动率/分发)。
+    返回 {score, self_rate, comp_median, ratio, evidence, verdict, attribution}。
+    ⚠️阈值(行业互动带[0.01,0.08])待按行业细分校准。
+    """
+    rates = _xattr(xprof, "rec_interact_rates")
+    if not rates:
+        # 兼容旧 raw rec_videos(interact_rate 字段)
+        rec = _xattr(xprof, "rec_videos") or []
+        rates = []
+        for v in rec:
+            if isinstance(v, dict):
+                r = v.get("interact_rate")
+                if r is None and isinstance(v.get("stats"), dict):
+                    r = v["stats"].get("interact_rate")
+                if r is not None:
+                    try:
+                        rates.append(float(r))
+                    except (TypeError, ValueError):
+                        pass
+    valid = []
+    for r in (rates or []):
+        try:
+            valid.append(float(r))
+        except (TypeError, ValueError):
+            continue
+    if not valid:
+        return {"score": 40.0, "self_rate": None, "comp_median": None,
+                "evidence": [], "verdict": "无竞品代表作数据",
+                "attribution": None, "degraded": True,
+                "missing": "rec_interact_rates #需星图数据(竞品互动率)"}
+
+    valid.sort()
+    m = len(valid)
+    comp_median = valid[m // 2] if m % 2 else (valid[m // 2 - 1] + valid[m // 2]) / 2
+
+    avg_like = account.get("avg_like")
+    follower = account.get("follower") or 0
+    self_rate = (float(avg_like) / follower) if (avg_like and follower > 0) else None
+
+    evidence: list[str] = [
+        f"竞品代表作互动率中位数 {comp_median * 100:.2f}%(n={m}·区间 "
+        f"{valid[0] * 100:.2f}%–{valid[-1] * 100:.2f}%)"]
+    parts: list[tuple[float, float]] = []
+    ratio = None
+    attribution = None
+    verdict = "待自身互动率"
+
+    if self_rate is not None:
+        ratio = self_rate / max(comp_median, 1e-4)
+        # 相对差距：ratio 0.5→落后 / 1→持平 / 1.5+→领先
+        s_rel = _clamp(min(ratio, 2.0) / 2.0 * 100)
+        parts.append((s_rel, 0.55))
+        # 绝对水平
+        s_abs = _score_range(self_rate, 0.01, 0.08)
+        parts.append((s_abs, 0.25))
+        evidence.append(f"自身互动率 {self_rate * 100:.2f}%·相对竞品 {ratio:.2f}×")
+        if ratio >= 1.2:
+            verdict = "互动领先竞品"
+            attribution = "内容互动效率高于赛道代表作"
+        elif ratio >= 0.8:
+            verdict = "与竞品持平"
+            attribution = "互动效率赛道中游"
+        else:
+            verdict = "互动落后竞品"
+            # 归因：绝对值低=内容力·分发足但互动差
+            if self_rate < 0.01:
+                attribution = "绝对互动率偏低·内容钩子/完播待提升"
+            else:
+                attribution = "互动率尚可但低于赛道头部·选题/封面差异化不足"
+    else:
+        evidence.append("缺自身 avg_like/follower·仅给竞品基准")
+
+    # 离散惩罚：竞品方差大说明赛道波动·给中性偏高(机会多)
+    if m >= 2:
+        mean_v = sum(valid) / m
+        var = sum((x - mean_v) ** 2 for x in valid) / m
+        cv = (var ** 0.5) / mean_v if mean_v > 0 else 0
+        s_disp = _clamp(50 + min(cv, 1.0) * 30)  # 波动大→机会分
+        parts.append((s_disp, 0.20))
+
+    if parts:
+        tw = sum(w for _, w in parts)
+        s = round(_clamp(sum(sc * w for sc, w in parts) / tw)) if tw else 40
+    else:
+        s = 40
+
+    return {"score": s, "self_rate": round(self_rate, 4) if self_rate else None,
+            "comp_median": round(comp_median, 4), "ratio": round(ratio, 2) if ratio else None,
+            "evidence": evidence, "verdict": verdict, "attribution": attribution,
+            "degraded": False}
 
 
 # ── C5：赛道竞争力分 ──────────────────────────────────────────────────────────
@@ -490,9 +854,11 @@ def score_c5_track(account: dict[str, Any], xprof=None) -> dict[str, Any]:
     if vs is None:
         missing.append("vertical_score(垂直度)")
 
-    # 2. 赛道蓝海度·#需全量数据
-    s_blue_ocean = 50.0
-    missing.append("competition_density #需全量数据(赛道蓝海度·话题内容数)")
+    # 2. 赛道蓝海度（account.track_competition·搜行业词结果密度）
+    blue = _blue_ocean(account)
+    s_blue_ocean = blue["score"]
+    if blue.get("degraded"):
+        missing.append(blue["missing"])
 
     # 3. 赛道商业价值：avg_value 为行业均值指数
     shopping_avg = _idx(xprof, "link_shopping_index", "avg_value")
@@ -529,7 +895,53 @@ def score_c5_track(account: dict[str, Any], xprof=None) -> dict[str, Any]:
     else:
         track_label = "无路"
 
-    return {"score": score, "track": track_label, "missing": missing}
+    return {"score": score, "track": track_label, "blue_ocean": blue, "missing": missing}
+
+
+# ── C5 子项算法：赛道蓝海度（搜索结果密度） ──────────────────────────────────
+
+def _blue_ocean(account: dict[str, Any]) -> dict[str, Any]:
+    """赛道蓝海度(0-100·越高越蓝海)·account.track_competition。
+
+    track_competition(account.py _track_competition 实测)：
+      result_count  当页结果数(竞争密度代理·满页通常 18)
+      has_more      是否还有更多(海量竞争=红海信号)
+    多维：
+      结果密度   result_count 越少越蓝海·满页 18 → 红海           权重 0.6
+      海量信号   has_more=True → 红海惩罚                          权重 0.4
+    结论：蓝海/平衡/红海 + 机会窗口提示。
+    ⚠️阈值(满页18·result_count分档)待跨赛道采样校准。
+    """
+    tc = account.get("track_competition")
+    if not isinstance(tc, dict) or tc.get("result_count") is None:
+        return {"score": 50.0, "evidence": [], "verdict": "待赛道搜索数据",
+                "degraded": True,
+                "missing": "track_competition #需全量数据(赛道蓝海度·搜索结果密度)"}
+    rc = int(tc.get("result_count") or 0)
+    has_more = bool(tc.get("has_more"))
+    kw = tc.get("keyword") or "行业词"
+
+    # 结果密度：0 结果→蓝海满分·18 满页→红海低分
+    s_density = _clamp((1 - min(rc, 18) / 18) * 100)
+    # 海量信号
+    s_more = 30.0 if has_more else 100.0
+    s = round(_clamp(s_density * 0.6 + s_more * 0.4))
+
+    if s >= 70:
+        verdict = "蓝海(竞争稀疏·有先发机会窗口)"
+        window = "建议加速卡位·内容供给不足"
+    elif s >= 45:
+        verdict = "平衡(竞争适中)"
+        window = "差异化定位可突围"
+    else:
+        verdict = "红海(竞争饱和)"
+        window = "需强差异化或细分长尾切入"
+
+    evidence = [
+        f"搜索'{kw}':当页 {rc} 条结果·{'有更多(海量竞争)' if has_more else '无更多页'}"]
+    return {"score": s, "keyword": kw, "result_count": rc, "has_more": has_more,
+            "evidence": evidence, "verdict": verdict, "window": window,
+            "degraded": False}
 
 
 # ── C6：破圈能力分 ────────────────────────────────────────────────────────────
@@ -565,13 +977,17 @@ def score_c6_breakout(account: dict[str, Any], xprof=None) -> dict[str, Any]:
         s_distrib = 20.0
         missing.append("avg_play/avg_like(分发放大倍数)")
 
-    # 2. 粉-观年龄错位·#需全量数据(双画像比对)
-    s_age_gap = 50.0
-    missing.append("fans_portrait/audience_portrait #需全量数据(年龄错位)")
+    # 2. 粉-观年龄错位（双画像同维比对·破圈方向）
+    age_gap = _portrait_mismatch(xprof, _OT_AGE, "年龄")
+    s_age_gap = age_gap["score"]
+    if age_gap.get("degraded"):
+        missing.append(age_gap["missing"])
 
-    # 3. 粉-观地域错位·#需全量数据
-    s_geo_gap = 50.0
-    missing.append("fans_portrait/audience_portrait #需全量数据(地域错位)")
+    # 3. 粉-观地域错位（省份维）
+    geo_gap = _portrait_mismatch(xprof, _OT_PROVINCE, "省份")
+    s_geo_gap = geo_gap["score"]
+    if geo_gap.get("degraded"):
+        missing.append(geo_gap["missing"])
 
     # 4. 传播率：avg_like/follower [0.005, 0.1]
     if avg_like is not None and follower > 0:
@@ -601,7 +1017,72 @@ def score_c6_breakout(account: dict[str, Any], xprof=None) -> dict[str, Any]:
     else:
         breakout_type = "账号级内循环"
 
-    return {"score": score, "type": breakout_type, "missing": missing}
+    # 破圈方向汇总（向哪类人群破圈）
+    directions = []
+    for g in (age_gap, geo_gap):
+        if not g.get("degraded") and g.get("breakout_to"):
+            directions.append(g["breakout_to"])
+
+    return {"score": score, "type": breakout_type,
+            "age_mismatch": age_gap, "geo_mismatch": geo_gap,
+            "breakout_directions": directions, "missing": missing}
+
+
+# ── C6 子项算法：粉-观画像错位（破圈方向） ───────────────────────────────────
+
+def _portrait_mismatch(xprof, origin_type: int, dim_name: str) -> dict[str, Any]:
+    """粉丝画像 vs 观众画像同维错位度(0-100·错位越大破圈分越高)。
+
+    fans_portrait(粉丝) vs audience_portrait(实际观看者) 同 origin_type 维。
+    错位 = 两分布的 L1 距离(各 key 占比差绝对值和 / 2·范围 0-1)。
+    多维：
+      分布错位度  L1 距离·越大说明观众≠粉丝(破圈)        权重 0.7
+      top1 异同   top1 人群是否切换                       权重 0.3
+    破圈方向 = 观众侧占比显著高于粉丝侧的 top 人群。
+    返回 {score, l1_distance, fans_top, aud_top, breakout_to, evidence, verdict}。
+    """
+    fans = _portrait_dim(xprof, "fans_portrait", origin_type)
+    aud = _portrait_dim(xprof, "audience_portrait", origin_type)
+    if not fans or not aud:
+        return {"score": 50.0, "evidence": [], "verdict": f"待双画像({dim_name})",
+                "degraded": True,
+                "missing": f"fans_portrait/audience_portrait.{dim_name} #需全量数据({dim_name}错位)"}
+
+    fan_map = {k: v for k, v in fans}
+    aud_map = {k: v for k, v in aud}
+    keys = set(fan_map) | set(aud_map)
+    # L1 距离(占比差·百分比→0-1)
+    l1 = sum(abs(fan_map.get(k, 0) - aud_map.get(k, 0)) for k in keys) / 200.0
+    l1 = min(l1, 1.0)
+    s_dist = _clamp(_score_range(l1, 0.05, 0.5))
+
+    fans_top = fans[0][0]
+    aud_top = aud[0][0]
+    top_switch = fans_top != aud_top
+    s_top = 100.0 if top_switch else 20.0
+
+    s = round(_clamp(s_dist * 0.7 + s_top * 0.3))
+
+    # 破圈方向：观众占比 - 粉丝占比 最大正差的人群
+    gains = sorted(((k, aud_map.get(k, 0) - fan_map.get(k, 0)) for k in keys),
+                   key=lambda t: -t[1])
+    breakout_to = None
+    if gains and gains[0][1] > 3:  # 观众侧高出>3pct 才算方向
+        breakout_to = f"{dim_name}:{gains[0][0]}(+{gains[0][1]:.0f}pct)"
+
+    evidence = [f"{dim_name} 粉丝top={fans_top}·观众top={aud_top}·分布错位 L1={l1:.2f}"]
+    if breakout_to:
+        evidence.append(f"破圈方向→{breakout_to}")
+    if top_switch:
+        verdict = f"{dim_name}破圈(观众主力≠粉丝主力)"
+    elif l1 > 0.25:
+        verdict = f"{dim_name}部分外溢(top一致但结构偏移)"
+    else:
+        verdict = f"{dim_name}精准(观众≈粉丝)"
+
+    return {"score": s, "l1_distance": round(l1, 2), "fans_top": fans_top,
+            "aud_top": aud_top, "top_switch": top_switch, "breakout_to": breakout_to,
+            "evidence": evidence, "verdict": verdict, "degraded": False}
 
 
 # ── C7：商业价值评级 ──────────────────────────────────────────────────────────
@@ -708,13 +1189,24 @@ def score_c8_private(account: dict[str, Any], xprof=None) -> dict[str, Any]:
             s_collect = 20.0
             missing.append("avg_collect #需全量数据(收藏粉丝比)")
 
-    # 3. 私域意图评论率·#需全量数据
-    s_intent = 40.0
-    missing.append("comment_keywords #需全量数据(私域意图评论率)")
+    # 3. 私域意图评论率（comment_deep.top_keywords 命中私域意图词）
+    intent = _private_intent(account)
+    s_intent = intent["score"]
+    if intent.get("degraded"):
+        missing.append(intent["missing"])
 
-    # 4. 城市集中度·#需全量数据
-    s_city = 50.0
-    missing.append("fans_portrait.city #需全量数据(粉丝城市集中度)")
+    # 4. 城市集中度（私域偏好本地集中·星图城市维 origin_type=8）
+    city = _portrait_dim(xprof, "fans_portrait", _OT_CITY)
+    if city:
+        hhi_city = _herfindahl(city)
+        if hhi_city is not None:
+            # 私域：城市集中(HHI高)反而利于本地社群·正向映射
+            s_city = _clamp(_score_range(hhi_city, 0.05, 0.4))
+        else:
+            s_city = 50.0
+    else:
+        s_city = 50.0
+        missing.append("fans_portrait.city #需全量数据(粉丝城市集中度)")
 
     # 5. 高互动内容占比·#需全量数据
     s_high_engage = 40.0
@@ -737,7 +1229,85 @@ def score_c8_private(account: dict[str, Any], xprof=None) -> dict[str, Any]:
     else:
         path = "先建内容积累·私域尚早"
 
-    return {"score": score, "path": path, "missing": missing}
+    return {"score": score, "path": path, "private_intent": intent, "missing": missing}
+
+
+# ── C8 子项算法：私域意图评论率 ──────────────────────────────────────────────
+
+# 私域意图词典(分类·命中即计私域意图评论)。⚠️词典待按行业扩充校准。
+_INTENT_LEXICON = {
+    "导流加微": ["加微", "微信", "vx", "v信", "威信", "+v", "薇信", "联系方式", "怎么联系"],
+    "咨询购买": ["怎么买", "哪里买", "多少钱", "价格", "链接", "求购", "想要", "下单", "购买",
+                "怎么卖", "店铺", "橱窗"],
+    "求课求教": ["求教程", "教程", "课程", "报名", "怎么学", "求带", "拜师", "想学"],
+    "私信意向": ["私信", "发我", "扣1", "扣我", "求", "蹲", "想问"],
+}
+
+
+def _private_intent(account: dict[str, Any]) -> dict[str, Any]:
+    """私域意图评论率(0-100)·comment_deep.top_keywords 命中私域意图词。
+
+    top_keywords = [{word,count}]（account.py 中文 n-gram 高频词·频次≥2）。
+    多维：
+      意图词覆盖   命中意图词的去重词数 / top 词数               权重 0.5
+      意图词词频   命中词总频次 / 全部 top 词频次                权重 0.5
+    分类拆分(导流加微/咨询购买/求课求教/私信意向)·导流加微权重最高。
+    返回 {score, hit_categories, hit_words, intent_ratio, evidence, verdict}。
+    ⚠️词典与阈值待真实评论样本校准。
+    """
+    cd = _comment_deep(account)
+    if not cd or not cd.get("top_keywords"):
+        return {"score": 40.0, "evidence": [], "verdict": "待评论关键词",
+                "degraded": True,
+                "missing": "comment_deep.top_keywords #需全量数据(私域意图评论率)"}
+    kws = cd["top_keywords"]
+    total_words = len(kws)
+    total_freq = sum(int(k.get("count") or 0) for k in kws) or 0
+
+    hit_words: list[dict] = []
+    hit_categories: dict[str, int] = {}
+    hit_freq = 0
+    for k in kws:
+        w = str(k.get("word") or "")
+        ct = int(k.get("count") or 0)
+        for cat, lex in _INTENT_LEXICON.items():
+            if any(token in w for token in lex):
+                hit_words.append({"word": w, "count": ct, "category": cat})
+                hit_categories[cat] = hit_categories.get(cat, 0) + 1
+                hit_freq += ct
+                break
+
+    if total_words == 0:
+        return {"score": 40.0, "evidence": [], "verdict": "评论无高频词",
+                "degraded": True,
+                "missing": "comment_deep.top_keywords #需全量数据(私域意图评论率)"}
+
+    cover = len(hit_words) / total_words
+    freq_ratio = (hit_freq / total_freq) if total_freq else 0.0
+    base = (_clamp(cover * 100) * 0.5 + _clamp(freq_ratio * 100) * 0.5)
+    # 导流加微出现 → 强私域信号·加成
+    if "导流加微" in hit_categories:
+        base = min(base + 15, 100)
+    s = round(_clamp(base))
+
+    cats = "·".join(f"{c}×{n}" for c, n in hit_categories.items()) or "无"
+    evidence = [
+        f"top{total_words}高频词命中私域意图 {len(hit_words)} 个(覆盖 {cover * 100:.0f}%·"
+        f"词频占 {freq_ratio * 100:.0f}%)·分类:{cats}"]
+    if hit_words:
+        evidence.append("命中词:" + "、".join(
+            f"{h['word']}({h['count']})" for h in hit_words[:5]))
+
+    if "导流加微" in hit_categories or s >= 60:
+        verdict = "强私域意图(评论区有主动加微/购买诉求)"
+    elif s >= 35:
+        verdict = "中等私域意图(有咨询/求教倾向)"
+    else:
+        verdict = "弱私域意图(评论以泛互动为主)"
+
+    return {"score": s, "hit_categories": hit_categories, "hit_words": hit_words,
+            "intent_ratio": round(cover, 2), "freq_ratio": round(freq_ratio, 2),
+            "evidence": evidence, "verdict": verdict, "degraded": False}
 
 
 # ── 汇总接口 ──────────────────────────────────────────────────────────────────
@@ -797,6 +1367,34 @@ def render_composite_section(account: dict[str, Any], xprof=None) -> str:
         f"系列化率 {bd['serialization']}分",
         "",
     ]
+
+    # 深化子项洞察（仅渲染已接通真实数据·非降级的子项）
+    insight_specs = [
+        ("C2 水军风险", c2.get("bot_risk")),
+        ("C2 评论层级真实性", c2.get("comment_realness")),
+        ("C2 地域多元度", c2.get("geo_diversity")),
+        ("C4 竞品互动差", c4.get("competitor_gap")),
+        ("C5 赛道蓝海度", c5.get("blue_ocean")),
+        ("C6 年龄破圈", c6.get("age_mismatch")),
+        ("C6 地域破圈", c6.get("geo_mismatch")),
+        ("C8 私域意图", c8.get("private_intent")),
+    ]
+    rendered = [(t, d) for t, d in insight_specs
+                if isinstance(d, dict) and not d.get("degraded")]
+    if rendered:
+        lines.append("### 深化子项洞察（接通真实数据）")
+        for title, d in rendered:
+            sc = d.get("score")
+            verdict = d.get("verdict", "")
+            head = f"- **{title}** {sc}分 · {verdict}"
+            lines.append(head)
+            for ev in (d.get("evidence") or [])[:3]:
+                lines.append(f"  - {ev}")
+        # 破圈方向汇总
+        dirs = c6.get("breakout_directions") or []
+        if dirs:
+            lines.append(f"- **破圈方向汇总**：{' / '.join(dirs)}")
+        lines.append("")
 
     # 降级说明汇总
     all_missing: list[str] = []
