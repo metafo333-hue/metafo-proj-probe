@@ -68,3 +68,33 @@ def test_registry_complete():
     assert set(sc.REGISTRY) == {"B1", "C5", "D2", "E3"}
     for fn in sc.REGISTRY.values():
         assert callable(fn)
+
+
+# ── P2-a: 场景过八闸出可信度三标签（护城河）────────────────────
+def test_scenario_carries_conclusion_label():
+    """每个情报包必须带可信度三标签（probe 价值：带可信度的结论·非裸数据）。"""
+    out = sc.scenario_b1_company(
+        "Acme Inc",
+        _oc=lambda q: [{"name": q, "status": "active"}],
+        _edgar=lambda q: [{"filing": "10-K"}],
+        _wiki=lambda q: [{"title": q}],
+    )
+    cl = out["conclusion_label"]
+    assert set(cl) >= {"source_reliability", "confidence_level", "evidence_strength"}
+    assert cl["confidence_level"]                       # 非空
+    assert "trace_id" in cl                             # 可回放溯源
+
+
+def test_enrich_audit_no_sources():
+    """无可用源 → 标「不可出」，不伪造可信度。"""
+    pkt = {"query": "x", "scenario": "T", "partial": True, "findings": []}
+    out = sc.enrich_with_audit(pkt)
+    assert out["conclusion_label"]["confidence_level"] == "无源·不可出"
+
+
+def test_scenario_audit_can_be_skipped():
+    """audit=False（_assemble 直传）时不过八闸，省成本。"""
+    from app.datasources.orchestrator import SourceSpec, fan_out
+    out = fan_out([SourceSpec("s", lambda q: [1], ("q",))])
+    pkt = sc._assemble("T", "q", ["D1"], out, audit=False)
+    assert "conclusion_label" not in pkt
