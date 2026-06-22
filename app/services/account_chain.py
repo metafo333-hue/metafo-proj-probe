@@ -114,6 +114,50 @@ def _agg_video_tags(works: list) -> list[str]:
     return [t for t, _ in sorted(counts.items(), key=lambda x: -x[1])[:3]]
 
 
+def _harness_collect(sec_uid: str, key: str) -> dict:
+    """采集账号(profile+作品)→ AccountProbe.to_dict 格式。
+
+    优先 P0 harness 并发采集(三锚点缓存·复诊近 0 成本)·复用 combo 解析函数;
+    任一失败 → 回退原 AccountProbe 串行(降级·保证不退化)。
+    只取 profile/posts 两端点(kol 由 xingtu_profile 单独管·共享缓存不重复扣)。
+    """
+    try:
+        import asyncio
+        from combo_deep_probe.account_probe import diagnose, parse_profile, parse_works
+        from combo_deep_probe.cache import ResponseCache
+        from combo_deep_probe.harness import fetch_endpoints_async
+        specs = [
+            ("profile", "/api/v1/douyin/web/handler_user_profile", {"sec_user_id": sec_uid}),
+            ("posts", "/api/v1/douyin/web/fetch_user_post_videos",
+             {"sec_user_id": sec_uid, "max_cursor": 0, "count": 20}),
+        ]
+        cache = ResponseCache(cache_dir="data/cache", ttl_sec=86400)
+        coro = fetch_endpoints_async(specs, key, cache=cache)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+            res = loop.run_until_complete(coro)
+        else:
+            res = asyncio.run(coro)
+        pd = (res.get("profile") or {}).get("data")
+        ld = (res.get("posts") or {}).get("data")
+        if pd and ld:
+            profile = parse_profile(pd)
+            works = parse_works(ld)
+            diag = diagnose(works, follower_count=profile.get("follower_count"), profile=profile)
+            return {"profile": profile, "diagnosis": diag, "works_analyzed": len(works),
+                    "works_sample": works[:10], "meta": {"via": "harness"}}
+    except Exception as _e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("harness 采集降级 AccountProbe: %s", _e)
+    from combo_deep_probe import build_account_probe
+    return build_account_probe(tikhub_key=key).analyze(sec_user_id=sec_uid, count=20).to_dict()
+
+
 def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                        with_audiovisual: bool = True,
                        competitor_urls: list[str] | None = None,
@@ -204,8 +248,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         return {"ok": False, "error": "拿不到作者 sec_uid(无法多维)", "video": video}
 
     # 2. 账号 + 兄弟视频(works)
-    rep = build_account_probe(tikhub_key=key).analyze(sec_user_id=sec_uid, count=20)
-    rd = rep.to_dict()
+    rd = _harness_collect(sec_uid, key)   # P0 harness 并发+缓存·失败回退 AccountProbe
     # 字段契约校验：combo-deep-probe to_dict() 必须返回这四个顶层键（版本漂移早发现）
     _CONTRACT_FIELDS = ("profile", "diagnosis", "works_sample", "works_analyzed")
     _missing_fields = [f for f in _CONTRACT_FIELDS if f not in rd]
