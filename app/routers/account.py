@@ -365,11 +365,17 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
                          "top5": [{"name": k, "value": v} for k, v in (d.get("top5") or [])]}
                         for d in (dims or [])]
 
+            def _ix(it):  # IndexItem → dict·保 avg_value+rank_percent(防 C5 rank/C3/C7 降级)
+                return {"avg_value": it.avg_value,
+                        "rank_percent": it.rank_percent} if it else None
+
             xprof_adapter = {
                 "expect_vv": xp.expect_vv, "industry_tags": xp.industry_tags,
                 "industry_tag": (xp.industry_tags or [None])[0], "price_info": xp.prices,
-                "link_shopping_index": {"avg_value": _lsi.avg_value} if _lsi else None,
+                "link_shopping_index": _ix(_lsi),                 # 含 rank_percent(C5 赛道排名)
                 "link_shopping_index_avg": _lsi.avg_value if _lsi else None,
+                "link_convert_index": _ix(xp.link_convert_index),  # C3 转化指数
+                "link_star_index": _ix(xp.link_star_index),        # C7 明星指数
                 "fans_portrait": _p2c(xp.fans_portrait),          # 满血:消费力/地域
                 "audience_portrait": _p2c(xp.audience_portrait),  # 满血:双画像破圈
                 "rec_videos": xp.rec_videos,                      # 满血:竞品互动(raw·composite c4 直读 interact_rate)

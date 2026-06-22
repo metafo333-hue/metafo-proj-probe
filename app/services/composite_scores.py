@@ -1455,7 +1455,8 @@ def score_c11_fans_insight(account: dict[str, Any], xprof=None) -> dict[str, Any
             f"{a.get('name')}({_fmt_w(a.get('fans'))})" for a in top_acct[:4]))
     if top_search:
         ev.append("粉丝搜索需求:" + " ".join(s.get("word") for s in top_search if s.get("word")))
-    verdict = f"{dims}/3维可洞察·{len(accts)}同关账号·{len(searches)}搜索词"
+    _tp = f"·{len(topics)}兴趣话题" if topics else ""
+    verdict = f"{dims}/3维可洞察·{len(accts)}同关账号·{len(searches)}搜索词{_tp}"
     return {"score": score, "verdict": verdict, "evidence": ev,
             "competitor_accounts": top_acct, "missing": []}
 
@@ -1476,10 +1477,10 @@ def score_c12_monetize(account: dict[str, Any], xprof=None) -> dict[str, Any]:
         ev.append(f"可接商单 {mission} 个" if mission
                   else "当前无可接商单(赛道商单稀疏或账号未达准入)")
     my_like, bench_like = account.get("avg_like"), bench.get("avg_like")
-    if bench_like and my_like:
+    if bench_like and my_like is not None:   # bench_like 须非0(防除零)·my_like 可为0
         ratio = my_like / bench_like
         parts.append(_clamp(min(100, ratio * 50)))
-        ev.append(f"赞均值 {my_like:.0f} vs 同类 {bench_like:.0f}"
+        ev.append(f"赞均值 {my_like:.0f} vs 同类 {bench_like:.0f} "
                   f"({'高' if ratio >= 1 else '低'}于均值 {ratio:.1f}x)")
     if lsi is not None:
         parts.append(_clamp(float(lsi)))
@@ -1506,14 +1507,14 @@ def score_c13_competitor_pos(account: dict[str, Any], xprof=None) -> dict[str, A
 
     parts, ev = [], []
     comp_fans = [c.get("fans") for c in comps if c.get("fans")]
-    if comp_fans and my_fans:
+    if comp_fans and my_fans is not None:
         below = sum(1 for f in comp_fans if f < my_fans)
         pct = below / len(comp_fans) * 100
         parts.append(_clamp(pct))
         pos = "领先" if pct >= 66 else "跟随" if pct >= 33 else "落后"
         ev.append(f"粉丝量超过 {below}/{len(comp_fans)} 同关竞品({pos}·{pct:.0f}%位)")
     my_like, bench_like = account.get("avg_like"), bench.get("avg_like")
-    if bench_like and my_like:
+    if bench_like and my_like is not None:   # bench_like 须非0(防除零)
         ratio = my_like / bench_like
         parts.append(_clamp(min(100, ratio * 50)))
         ev.append(f"互动 {ratio:.1f}x 赛道均值")
@@ -1534,7 +1535,9 @@ def score_c14_dark_horse(account: dict[str, Any], xprof=None) -> dict[str, Any]:
     数据源: board_low_fan/board_high_fan/board_topics(billboard POST 榜单)。
     """
     import re
-    horse = (account.get("board_low_fan") or []) + (account.get("board_high_fan") or [])
+    # 黑马样本=4 视频榜(低粉爆款/涨粉/高完播/高赞)·话题标签全提取·不浪费任何榜采集
+    horse = ((account.get("board_low_fan") or []) + (account.get("board_high_fan") or [])
+             + (account.get("board_high_play") or []) + (account.get("board_high_like") or []))
     low_fan = account.get("board_low_fan") or []
     topics = account.get("board_topics") or []
     if not horse and not topics:
