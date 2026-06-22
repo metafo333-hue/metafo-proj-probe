@@ -633,17 +633,28 @@ mark {
 
 .toc-item {
   display: block;
-  padding: 6px 14px;
-  font-size: 12px; color: var(--text-gray);
+  padding: 5px 12px;
+  font-size: 12px; font-weight: 500; color: var(--text-gray);
   cursor: pointer;
   border-left: 2px solid transparent;
-  transition: all .12s; line-height: 1.4;
+  transition: background .12s, color .12s;
+  line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .toc-item:hover, .toc-item.active {
   color: var(--blue); background: #EFF6FF;
   border-left-color: var(--blue);
 }
-.toc-item.h3 { padding-left: 24px; font-size: 11px; color: var(--text-muted); }
+/* 二级标题：缩进 + 减弱 + 常规字重，与一级拉开层级 */
+.toc-item.h3 {
+  padding-left: 26px; font-size: 11px; font-weight: 400; color: var(--text-muted);
+  position: relative;
+}
+.toc-item.h3::before {
+  content: ''; position: absolute; left: 15px; top: 50%;
+  width: 4px; height: 1px; background: var(--border-strong, #CBD5E1);
+}
+.toc-item.h3:hover, .toc-item.h3.active { color: var(--blue); }
 
 /* 唯一下载按钮 */
 .download-btn {
@@ -1677,7 +1688,12 @@ function buildTocItems(headings, tocEl, scrollEl, makeScrollFn) {
     const item = document.createElement('div');
     const tag = h.tagName.toLowerCase();
     item.className = 'toc-item' + (tag === 'h3' || tag === 'h4' ? ' h3' : '');
-    item.textContent = (h.textContent.replace(/^[#·\s]+/, '').trim() || '(无标题)').slice(0, 26);
+    // 清洗：去 # · 前缀 + 去开头 emoji/符号，留纯标题，CSS 负责单行省略
+    let txt = (h.textContent || '').replace(/^[#·\s]+/, '');
+    txt = txt.replace(/^(?:[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}️‍\s]+)/u, '').trim();
+    txt = txt || '(无标题)';
+    item.textContent = txt;
+    item.title = txt;   // hover 显示完整标题
     item.addEventListener('click', () => {
       scrollFn();
       tocEl.querySelectorAll('.toc-item').forEach(el => el.classList.remove('active'));
