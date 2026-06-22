@@ -14,7 +14,8 @@ def test_list_scenarios():
     body = r.json()
     assert body["code"] == 0
     keys = {s["key"] for s in body["data"]["scenarios"]}
-    assert keys == {"B1", "C5", "D2", "E3"}
+    assert {"B1", "C5", "D2", "E3"} <= keys      # 含 4 详细场景
+    assert len(keys) == 13                        # 扩至 13 多源场景
 
 
 def test_unknown_scenario():

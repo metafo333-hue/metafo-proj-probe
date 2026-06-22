@@ -206,10 +206,108 @@ def scenario_e3_source(topic: str, *, audit: bool = True,
                      fan_out(specs, default_timeout=timeout), audit=audit)
 
 
-# 场景注册表（供路由/MetaAsk 意图路由按 key 调度）
-REGISTRY = {
+# ── 声明式简单场景（真适配器支撑·批量扩 27 场景广度）──────────────
+# 每条 source: (source_id, module, func, domain, pass_query)
+# pass_query=False → 适配器无 query 参数（宏观数据类·调用忽略 query）
+import importlib
+
+_SIMPLE_SCENARIOS: dict[str, dict[str, Any]] = {
+    "A4": {"label": "A4·趋势雷达", "domains": ["D6", "D7"], "sources": [
+        ("gdelt", "gdelt", "search", "D6", True),
+        ("hackernews", "hackernews", "search", "D7", True),
+        ("searxng", "searxng", "search", "D6", True)]},
+    "B3": {"label": "B3·行业赛道扫描", "domains": ["D4", "D5", "D1"], "sources": [
+        ("gdelt", "gdelt", "search", "D4", True),
+        ("openalex", "openalex", "search_works", "D5", True),
+        ("wikipedia", "wikipedia", "search", "D1", True)]},
+    "B6": {"label": "B6·品牌舆情监测", "domains": ["D6", "D7"], "sources": [
+        ("gdelt", "gdelt", "search", "D6", True),
+        ("reddit", "reddit_rss", "search", "D7", True)]},
+    "C1": {"label": "C1·企业背调", "domains": ["D4", "D6"], "sources": [
+        ("opencorporates", "opencorporates", "search_company", "D4", True),
+        ("edgar", "edgar", "company_filings", "D6", True)]},
+    "D1": {"label": "D1·深度调研", "domains": ["D1", "D5", "D6"], "sources": [
+        ("searxng", "searxng", "search", "D1", True),
+        ("wikipedia", "wikipedia", "search", "D5", True),
+        ("hackernews", "hackernews", "search", "D6", True)]},
+    "D3": {"label": "D3·学术专利情报", "domains": ["D5"], "sources": [
+        ("openalex", "openalex", "search_works", "D5", True),
+        ("arxiv", "arxiv", "search", "D5", True)]},
+    "D4": {"label": "D4·政策宏观情报", "domains": ["D6", "D10"], "sources": [
+        ("worldbank", "worldbank", "indicators_search", "D6", True),
+        ("us_treasury", "us_treasury", "avg_interest_rates", "D10", False),
+        ("frankfurter", "frankfurter", "latest", "D10", False)]},
+    "E1": {"label": "E1·事实核查", "domains": ["D6", "D1"], "sources": [
+        ("searxng", "searxng", "search", "D6", True),
+        ("wikipedia", "wikipedia", "search", "D1", True),
+        ("gdelt", "gdelt", "search", "D6", True)]},
+    "E4": {"label": "E4·谣言钓鱼识别", "domains": ["D3", "D6"], "sources": [
+        ("virustotal", "virustotal", "lookup", "D3", True),
+        ("searxng", "searxng", "search", "D6", True)]},
+}
+
+
+def _bind_adapter(module: str, func: str, query: str, pass_query: bool) -> Callable:
+    """惰性绑定 public 适配器为无参 callable（导入失败由 OS1 隔离为 error）。"""
+    def _call() -> Any:
+        m = importlib.import_module(f"app.datasources.public.{module}")
+        f = getattr(m, func)
+        return f(query) if pass_query else f()
+    return _call
+
+
+def run_simple_scenario(key: str, query: str, *, audit: bool = True,
+                        timeout: float = 8.0) -> dict[str, Any]:
+    """声明式简单场景统一运行器（复用 OS1 扇出 + 八闸）。"""
+    cfg = _SIMPLE_SCENARIOS[key]
+    specs = [
+        SourceSpec(sid, _bind_adapter(mod, fn, query, pq), domain=dom, timeout=timeout)
+        for (sid, mod, fn, dom, pq) in cfg["sources"]
+    ]
+    return _assemble(cfg["label"], query, cfg["domains"],
+                     fan_out(specs, default_timeout=timeout), audit=audit)
+
+
+def _make_simple(key: str) -> Callable:
+    def _fn(query: str, *, audit: bool = True, timeout: float = 8.0) -> dict[str, Any]:
+        return run_simple_scenario(key, query, audit=audit, timeout=timeout)
+    _fn.__name__ = f"scenario_{key.lower()}"
+    return _fn
+
+
+# 场景注册表（详细场景 + 声明式简单场景·供路由/MetaAsk 意图路由按 key 调度）
+REGISTRY: dict[str, Callable] = {
     "B1": scenario_b1_company,
     "C5": scenario_c5_compliance,
     "D2": scenario_d2_tech,
     "E3": scenario_e3_source,
+    **{k: _make_simple(k) for k in _SIMPLE_SCENARIOS},
 }
+
+
+# ── 27 场景诚实覆盖账（真源·防"宣称全覆盖"）──────────────────────
+# status: backed=多源场景已跑通 · atrack=A赛道抖音管线(account_chain) · blocked=缺适配器/PIPL
+COVERAGE_27 = {
+    # A 自媒体（A1-A7 走 account_chain 抖音管线·已建）
+    "A1": "atrack", "A2": "atrack", "A3": "atrack", "A4": "backed",
+    "A5": "atrack", "A6": "atrack", "A7": "atrack",
+    # B 商业
+    "B1": "backed", "B2": "blocked:builtwith/similarweb 无适配器", "B3": "backed",
+    "B4": "blocked:keepa 无适配器", "B5": "blocked:appstore 无顶层函数", "B6": "backed",
+    # C 尽调
+    "C1": "backed", "C2": "blocked:人物背调涉PIPL·暂不开", "C3": "blocked:文档上传未接",
+    "C4": "blocked:批量端点未建", "C5": "backed",
+    # D 调研
+    "D1": "backed", "D2": "backed", "D3": "backed", "D4": "backed",
+    "D5": "blocked:docling 文档上传未接",
+    # E 核查
+    "E1": "backed", "E2": "blocked:反向图搜无适配器", "E3": "backed", "E4": "backed",
+}
+
+
+def coverage_summary() -> dict[str, Any]:
+    from collections import Counter
+    c = Counter(v.split(":")[0] for v in COVERAGE_27.values())
+    return {"total": len(COVERAGE_27), **dict(c),
+            "addressed": c["backed"] + c["atrack"],
+            "multi_source_backed": [k for k, v in COVERAGE_27.items() if v == "backed"]}

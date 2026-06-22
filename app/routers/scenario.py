@@ -25,11 +25,19 @@ _DESC = {
 }
 
 
+def _desc(key: str) -> str:
+    if key in _DESC:
+        return _DESC[key]
+    cfg = scenarios._SIMPLE_SCENARIOS.get(key)
+    return cfg["label"] if cfg else ""
+
+
 @router.get("/scenario")
 def list_scenarios() -> dict:
     return {"code": 0, "msg": "ok",
-            "data": {"scenarios": [{"key": k, "desc": _DESC.get(k, "")}
-                                   for k in scenarios.REGISTRY]}}
+            "data": {"scenarios": [{"key": k, "desc": _desc(k)}
+                                   for k in scenarios.REGISTRY],
+                     "coverage_27": scenarios.coverage_summary()}}
 
 
 @router.post("/scenario/{key}")

@@ -65,7 +65,7 @@ def test_e3_source_partial_when_one_fails():
 
 
 def test_registry_complete():
-    assert set(sc.REGISTRY) == {"B1", "C5", "D2", "E3"}
+    assert {"B1", "C5", "D2", "E3"} <= set(sc.REGISTRY)   # 4 详细场景在
     for fn in sc.REGISTRY.values():
         assert callable(fn)
 
@@ -98,3 +98,40 @@ def test_scenario_audit_can_be_skipped():
     out = fan_out([SourceSpec("s", lambda q: [1], ("q",))])
     pkt = sc._assemble("T", "q", ["D1"], out, audit=False)
     assert "conclusion_label" not in pkt
+
+
+# ── P3-b: 27 场景补齐（声明式简单场景 + 诚实覆盖账）──────────────
+def test_registry_expanded_13():
+    assert set(sc.REGISTRY) == {
+        "B1", "C5", "D2", "E3",                       # 详细场景
+        "A4", "B3", "B6", "C1", "D1", "D3", "D4", "E1", "E4",  # 声明式
+    }
+
+
+def test_coverage_27_honest():
+    cov = sc.coverage_summary()
+    assert cov["total"] == 27
+    assert cov["addressed"] == 19          # 6 atrack + 13 backed
+    assert cov["blocked"] == 8             # 诚实标注缺适配器/PIPL·非假0
+    assert len(cov["multi_source_backed"]) == 13
+
+
+def test_simple_scenario_runs_with_fake_module(monkeypatch):
+    """声明式场景经 OS1 扇出·注入 fake 适配器模块验证多源组装。"""
+    import types
+    fake = types.ModuleType("app.datasources.public.searxng")
+    fake.search = lambda q: [{"title": f"hit {q}"}]
+    monkeypatch.setitem(__import__("sys").modules,
+                        "app.datasources.public.searxng", fake)
+    # D1 含 searxng/wikipedia/hackernews·至少 searxng 这路出数
+    out = sc.run_simple_scenario("D1", "konjac", audit=False, timeout=2.0)
+    ok_ids = out["sources"]["sources_ok"]
+    assert "searxng" in ok_ids
+    assert out["scenario"].startswith("D1")
+
+
+def test_blocked_scenarios_not_in_registry():
+    """被阻塞的 27 槽不混进 REGISTRY（不假装可跑）。"""
+    blocked = [k for k, v in sc.COVERAGE_27.items() if v.startswith("blocked")]
+    for k in blocked:
+        assert k not in sc.REGISTRY
