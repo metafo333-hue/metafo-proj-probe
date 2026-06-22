@@ -666,6 +666,14 @@ mark {
   transition: opacity .15s; border: none;
 }
 .download-btn:hover { opacity: .85; }
+.word-hint {
+  margin-top: 7px; font-size: 10px; line-height: 1.5;
+  color: var(--text-muted); text-align: center;
+}
+.word-hint code {
+  font-size: 9px; background: #E2E8F0; color: var(--text-dark);
+  padding: 0 4px; border-radius: 3px;
+}
 
 /* ============================================================
    报告 Markdown / Shadow DOM 渲染
@@ -1024,6 +1032,7 @@ mark {
     <div id="toc-list"></div>
     <div class="toc-foot">
       <button id="word-btn" class="download-btn">↓ 下载 Word 报告</button>
+      <div id="word-hint" class="word-hint"></div>
     </div>
   </nav>
 </div>
@@ -1256,6 +1265,17 @@ async function loadData() {
   renderAll();
   updateDataStatus(mode, data.updated_at);
 
+  // file:// 模式：检查内嵌报告覆盖度，漏内嵌时提醒重跑 build_embed
+  if (!isServerMode && allCases.length) {
+    const missing = allCases.filter(c => !getEmbeddedReport(c.run_id));
+    if (missing.length) {
+      console.warn(`[元探] ${missing.length} 个案例报告未内嵌：` +
+        missing.map(c => c.run_id).join(', ') + ' — 请运行 python3 hub/build_embed.py');
+      const line = document.getElementById('data-updated-line');
+      if (line) line.innerHTML += `<div style="margin-top:4px;color:var(--orange);font-size:10px;font-weight:600">⚠️ ${missing.length} 份报告未内嵌 · 请跑 build_embed.py</div>`;
+    }
+  }
+
   const sp = new URLSearchParams(location.search);
   const caseId = sp.get('case');
   if (caseId) {
@@ -1457,17 +1477,23 @@ function enterReadMode(c) {
   // 左侧导航
   updateReadSidebar(c);
 
-  // Word 下载按钮
+  // Word 按钮 —— 两种模式行为不同，标签如实区分
   const wordBtn = document.getElementById('word-btn');
   if (isServerMode) {
+    // 服务器模式：调 /open-file，系统默认程序(WPS/Pages)零下载直接打开
     wordBtn.onclick = e => { e.preventDefault(); openWordFile(c.run_id, wordBtn); };
-    wordBtn.textContent = '↓ 下载 Word 报告';
+    wordBtn.textContent = '📄 用 WPS/Pages 打开';
+    wordBtn.title = '零下载 · 调用本地服务直接用系统默认程序打开 report.docx';
+    document.getElementById('word-hint').innerHTML = '✅ 服务模式 · 点击零下载直开';
   } else {
+    // file:// 双击模式：Chrome 必下载 docx，无法零下载直开（这是浏览器限制）
     wordBtn.onclick = () => {
       const a = document.createElement('a');
       a.href = getDocxUrl(c.run_id); a.download = 'report.docx'; a.click();
     };
     wordBtn.textContent = '↓ 下载 Word 报告';
+    wordBtn.title = '当前为离线双击模式，浏览器只能下载到本地（下载后双击用 WPS 打开）。\n想「点击即用 WPS 直接打开」？在 probe 目录运行：python3 hub/serve.py';
+    document.getElementById('word-hint').innerHTML = '💡 离线模式下浏览器只能下载 · 想点击直开请跑 <code>serve.py</code>';
   }
 
   // tabs
