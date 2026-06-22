@@ -258,6 +258,10 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         "risk_warned_count": sum(1 for w in (works or []) if w.get("risk_warn")),
         "pinned_work": next((w for w in (works or []) if w.get("is_top")), None),
         "platform_tags": _agg_video_tags(works) if works else [],   # 聚合平台三级标签
+        # ── 组合衍生矩阵 v2.0（works/profile 内零额外 API）──
+        "engagement_structure": diag.get("engagement_structure"),   # 互动结构+内容性质(实用/争议/传播)
+        "commerce_density": diag.get("commerce_density"),           # 带货作品占比
+        "follower_drawdown": diag.get("follower_drawdown"),         # 掉粉预警(历史峰值-当前)
     }
 
     # 3. 担保:账号 → 转换器 → 八闸
@@ -323,9 +327,24 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     _biz_data = {"commission": category_commission(_track_name),
                  "gmv": category_gmv_tier(_track_name),
                  "xingtu": xingtu_price_estimate(account.get("follower") or 0, _track_name)}
+    # 星图官方真值(开通星图的达人·绕开估算·失败/未开通降级 None)·顺带取官方粉丝画像
+    _xingtu_md = _fans_md = None
+    try:
+        from app.services.xingtu_commercial import (
+            resolve_kolid, fetch_xingtu_commercial, fetch_fans_portrait,
+            render_xingtu_section, render_fans_portrait_section)
+        _kid = resolve_kolid(sec_uid, key)
+        if _kid:
+            _xingtu_md = render_xingtu_section(
+                fetch_xingtu_commercial(sec_uid, key, kolid=_kid))
+            _fans_md = render_fans_portrait_section(
+                fetch_fans_portrait(sec_uid, key, kolid=_kid))
+    except Exception:  # noqa: BLE001
+        pass
     business_md = "\n\n".join(filter(None, [
         render_commercial_section(account, _tv),
         render_commercial_data_section(account, _track_name, _biz_data),
+        _xingtu_md,                                  # 星图官方真值卡片(有则插)
         render_conversion_section(account, video, works, av_six),
     ]))
 
@@ -336,6 +355,26 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                 "works_count": account.get("aweme_count") or 0}
     segment_md = cold_start_md = audience_md = comment_md = homepage_md = None
     trend_md = benchmark_md = risk_md = verify_md = action_md = None
+    # 画像段(项3):星图官方真画像优先(_fans_md)·无则评论区 ip_label 地域估算兜底
+    audience_md = _fans_md
+    if not audience_md:
+        try:
+            from combo_deep_probe.adapters.tikhub_adapter import tikhub_get as _tg
+            from collections import Counter as _Cnt
+            _craw = _tg("/api/v1/douyin/web/fetch_video_comments",
+                        {"aweme_id": aweme_id, "cursor": 0, "count": 50}, key)
+            _cms = ((_craw or {}).get("data") or {}).get("comments") or []
+            _ips = _Cnt(c.get("ip_label") for c in _cms if c.get("ip_label"))
+            if _ips:
+                _tot = sum(_ips.values())
+                _parts = "、".join(f"{k} {v / _tot * 100:.0f}%"
+                                   for k, v in _ips.most_common(5))
+                audience_md = ("### 👥 粉丝画像（评论区地域估算·非官方）\n\n"
+                               f"- 评论活跃地域 TOP5：{_parts}\n\n"
+                               f"> 基于 {_tot} 条评论 IP 属地聚合(非粉丝全量·仅参考)·"
+                               "开星图账号可取官方真画像。")
+        except Exception:  # noqa: BLE001
+            pass
     _seg = None
     _risk_findings: list = []
     try:  # 对象层:创作者分层 + 能力适配
@@ -404,9 +443,9 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                 _ci.analyze_comments(_comments, _track_name))
         except Exception as _e:  # noqa: BLE001
             _log.warning("comment_insight 降级: %s", _e)
-    # 受众画像:A路需创作者授权数据·C路(粉丝列表聚合)PIPL 默认关·
-    #   真正的灰色/个人侧通路走 audience_source.register_source 隔离注册(不在商业链自建抓取·
-    #   中性指针)·当前自动管线无授权数据 → audience_md 留 None(安全·有授权源时在此接)
+    # 受众画像:audience_md 已在步骤 4.9 接入(星图官方真画像优先·无则评论区 ip_label 地域估算)·
+    #   A路创作者授权数据/C路粉丝列表聚合(PIPL 默认关)仍走 audience_source.register_source
+    #   隔离注册(不在商业链自建抓取·中性指针)
 
     # 4.11 轮动分析（行业板块轮动·五维·零 LLM·失败降级 None）
     rotation_result = None

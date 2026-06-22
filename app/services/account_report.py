@@ -551,6 +551,15 @@ def build_report(video: dict[str, Any], account: dict[str, Any],
     P("## 三、你的粉丝有多忠诚")
     P("")
 
+    # 掉粉预警（组合矩阵指标5·历史峰值粉丝 - 当前·实测才发现的 max_follower_count）
+    _dd = account.get("follower_drawdown")
+    if _dd and _dd.get("drawdown_pct", 0) >= 5:
+        _warn = ("⚠️ 回撤明显，建议复盘近期内容方向是否漂移、是否有引发掉粉的争议视频。"
+                 if _dd["drawdown_pct"] >= 15 else "🟡 轻微回撤，留意内容稳定性。")
+        P(f"**📉 掉粉预警** 历史峰值 {_dd['max']:,} → 现在 {_dd['current']:,}，"
+          f"已掉 {_dd['lost']:,}（-{_dd['drawdown_pct']}%）。{_warn}")
+        P("")
+
     # 钻石粉密度（B）
     a_density = (L2.get("admire_density") if L2 else None)
     if a_density is not None:
