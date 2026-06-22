@@ -104,9 +104,29 @@ def _infer_type(account: dict) -> str:
 
 
 def _slugify(text: str, maxlen: int = 12) -> str:
-    """中英文昵称 → 安全文件名片段。"""
-    text = re.sub(r'[\\/:*?"<>|\s｜]+', "", text)
-    return text[:maxlen] or "unknown"
+    """中英文昵称 → 安全 ASCII 文件名片段（run_id 纯 ASCII 铁律·B3 修复）。
+
+    三级回退保证产出始终 ASCII：
+      1) pypinyin 转拼音（可读·如 北川魔芋姐→beichuanmoyujie）
+      2) 无 pypinyin → 保留昵称里已有的 ASCII 字符
+      3) 全中文且无 pypinyin → 确定性 md5 哈希（acct+8位·不再把中文带进 run_id）
+    """
+    cleaned = re.sub(r'[\\/:*?"<>|\s｜]+', "", text)
+    # 1) 拼音转写（可读优先）
+    try:
+        from pypinyin import lazy_pinyin
+        py = re.sub(r"[^A-Za-z0-9]", "", "".join(lazy_pinyin(cleaned)))
+        if py:
+            return py[:maxlen].lower()
+    except Exception:
+        pass
+    # 2) 保留已有 ASCII
+    ascii_only = re.sub(r"[^A-Za-z0-9]", "", cleaned)
+    if ascii_only:
+        return ascii_only[:maxlen].lower()
+    # 3) 哈希回退（确定性·保证 ASCII）
+    import hashlib
+    return "acct" + hashlib.md5(cleaned.encode("utf-8")).hexdigest()[:8]
 
 
 def _gen_summary(report_md: str, account_name: str, sf_key: str | None) -> str:
@@ -166,8 +186,11 @@ def save_case(
     polish_info = result.get("_polish") or {}   # polish_report 可写入此字段
 
     nick = account.get("nickname") or "未知账号"
-    sec_uid = account.get("sec_uid") or ""
-    aweme_id = result.get("aweme_id") or ""
+    # B2 修复：sec_uid 优先 account，兜底 result 顶层（透传双保险）
+    sec_uid = account.get("sec_uid") or result.get("sec_uid") or ""
+    aweme_id = result.get("aweme_id") or account.get("aweme_id") or ""
+    # B4 修复：数据来源（仪表盘图例·不再显示「—」）
+    source = result.get("source") or "tikhub"
 
     # ── 重测提醒（同 aweme_id 或同 sec_uid 已有记录时输出警告）──────────────
     idx_existing = _load_index()
@@ -212,6 +235,7 @@ def save_case(
     meta = {
         "run_id": run_id,
         "platform": "douyin",
+        "source": source,
         "sec_uid": sec_uid,
         "aweme_id": aweme_id,
         "account_name": nick,
@@ -251,7 +275,7 @@ def save_case(
     # 更新 index.json（卡片所需字段的扁平副本）
     idx = _load_index()
     idx_entry = {k: meta[k] for k in (
-        "run_id", "platform", "sec_uid", "aweme_id", "account_name", "account_type",
+        "run_id", "platform", "source", "sec_uid", "aweme_id", "account_name", "account_type",
         "follower", "avg_like", "max_like", "burst_ratio",
         "video_title", "video_like", "has_av", "analyzed_at", "analyzed_date",
         "probe_version", "polish", "validation_pass", "validation_gaps",
@@ -291,7 +315,7 @@ if __name__ == "__main__":
         existing_ids = {c["run_id"] for c in idx["cases"]}
         if meta["run_id"] not in existing_ids:
             idx["cases"].append({k: meta.get(k) for k in (
-                "run_id", "platform", "sec_uid", "aweme_id", "account_name", "account_type",
+                "run_id", "platform", "source", "sec_uid", "aweme_id", "account_name", "account_type",
                 "follower", "avg_like", "max_like", "burst_ratio",
                 "video_title", "video_like", "has_av", "analyzed_at", "analyzed_date",
                 "probe_version", "polish", "validation_pass", "validation_gaps",

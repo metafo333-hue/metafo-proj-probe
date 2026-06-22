@@ -218,6 +218,9 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     diag = rd.get("diagnosis") or {}
     works = rd.get("works_sample")  # 提前到 account dict 之前供新字段使用
     account = {
+        # ── 身份锚点（三坐标·供案例聚合 + 仪表盘身份字段·B1/B2 修复）──
+        "sec_uid": sec_uid,
+        "aweme_id": aweme_id,
         # ── 基础档案 ──
         "nickname": prof.get("nickname") or author.get("nickname"),
         "follower": prof.get("follower_count") or author.get("follower_count"),
@@ -471,4 +474,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     # works/six_layer/attribution 一并返回 → 供 Word 导出做动态图表 + 视听六层 + 归因
     return {"ok": True, "report_md": report_md, "video": video,
             "account": account, "audit": audit, "works": works,
-            "six_layer": av_six, "attribution_md": attribution_md}
+            "six_layer": av_six, "attribution_md": attribution_md,
+            # ── 顶层身份锚点 + 来源（B1/B4 修复·供 save_case 入库 + 仪表盘图例）──
+            "aweme_id": aweme_id, "sec_uid": sec_uid,
+            "platform": "douyin", "source": "tikhub"}
