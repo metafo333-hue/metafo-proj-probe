@@ -1,0 +1,58 @@
+{
+  "run_id": "douyin-beichuanmoyujie-20260622-122548",
+  "platform": "douyin",
+  "sec_uid": "",
+  "aweme_id": "7641434470629562865",
+  "account_name": "北川魔芋姐｜赵娟",
+  "account_type": "带货·B2B",
+  "follower": 4645,
+  "avg_like": 105,
+  "max_like": 383,
+  "burst_ratio": 3.6,
+  "vertical_score": 0.7,
+  "hashtags": [
+    "安福魔芋",
+    "北川魔芋姐",
+    "魔芋工厂",
+    "魔芋代工",
+    "餐饮食材",
+    "源头工厂",
+    "餐饮供货",
+    "餐饮合作"
+  ],
+  "signature": "北川魔芋姐 | 赵娟\n🏭 专注魔芋36年 · 源头工厂\n🌱  北川花魔芋种植基地\n👩‍🍳 非遗魔芋豆腐第五代传承人\n🏆 农业产业化省级重点龙头企业\n✅ 餐饮连锁直供 · OEM贴牌代工\n✅ 餐饮食材 · 休闲零食 ·礼品定制\n📍 四川北川\n📩 合作私信\n地址：四川省绵阳市北川羌族自治县下河街100号",
+  "video_title": "扎根北川深耕魔芋 36 年，产地直供品质正宗地道\n#北川魔芋 #源头工厂 #特色农产 #素毛肚食材 #产地好物",
+  "video_like": 196,
+  "video_comment": 39,
+  "video_collect": 6,
+  "has_av": true,
+  "analyzed_at": "2026-06-22T12:25:48",
+  "analyzed_date": "2026-06-22",
+  "probe_version": "e8d44007",
+  "polish": {
+    "ok": false,
+    "mode": "unknown",
+    "model": "",
+    "segs_ok": 0,
+    "segs_total": 0
+  },
+  "validation_pass": false,
+  "validation_gaps": [
+    "涉密·不暴露数据源"
+  ],
+  "ai_summary": "「产业带货·明确定位·提升转化」",
+  "tags": [
+    "真实账号",
+    "同账号多视频",
+    "B2B",
+    "魔芋"
+  ],
+  "audit": {
+    "source_reliability": "C",
+    "confidence_level": "Low",
+    "evidence_strength": "Weak"
+  },
+  "docx_path": "/Users/metafo/Downloads/metafoclaw/probe/data/cases/douyin-beichuanmoyujie-20260622-122548/report.docx",
+  "report_chars": 14512,
+  "source": "real_tikhub"
+}
