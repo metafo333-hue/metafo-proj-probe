@@ -34,34 +34,9 @@ def check_response(resp: dict[str, Any]) -> None:
         raise GuardError("C4: 禁直吐第三方原始数据（02-api §7.2）")
 
 
-def apply_depth_line(report: dict[str, Any], tier: str) -> dict[str, Any]:
-    """三层深度线裁剪深探报告 · 不泄露付费价值（02-api §7.4）。
-
-    paid/member → 完整；免费登录 → 预览（评级+结构，锁竞品/二创/合规）；
-    匿名 → 仅公开结论（评级一句话）。
-    """
-    if tier in ("paid", "member"):
-        return {"depth": DEPTH_PAID, **report}
-    if tier == "free":
-        return {
-            "depth": DEPTH_PREVIEW,
-            "rating": report.get("rating"),
-            "headline": report.get("headline"),
-            "structure": report.get("structure"),
-            "locked_sections": ["竞品横评", "二创路径", "合规风险"],
-            "unlock_hint": "深度报告（竞品横评 / 二创路径 / 合规）需付费档解锁",
-        }
-    # 匿名
-    return {
-        "depth": DEPTH_PUBLIC,
-        "rating": report.get("rating"),
-        "headline": report.get("headline"),
-        "locked_sections": ["结构公式", "竞品横评", "二创路径", "合规风险"],
-        "unlock_hint": "登录看结构预览，付费档解锁完整深度报告",
-    }
-
-
-# ─────────────────── C-2 三层裁剪（七段报告） ───────────────────
+# ─────────────────── C-2 三层裁剪（七段报告·唯一裁剪函数） ───────────────────
+# 注：旧 apply_depth_line（扁平版）已于 2026-06-13 按 D2 裁定删除，
+#     全局统一走下方 redact_by_tier（七段 s1-s7·更精确）。
 
 def redact_by_tier(report: "dict[str, Any]", tier: str) -> "dict[str, Any]":
     """按 public/preview/paid 对七段报告执行三层深度线裁剪（C-2 硬约束）。

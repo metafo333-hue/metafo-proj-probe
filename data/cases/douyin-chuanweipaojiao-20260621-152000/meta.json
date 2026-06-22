@@ -1,0 +1,40 @@
+{
+  "run_id": "douyin-chuanweipaojiao-20260621-152000",
+  "platform": "douyin",
+  "sec_uid": "",
+  "aweme_id": "",
+  "account_name": "川味泡椒老赵｜赵老板",
+  "account_type": "带货·B2B",
+  "follower": 52000,
+  "avg_like": 186,
+  "max_like": 4200,
+  "burst_ratio": 22.6,
+  "video_title": "四川泡椒厂直供·餐饮连锁50箱起批·比市面便宜30%",
+  "video_like": 312,
+  "video_comment": 28,
+  "video_collect": 7,
+  "has_av": false,
+  "analyzed_date": "2026-06-21",
+  "probe_version": "commit:7e7c214",
+  "polish": {
+    "ok": false,
+    "mode": "single",
+    "model": "DeepSeek-V3",
+    "segs_ok": 0,
+    "segs_total": 1,
+    "note": "合规段保护降级"
+  },
+  "validation_pass": true,
+  "validation_gaps": [],
+  "tags": [
+    "fixture",
+    "B2B",
+    "工厂直供",
+    "四川"
+  ],
+  "report_chars": 2870,
+  "source": "fixture",
+  "ai_summary": "四川泡椒工厂B2B·52K粉·获奖品质需晒证据·私域询单主路径",
+  "analyzed_at": "2026-06-21T15:20:00",
+  "video_share": 15
+}

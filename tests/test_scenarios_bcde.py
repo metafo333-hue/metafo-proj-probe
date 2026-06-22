@@ -1,0 +1,157 @@
+"""B/C/D/E 四赛道 MVP 场景回归测试（离线·注入 fake 适配器·无网络）。
+
+验证：27 场景里 B/C/D/E 各 1 个从「纯设计」变「可跑通的多源情报包」。
+"""
+from __future__ import annotations
+
+from app.services import scenarios as sc
+
+
+def test_b1_company_multisource():
+    out = sc.scenario_b1_company(
+        "Acme Inc",
+        _oc=lambda q: [{"name": q, "status": "active"}],
+        _edgar=lambda q: [{"filing": "10-K"}],
+        _wiki=lambda q: [{"title": q}],
+    )
+    assert out["scenario"].startswith("B1")
+    assert out["ok"] and out["partial"] is False
+    assert out["sources"]["ok"] == 3
+    assert {f["source"] for f in out["findings"]} == {"opencorporates", "edgar", "wikipedia"}
+    assert "交叉印证" in out["credibility_note"]
+
+
+def test_c5_compliance_sanction_hit():
+    """OFAC 命中 → 高风险红旗。"""
+    hit = sc.scenario_c5_compliance(
+        "Bad Entity",
+        _ofac=lambda q: [{"sdn_name": q, "program": "SDGT"}],   # 命中
+        _oc=lambda q: [{"name": q}],
+    )
+    assert "🔴" in hit["risk_flag"]
+
+    clean = sc.scenario_c5_compliance(
+        "Good Corp",
+        _ofac=lambda q: [],                                     # 未命中
+        _oc=lambda q: [{"name": q}],
+    )
+    assert "🟢" in clean["risk_flag"]
+
+
+def test_d2_tech_repo_and_cve():
+    out = sc.scenario_d2_tech(
+        "psf/requests",
+        _gh=lambda r: {"stars": 50000, "archived": False},
+        _osv=lambda pkg: [{"id": "GHSA-xxxx", "summary": "demo cve"}],
+    )
+    assert out["scenario"].startswith("D2")
+    assert out["sources"]["ok"] == 2
+    gh = [f for f in out["findings"] if f["source"] == "github"][0]
+    assert gh["data"]["stars"] == 50000
+
+
+def test_e3_source_partial_when_one_fails():
+    """一个源抛错 → partial=True，其余源照常出（OS1 隔离贯穿到场景层）。"""
+    out = sc.scenario_e3_source(
+        "konjac health",
+        _wiki=lambda q: [{"title": q}],
+        _gdelt=lambda q: (_ for _ in ()).throw(RuntimeError("gdelt down")),  # 抛错
+        _openalex=lambda q: [{"work": "paper1"}],
+    )
+    assert out["partial"] is True
+    assert out["sources"]["ok"] == 2
+    assert out["sources"]["error"] == 1
+    assert any("gdelt" in s for s in out["sources"]["sources_failed"])
+
+
+def test_registry_complete():
+    assert {"B1", "C5", "D2", "E3"} <= set(sc.REGISTRY)   # 4 详细场景在
+    for fn in sc.REGISTRY.values():
+        assert callable(fn)
+
+
+# ── P2-a: 场景过八闸出可信度三标签（护城河）────────────────────
+def test_scenario_carries_conclusion_label():
+    """每个情报包必须带可信度三标签（probe 价值：带可信度的结论·非裸数据）。"""
+    out = sc.scenario_b1_company(
+        "Acme Inc",
+        _oc=lambda q: [{"name": q, "status": "active"}],
+        _edgar=lambda q: [{"filing": "10-K"}],
+        _wiki=lambda q: [{"title": q}],
+    )
+    cl = out["conclusion_label"]
+    assert set(cl) >= {"source_reliability", "confidence_level", "evidence_strength"}
+    assert cl["confidence_level"]                       # 非空
+    assert "trace_id" in cl                             # 可回放溯源
+
+
+def test_enrich_audit_no_sources():
+    """无可用源 → 标「不可出」，不伪造可信度。"""
+    pkt = {"query": "x", "scenario": "T", "partial": True, "findings": []}
+    out = sc.enrich_with_audit(pkt)
+    assert out["conclusion_label"]["confidence_level"] == "无源·不可出"
+
+
+def test_scenario_audit_can_be_skipped():
+    """audit=False（_assemble 直传）时不过八闸，省成本。"""
+    from app.datasources.orchestrator import SourceSpec, fan_out
+    out = fan_out([SourceSpec("s", lambda q: [1], ("q",))])
+    pkt = sc._assemble("T", "q", ["D1"], out, audit=False)
+    assert "conclusion_label" not in pkt
+
+
+# ── P3-b: 27 场景补齐（声明式简单场景 + 诚实覆盖账）──────────────
+def test_registry_expanded_13():
+    assert set(sc.REGISTRY) == {
+        "B1", "C5", "D2", "E3",                       # 详细场景
+        "A4", "B3", "B6", "C1", "D1", "D3", "D4", "E1", "E4",  # 声明式
+    }
+
+
+def test_coverage_27_honest():
+    cov = sc.coverage_summary()
+    assert cov["total"] == 27
+    assert cov["addressed"] == 19          # 6 atrack + 13 backed
+    assert cov["blocked"] == 8             # 诚实标注缺适配器/PIPL·非假0
+    assert len(cov["multi_source_backed"]) == 13
+
+
+def test_simple_scenario_runs_with_fake_module(monkeypatch):
+    """声明式场景经 OS1 扇出·注入 fake 适配器模块验证多源组装。"""
+    import types
+    fake = types.ModuleType("app.datasources.public.searxng")
+    fake.search = lambda q: [{"title": f"hit {q}"}]
+    monkeypatch.setitem(__import__("sys").modules,
+                        "app.datasources.public.searxng", fake)
+    # D1 含 searxng/wikipedia/hackernews·至少 searxng 这路出数
+    out = sc.run_simple_scenario("D1", "konjac", audit=False, timeout=2.0)
+    ok_ids = out["sources"]["sources_ok"]
+    assert "searxng" in ok_ids
+    assert out["scenario"].startswith("D1")
+
+
+def test_blocked_scenarios_not_in_registry():
+    """被阻塞的 27 槽不混进 REGISTRY（不假装可跑）。"""
+    blocked = [k for k, v in sc.COVERAGE_27.items() if v.startswith("blocked")]
+    for k in blocked:
+        assert k not in sc.REGISTRY
+
+
+# ── A1: OS3 真值融合接进场景（建了真用上）──────────────────────
+def test_scenario_carries_os3_fusion():
+    """场景输出含 OS3 融合真值 + 冲突检测·内部 _fused_claims 不外露。"""
+    out = sc.scenario_b1_company(
+        "Acme Inc",
+        _oc=lambda q: [{"name": q, "country": "US"}],      # B 权威
+        _edgar=lambda q: [{"name": q, "country": "US"}],   # A 权威
+        _wiki=lambda q: [{"name": q, "country": "UK"}],    # C 二手
+    )
+    fused = {f["key"]: f for f in out["fused"]}
+    # country: US(oc B + edgar A) 加权胜 UK(wiki C)·且检出冲突
+    assert fused["country"]["value"] == "US"
+    assert fused["country"]["conflict"] is True
+    assert fused["country"]["corroboration"] == 2
+    assert any("country 多源冲突" in c for c in out["conflicts"])
+    assert "_fused_claims" not in out                        # 内部字段已清理
+    # name 三源一致·无冲突
+    assert fused["name"]["conflict"] is False

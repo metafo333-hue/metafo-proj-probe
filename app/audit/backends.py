@@ -239,22 +239,175 @@ class LiteLLMBackend(ModelBackend):
 
 
 # ---------------------------------------------------------------------------
+# AuditLLMBackend：使用 audit/llm_caller.py（LITELLM_* 环境变量）的纯 audit 后端
+#
+# 与 LiteLLMBackend 的区别：
+#   - 使用独立的 LITELLM_BASE_URL / LITELLM_API_KEY / LITELLM_MODEL 变量
+#   - 不依赖 PROBE_LITELLM_BASE / PROBE_LITELLM_KEY（probe 业务层变量）
+#   - 通过 llm_caller.call() 发起请求，超时 10 秒，失败降级 stub
+#
+# ⚠️ 真模型未在生产实测，需 probe-a 部署后验证。
+# ---------------------------------------------------------------------------
+
+class AuditLLMBackend(ModelBackend):
+    """audit 专用 LLM backend · 通过 llm_caller 调用，失败降级 stub。
+
+    受 GATES_LIVE_MODEL=1 开关控制（由 get_backend() 自动选择）。
+    """
+
+    name: str = "audit_llm"
+
+    def __init__(self) -> None:
+        self._stub = StubBackend()
+
+    def faithfulness(self, claim: str, sources: list[str]) -> float:
+        """闸2：判断 claim 是否由 sources 支持，返回 0.0-1.0。
+
+        MetaRoute 基准测试 2026-06-22：R1-Free 100% vs Flash 80%，切到 R1-Free。
+        路由：GATES_FAITHFULNESS_MODEL 环境变量可覆盖（默认 R1-Free）。
+        """
+        import os, re
+        from app.audit.llm_caller import call
+        src_text = "\n".join(f"[{i+1}] {s[:300]}" for i, s in enumerate(sources[:3]))
+        prompt = (
+            f"判断声称是否由来源支持，只输出一个 0.0~1.0 的浮点数，不要其他文字。\n\n"
+            f"声称：{claim[:200]}\n来源：\n{src_text}"
+        )
+        # 闸2 路由：优先用 R1-Free（推理模型，忠实度 100% > Flash 80%，免费）
+        model_override = os.getenv("GATES_FAITHFULNESS_MODEL",
+                                   "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B")
+        raw = call([{"role": "user", "content": prompt}], max_tokens=10,
+                   model=model_override)
+        if raw:
+            m = re.search(r"[01](\.\d+)?", raw)
+            if m:
+                try:
+                    return min(1.0, max(0.0, float(m.group())))
+                except ValueError:
+                    pass
+        return self._stub.faithfulness(claim, sources)
+
+    def detect_aigc(self, text: str) -> float:
+        """闸3：判断文本是否为 AI 生成，返回 0.0-1.0（越高=越像 AI）。"""
+        from app.audit.llm_caller import call
+        prompt = (
+            f"判断以下文本是否为 AI 生成，只输出 0.0~1.0 的浮点数（越高越像 AI），不要其他文字。\n\n"
+            f"{text[:800]}"
+        )
+        raw = call([{"role": "user", "content": prompt}], max_tokens=10)
+        if raw:
+            import re
+            m = re.search(r"[01](\.\d+)?", raw)
+            if m:
+                try:
+                    return min(1.0, max(0.0, float(m.group())))
+                except ValueError:
+                    pass
+        return self._stub.detect_aigc(text)
+
+    def nli(self, premise: str, hypothesis: str) -> dict[str, float]:
+        """闸5：NLI 矛盾检测，返回 {entailment, neutral, contradiction} 概率分布。"""
+        from app.audit.llm_caller import call
+        import json, re
+        prompt = (
+            '判断两段文本的逻辑关系，只输出 JSON，格式：'
+            '{"entailment":0.0,"neutral":1.0,"contradiction":0.0}（三项之和=1.0）\n\n'
+            f"premise: {premise[:400]}\nhypothesis: {hypothesis[:400]}"
+        )
+        raw = call([{"role": "user", "content": prompt}], max_tokens=80)
+        if raw:
+            m = re.search(r"\{[^{}]+\}", raw, re.DOTALL)
+            if m:
+                try:
+                    d = json.loads(m.group())
+                    keys = ("entailment", "neutral", "contradiction")
+                    if all(k in d for k in keys):
+                        return {k: float(d[k]) for k in keys}
+                except (ValueError, TypeError, KeyError):
+                    pass
+        return self._stub.nli(premise, hypothesis)
+
+    def judge(self, claim: str, perspectives: list[dict[str, Any]]) -> dict[str, Any]:
+        """闸6：D3-Judge 对抗证伪裁决。"""
+        from app.audit.llm_caller import call
+        import json, re
+        persp_text = "\n".join(
+            f"[{p['role']}] refuted={p.get('refuted','?')}: {str(p.get('text',''))[:200]}"
+            for p in perspectives[:5]
+        )
+        prompt = (
+            '综合各视角对以下声称进行裁决，只输出 JSON：'
+            '{"verdict":"accept|reject|human_review","vote_count":3,"rationale":"理由"}\n\n'
+            f"声称：{claim[:300]}\n各视角：\n{persp_text}"
+        )
+        raw = call([{"role": "user", "content": prompt}], max_tokens=120)
+        if raw:
+            m = re.search(r"\{[^{}]+\}", raw, re.DOTALL)
+            if m:
+                try:
+                    d = json.loads(m.group())
+                    if "verdict" in d and d["verdict"] in ("accept", "reject", "human_review"):
+                        return {
+                            "verdict":    d["verdict"],
+                            "vote_count": int(d.get("vote_count", 3)),
+                            "rationale":  str(d.get("rationale", "")),
+                        }
+                except (ValueError, TypeError, KeyError):
+                    pass
+        return self._stub.judge(claim, perspectives)
+
+
+# ---------------------------------------------------------------------------
 # Backend 注册表
 # ---------------------------------------------------------------------------
 
 _REGISTRY: dict[str, type[ModelBackend]] = {
-    "stub":    StubBackend,
-    "litellm": LiteLLMBackend,
+    "stub":      StubBackend,
+    "litellm":   LiteLLMBackend,
+    "audit_llm": AuditLLMBackend,
 }
 
 
 def get_backend(name: str | None = None) -> ModelBackend:
     """按名称获取 backend 实例。
 
-    name=None → 自动选：有 PROBE_LITELLM_KEY 则 LiteLLMBackend，否则 StubBackend。
+    name=None → 自动选（优先级）：
+      1. GATES_LIVE_MODEL=1 → AuditLLMBackend（使用 LITELLM_* 变量）
+      2. PROBE_LITELLM_KEY 存在 → LiteLLMBackend（使用 PROBE_LITELLM_* 变量）
+      3. PROBE_AUDIT_DEFAULT_LIVE=1 且有国产 LLM key（DEEPSEEK/BAILIAN）→ LiteLLMBackend
+         （走 llm._chat 国产 fallback·让生产默认八闸真跑·无 ufo2 proxy 也可）
+      4. 否则 → StubBackend
+
+    GATES_LIVE_MODEL 开关（仅 audit 层·fail-safe 降级 stub 不抛异常）。
     """
+    import os
     if name is None:
-        import os
-        name = "litellm" if os.getenv("PROBE_LITELLM_KEY") else "stub"
+        if os.getenv("GATES_LIVE_MODEL", "0") == "1":
+            name = "audit_llm"
+        elif os.getenv("PROBE_LITELLM_KEY"):
+            name = "litellm"
+        elif (os.getenv("PROBE_AUDIT_DEFAULT_LIVE", "0") == "1"
+              and (os.getenv("DEEPSEEK_API_KEY") or os.getenv("BAILIAN_API_KEY"))):
+            name = "litellm"        # 生产默认 live·国产模型兜底
+        else:
+            name = "stub"
     cls = _REGISTRY.get(name, StubBackend)
     return cls()
+
+
+def backend_status() -> dict[str, Any]:
+    """八闸 backend 可观测（防"以为 live 其实 stub"·喂 health/ops）。"""
+    import os
+    be = get_backend()
+    live = be.name != "stub"
+    if be.name == "audit_llm":
+        reason = "GATES_LIVE_MODEL=1"
+    elif be.name == "litellm" and os.getenv("PROBE_LITELLM_KEY"):
+        reason = "PROBE_LITELLM_KEY(ufo2 proxy)"
+    elif be.name == "litellm":
+        reason = "PROBE_AUDIT_DEFAULT_LIVE=1 + 国产key兜底"
+    else:
+        reason = "无 key/开关·中性桩(可信度标签为占位)"
+    return {"backend": be.name, "live": live, "reason": reason,
+            "hint": "" if live else "设 GATES_LIVE_MODEL=1 或 PROBE_LITELLM_KEY 或 "
+                                    "PROBE_AUDIT_DEFAULT_LIVE=1+DEEPSEEK_API_KEY 启用真跑"}

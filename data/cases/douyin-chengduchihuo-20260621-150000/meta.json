@@ -1,0 +1,39 @@
+{
+  "run_id": "douyin-chengduchihuo-20260621-150000",
+  "platform": "douyin",
+  "sec_uid": "",
+  "aweme_id": "",
+  "account_name": "成都吃货日记｜小李",
+  "account_type": "本地服务·探店",
+  "follower": 380000,
+  "avg_like": 4500,
+  "max_like": 89000,
+  "burst_ratio": 19.8,
+  "video_title": "成都苍蝇馆子藏不住了｜排队2小时·人均30元吃到哭",
+  "video_like": 8900,
+  "video_comment": 320,
+  "video_collect": 2300,
+  "has_av": false,
+  "analyzed_date": "2026-06-21",
+  "probe_version": "commit:7e7c214",
+  "polish": {
+    "ok": true,
+    "mode": "single",
+    "model": "DeepSeek-V3",
+    "segs_ok": 1,
+    "segs_total": 1
+  },
+  "validation_pass": true,
+  "validation_gaps": [],
+  "tags": [
+    "fixture",
+    "探店",
+    "本地美食",
+    "成都"
+  ],
+  "report_chars": 2345,
+  "source": "fixture",
+  "ai_summary": "成都探店38万粉·爆款比19.8·广告+佣金成熟·苍蝇馆子爆款89K赞",
+  "analyzed_at": "2026-06-21T15:00:00",
+  "video_share": 1200
+}

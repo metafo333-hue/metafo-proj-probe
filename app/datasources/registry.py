@@ -28,9 +28,11 @@ GATE_19 = [
 
 # 已接入适配器实例（新边界 2026-06-04：正规商业 API 采购，probe 只调接口、不背供应商技术责任）。
 from app.datasources.tikhub import TikHubAdapter
+from app.datasources.jzl_channels import JZLChannelsAdapter
 
 _ADAPTERS: dict[str, DataSourceAdapter] = {
-    "tikhub": TikHubAdapter(),       # 覆盖五平台（抖音/小红书/微博/B站/快手）· 待 PROBE_TIKHUB_KEY
+    "tikhub": TikHubAdapter(),            # 覆盖五平台（抖音/小红书/微博/B站/快手）· 待 PROBE_TIKHUB_KEY
+    "jzl_wechat_channels": JZLChannelsAdapter(),   # 微信视频号·待 PROBE_JZL_KEY
 }
 
 

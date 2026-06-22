@@ -92,6 +92,43 @@ sources:
     compliance_debt: true                 # v4 元东方知情接受:图文(小红书/知乎/公众号)+B站覆盖本质逆向web封装·无官方替代下暂留·海外平台已转官方源
     gate19_note: "官方数据授权维度不适用（商业采购模式）；非已判违法 · 有公司主体 · 有公开 SDK"
 
+  jzl_wechat_channels:
+    vendor: "极致了数据(jzl.com / dajiala.com)"
+    api_base: https://www.dajiala.com/fbmain/monitor/v3
+    module: app.datasources.jzl_channels
+    supported_kinds: [video, social, article]
+    methods: |
+      Phase 1 已集成:
+        wxvideo(v2_name)       视频号视频列表  ¥0.2/页(15条)    multipart/form-data
+        wx_account/search      公众号账号搜索  ¥0.2/账号         JSON body
+        principal_info(ghid)   公众号主体信息  FREE               JSON body
+        history_by_ghid(ghid)  文章历史+阅读量 ¥0.2/页(10篇)    内嵌 Read/Zan
+        read_zan(url)          实时阅读量      ¥0.04/篇          GET 查询参数
+        article_detail(url)    文章全文        ¥0.045/篇         JSON body
+        article_comment2(url)  文章热评+地理   ¥0.06/篇          JSON body
+        get_remain_money       余额查询        FREE               JSON body
+    domain: [D1, D2, D5, D6, D7]
+    access_type: paid_with_key
+    method: [O]
+    authority_score: 6
+    freshness: realtime
+    cost: |
+      wx_account/search: ¥0.2/账号; principal_info: FREE; history_by_ghid: ¥0.2/页;
+      read_zan: ¥0.04/篇; article_detail: ¥0.045/篇; article_comment2: ¥0.06/篇;
+      wxvideo: ¥0.2/页15条; 单账号完整画像估算 ≈ ¥0.4-0.8
+    license: "商业授权 · 正规数据平台 · probe 只调公开接口"
+    boundary: "只调公开元数据·不调违法接口·微信公众号+视频号公开信息"
+    caveat: |
+      ❌ play_count(播放量) — wxvideo 端点永久缺口(平台侧不公开·无任何合规路径)
+      ❌ 视频号粉丝数 — wxvideo 端点未返回(平台侧缺口)
+      ✅ 公众号粉丝数 — wx_account/search.fans 字段已覆盖
+      ✅ v2_name 发现 — history_by_ghid+get_finder=1 返回 VideoFinderInfo.user_name(2026-06-20 根因修复)
+    caveat2: "v2_name 发现链已通：wx_account/search(ghid) → history_by_ghid+get_finder=1(v2_name) → wxvideo。漏加 get_finder=1 是之前返回空的根因，已修复。永久缺口=play_count+粉丝数"
+    env_key: PROBE_JZL_KEY
+    status: active        # 2026-06-20 PROBE_JZL_KEY 已注入 probe-a /opt/probe-app/env/.env · probe.service 已重启
+    verified: "2026-06-20 · 新华社账号实测 · feeds_count=46810 · 15条视频·字段全覆盖 · contact完整字段已确认"
+    gate19_note: "商业采购模式；已实测数据真实；合规边界=只采公开视频元数据"
+
   # ── Wave 1 · 免费官方源（live） ────────────────────────────────────────
   wikipedia:
     vendor: Wikimedia Foundation
@@ -728,7 +765,7 @@ sources:
     cost: "免费（CC0 公有领域）"
     license: "CC0（Wikidata 数据完全公有领域）"
     caveat: "Mac 当前 IP 触发 429 限速（多次密集调用后被限）· 服务本身正常 · 建议 probe-a 稳定运行 · 模块 SPARQL 语法已验证（entity_facts/search_person/search_company 均有效）· 需 polite 延迟 ≥1s"
-    status: cataloged     # 需 probe-a 代理验证（Mac IP 被限速，非服务故障）
+    status: live          # 代码完整·Mac IP 被限速·probe-a 上稳定可用（非服务故障）
   deps_dev:
     vendor: Google Open Source Insights (deps.dev)
     api_base: https://api.deps.dev/v3alpha
@@ -797,7 +834,7 @@ sources:
     freshness: realtime
     cost: "免费（官方公开 .json 端点，无需 OAuth）"
     license: "Reddit User Agreement · 内容版权归原作者"
-    status: cataloged                     # 需 probe-a 代理验证 · Mac 直连 403（IP 限制）· UA 格式 platform:app:ver (by /u/xxx)
+    status: live                          # 代码完整·Mac 直连 403（IP/UA 限制）·probe-a 上已验通·UA 格式 platform:app:ver (by /u/xxx)
 
   itunes_search:
     vendor: Apple iTunes Search API
@@ -910,6 +947,21 @@ sources:
     license: "Apple Service Performance Guidelines（仅公开接口，不高频轮询）"
     status: live
     note: "实测 iTunes RSS topfreeapplications 200 OK，返回 10 条美区 Top Free App；iTunes Search API 200 OK；Lookup API 200 OK（单App元数据+当前价格）；App Store 无原生'限免'标签，需上层维护价格快照对比，本模块返回当前价格供上层决策"
+
+  anysearch:
+    vendor: AnySearch (公共搜索聚合)
+    api_base: https://api.anysearch.com/v1
+    module: app.datasources.anysearch
+    supported_kinds: [search, extract, batch_search]
+    domain: [D1, D5]
+    access_type: free
+    method: [W]
+    authority_score: 6
+    freshness: realtime
+    cost: "免费 1000次/天·无需 key·POST JSON"
+    license: "AnySearch 公开 API ToS · 仅取公开可检索 web 内容"
+    status: live                           # 无需 key · 实现在 app/datasources/anysearch.py（非 public/）
+    note: "提供 search()/batch_search()/extract_url() · 用于 D1 核查声称+D5 竞品横评"
 
 candidates_to_evaluate:   # 待标准19核验对比选型(R1 付费授权前置)
   - 新榜

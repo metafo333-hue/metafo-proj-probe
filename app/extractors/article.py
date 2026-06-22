@@ -15,6 +15,8 @@ from app.extractors.base import Extractor
 class ArticleExtractor(Extractor):
     kind = "article"
     lib = "trafilatura"
+    import_name = "trafilatura"
+    license = "Apache-2.0"
 
     def extract(self, url: str) -> dict[str, Any]:
         try:

@@ -1,0 +1,135 @@
+# probe 盲评框架 · promptfoo 配置 v1.0
+# 目标：验证核心商业假设——「多维报告（含视听六层/L2规律/L3账号/L4竞品）比单维报告更有价值」
+# 元验 L5 业务验收盲评 · 本文件为框架+样例，未真跑（需真实样本+预算批量跑）
+# 评委模型：ufo2 LiteLLM 自托管（数据不出门，安全铁律）
+# 日期：2026-06-20
+
+description: "probe 多维报告 vs 单维报告 · 盲评价值对比"
+
+# ─────────────────────────────────────────────
+# 评委模型（自托管，禁云 SaaS）
+# ─────────────────────────────────────────────
+providers:
+  - id: openai/qwen3-32b
+    label: judge-qwen3-32b
+    config:
+      # ufo2 LiteLLM 内网端点（tailscale 100.64.0.7:4000）
+      # 备选：硅基流动 https://api.siliconflow.cn/v1（国内低成本，Qwen3 系列）
+      apiBaseUrl: http://100.64.0.7:4000/v1
+      apiKey: "{{env.LITELLM_MASTER_KEY}}"
+      temperature: 0.0
+      max_tokens: 1024
+
+# ─────────────────────────────────────────────
+# 评测数据集
+# ─────────────────────────────────────────────
+tests:
+  - path: datasets/blind_eval_samples.jsonl
+
+# ─────────────────────────────────────────────
+# 提示词：评委打分 Rubric
+# ─────────────────────────────────────────────
+# 注：promptfoo 盲评模式下，评委不知道哪个是「单维」哪个是「多维」
+# 两个版本用变量 {{report_a}} / {{report_b}} 传入，顺序随机化防主观偏差
+prompts:
+  - label: judge-rubric
+    raw: |
+      你是一名短视频运营顾问，正在评估两份针对同一账号的分析报告（报告A / 报告B）。
+      你不知道哪份是"完整版"，请完全基于内容质量打分。
+
+      【账号背景】
+      {{account_context}}
+
+      ━━━━ 报告 A ━━━━
+      {{report_a}}
+
+      ━━━━ 报告 B ━━━━
+      {{report_b}}
+
+      ━━━━ 评分任务 ━━━━
+      请对每份报告在以下四个维度独立打分（1-5分，5最高），并给出简短理由（≤30字/维度）：
+
+      1. **信息量**（Information Density）
+         标准：是否覆盖视听六层/多条规律/账号战略/竞品对比等维度；是否有裸数字无对比坐标
+         - 5分：多维度有对比，结论有证据链
+         - 3分：覆盖基本信息但缺关键维度
+         - 1分：只有表面数据，无深层分析
+
+      2. **可执行性**（Actionability）
+         标准：用户看完后能立刻做什么？有无具体「下一步行动」和「风险提示」
+         - 5分：给出优先级排序的行动清单+避坑
+         - 3分：有方向但无具体步骤
+         - 1分：纯描述，无处方
+
+      3. **诚实度**（Honest Calibration）
+         标准：黑盒数据是否标「拿不到」；样本边界是否声明；是否硬凑结论
+         - 5分：置信度清晰，不确定处明确标注
+         - 3分：大体诚实但部分结论无据
+         - 1分：过度自信/编造/无法区分事实与推测
+
+      4. **决策可用性**（Decision Readiness）
+         标准：看完这份报告能否直接做出「要/不要参考这个账号」的决策
+         - 5分：给出明确推荐+依据+代价，可直接拍板
+         - 3分：信息充分但需要自行综合
+         - 1分：信息碎片化，仍需大量补充调研
+
+      ━━━━ 输出格式（严格 JSON）━━━━
+      {
+        "report_a": {
+          "information_density": {"score": <1-5>, "reason": "<≤30字>"},
+          "actionability": {"score": <1-5>, "reason": "<≤30字>"},
+          "honest_calibration": {"score": <1-5>, "reason": "<≤30字>"},
+          "decision_readiness": {"score": <1-5>, "reason": "<≤30字>"},
+          "total": <sum>,
+          "preferred": <true/false>
+        },
+        "report_b": {
+          "information_density": {"score": <1-5>, "reason": "<≤30字>"},
+          "actionability": {"score": <1-5>, "reason": "<≤30字>"},
+          "honest_calibration": {"score": <1-5>, "reason": "<≤30字>"},
+          "decision_readiness": {"score": <1-5>, "reason": "<≤30字>"},
+          "total": <sum>,
+          "preferred": <true/false>
+        },
+        "winner": "<A或B>",
+        "winner_reason": "<≤50字>"
+      }
+
+# ─────────────────────────────────────────────
+# 评测断言（自动判定）
+# ─────────────────────────────────────────────
+defaultTest:
+  assert:
+    # 断言1：JSON 格式合法
+    - type: is-json
+      description: 评委输出必须是合法 JSON
+
+    # 断言2：多维报告胜率（C2 判据 · 盲评胜 ≥70%）
+    # 注：实际批量跑时统计 winner=multidim_report 的比例
+    - type: javascript
+      value: |
+        const result = JSON.parse(output);
+        // 检查 winner 字段存在且合法
+        return result.winner === 'A' || result.winner === 'B';
+      description: winner 字段合法
+
+    # 断言3：四维得分完整
+    - type: javascript
+      value: |
+        const result = JSON.parse(output);
+        const dims = ['information_density', 'actionability', 'honest_calibration', 'decision_readiness'];
+        for (const r of ['report_a', 'report_b']) {
+          for (const d of dims) {
+            if (!result[r][d] || result[r][d].score < 1 || result[r][d].score > 5) return false;
+          }
+        }
+        return true;
+      description: 四维得分均在 1-5 范围内
+
+# ─────────────────────────────────────────────
+# 输出配置
+# ─────────────────────────────────────────────
+outputPath: eval/results/blind_eval_results.json
+
+# 并发控制（自托管 LiteLLM 限流保护）
+maxConcurrency: 2

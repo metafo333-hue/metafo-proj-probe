@@ -9,9 +9,14 @@ trafilatura>=2.0.0     # 公开网页正文（article）
 markitdown>=0.1.0      # 文档/PDF/Office→Markdown（doc）
 # 五平台数据层（TikHub 官方 SDK·商业采购·探只调接口）
 tikhub>=2.1.0          # 覆盖抖音/小红书/微博/B站/快手 · 需 PROBE_TIKHUB_KEY（R8+R1）
+# metering 成本落库（断层#5·R28 业务数据入 PG·未配 PROBE_PG_DSN 则回落 JSONL）
+psycopg[binary]>=3.1
 # 测试
 pytest>=8.0
 httpx>=0.27
-# ── 后续按需 ──
-# docling（高精度文档·MIT，重依赖）/ faster-whisper（授权音频 ASR·MIT）
-# 五平台数据走第三方授权 API（暂未接）；旧违规依赖（yt-dlp/crawl4ai/demucs）已随合规整改移除
+# ── D-Use 提取层扩展（可选·重依赖·服务器按需装·提取器懒加载未装则优雅失败）──
+# 合规边界：仅处理直链公开音频/图片/文档 + 用户上传·严禁平台视频下载（红线·走 datasources）
+# faster-whisper>=1.0    # 直链音频 ASR（audio·MIT·INT8 可纯 CPU·env PROBE_ASR_MODEL）
+# rapidocr-onnxruntime>=1.3  # 图片 OCR（image·Apache-2.0·ONNX CPU 友好·适配 2c4g）
+# docling>=2.0           # 高精度文档（doc·MIT·env PROBE_DOC_BACKEND=docling 开启）
+# 五平台数据走第三方授权 API；旧违规依赖（yt-dlp/crawl4ai/demucs）已随合规整改移除
