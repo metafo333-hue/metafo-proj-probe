@@ -300,10 +300,6 @@ def render_xingtu_profile_section(prof: XingtuProfile | None) -> str | None:
         L.append(f"- **带货指数**：{si.avg_value:.0f}/100{rk}"
                  + (f"·转化指数 {prof.link_convert_index.avg_value:.0f}"
                     if prof.link_convert_index and prof.link_convert_index.avg_value else ""))
-    if prof.fans_portrait:
-        for d in prof.fans_portrait[:4]:
-            if d.get("desc"):
-                L.append(f"- 粉丝{d['display']}：{d['desc']}")
     # 组合洞察
     roi = roi_triangle(prof)
     if roi:
@@ -313,4 +309,17 @@ def render_xingtu_profile_section(prof: XingtuProfile | None) -> str | None:
         L.append(f"- **破圈信号**：{bo['signal']}")
     L.append("")
     L.append("> 星图官方数据·整体并行一次取全报价/性价比/6商业指数/画像。")
+    return "\n".join(L)
+
+
+def render_fans_portrait_section(prof: XingtuProfile | None) -> str | None:
+    """粉丝画像 → 报告段（给 account_chain 的 audience_md 入口·星图官方真画像）。"""
+    if not prof or not prof.fans_portrait:
+        return None
+    L = ["### 👥 粉丝画像（星图官方·真实人群结构）", ""]
+    for d in prof.fans_portrait[:6]:
+        if d.get("desc"):
+            L.append(f"- {d['display']}：{d['desc']}")
+    L.append("")
+    L.append("> 星图官方粉丝画像·非评论估算·可直接用于投放人群匹配。")
     return "\n".join(L)

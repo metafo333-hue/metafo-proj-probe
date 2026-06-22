@@ -327,18 +327,19 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     _biz_data = {"commission": category_commission(_track_name),
                  "gmv": category_gmv_tier(_track_name),
                  "xingtu": xingtu_price_estimate(account.get("follower") or 0, _track_name)}
-    # 星图官方真值(开通星图的达人·绕开估算·失败/未开通降级 None)·顺带取官方粉丝画像
+    # 星图整体并行(P1·章四·替 xingtu_commercial 串行版)·一次取全报价/性价比/6指数/画像
+    # + 组合洞察(ROI核验/破圈信号)·复用 P0 三锚点缓存·未开星图降级 None(上游估算兜底)
     _xingtu_md = _fans_md = None
     try:
-        from app.services.xingtu_commercial import (
-            resolve_kolid, fetch_xingtu_commercial, fetch_fans_portrait,
-            render_xingtu_section, render_fans_portrait_section)
-        _kid = resolve_kolid(sec_uid, key)
-        if _kid:
-            _xingtu_md = render_xingtu_section(
-                fetch_xingtu_commercial(sec_uid, key, kolid=_kid))
-            _fans_md = render_fans_portrait_section(
-                fetch_fans_portrait(sec_uid, key, kolid=_kid))
+        from app.services.xingtu_profile import (
+            fetch_xingtu_profile, render_xingtu_profile_section,
+            render_fans_portrait_section)
+        from combo_deep_probe.cache import ResponseCache
+        _xprof = fetch_xingtu_profile(
+            sec_uid, key, cache=ResponseCache(cache_dir="data/cache", ttl_sec=86400))
+        if _xprof.is_xingtu:
+            _xingtu_md = render_xingtu_profile_section(_xprof)
+            _fans_md = render_fans_portrait_section(_xprof)
     except Exception:  # noqa: BLE001
         pass
     business_md = "\n\n".join(filter(None, [

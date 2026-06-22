@@ -114,19 +114,26 @@ class TestCombinationInsights(unittest.TestCase):
 
 
 class TestRender(unittest.TestCase):
-    def test_render_full(self):
+    def test_render_business(self):
         md = xp.render_xingtu_profile_section(_built())
         self.assertIn("8,200", md)
         self.assertIn("带货指数", md)         # 个体商业值(GPM修复)
         self.assertIn("前1.2%", md)           # link_shopping rank_percent 0.0118
-        self.assertIn("男性居多", md)
         self.assertIn("投放ROI", md)
         self.assertIn("破圈", md)
+        self.assertNotIn("31到40岁", md)      # 画像详情移到独立 audience 段
+
+    def test_render_fans_portrait(self):
+        md = xp.render_fans_portrait_section(_built())
+        self.assertIn("男性居多", md)
+        self.assertIn("31到40岁", md)
+        self.assertIn("星图官方", md)
 
     def test_render_none_when_not_xingtu(self):
         p = XingtuProfile(sec_uid="x")   # is_xingtu=False
         self.assertIsNone(xp.render_xingtu_profile_section(p))
         self.assertIsNone(xp.render_xingtu_profile_section(None))
+        self.assertIsNone(xp.render_fans_portrait_section(p))
 
 
 if __name__ == "__main__":
