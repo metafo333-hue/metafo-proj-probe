@@ -18,39 +18,82 @@ from app.services import account_chain, diagnosis_cards
 router = APIRouter(prefix="/api/v1/account", tags=["account"])
 
 
-def _build_account_for_diagnosis(sec_uid: str, key: str | None) -> tuple[dict, Any]:
-    """采集账号 + 星图(复用P0缓存)→ (account dict, xprof适配dict)。供诊断卡用。"""
-    rd = account_chain._harness_collect(sec_uid, key)
-    prof = rd.get("profile") or {}
-    diag = rd.get("diagnosis") or {}
+def _build_account_for_diagnosis(sec_uid: str, key: str | None,
+                                 aweme_id: str | None = None) -> tuple[dict, Any]:
+    """采集账号+星图→ (account dict, xprof适配dict)。供诊断卡/复合指标用。
+
+    有 aweme_id → run_full_harvest 全量采集(21端点·含评论/画像)·复合指标满血;
+    无 → 降级 _harness_collect(profile/posts)。全程复用 P0 缓存。
+    """
+    from combo_deep_probe.account_probe import diagnose, parse_profile, parse_works
+    from combo_deep_probe.cache import ResponseCache
+    cache = ResponseCache(cache_dir="data/cache", ttl_sec=86400)
+
+    results: dict = {}
+    if aweme_id:
+        try:
+            from combo_deep_probe.harness import run_full_harvest
+            r = run_full_harvest({"aweme_id": aweme_id}, key, cache=cache, tier="full")
+            results = r.get("results", {})
+            sec_uid = sec_uid or (r.get("seeds") or {}).get("sec_uid")
+        except Exception:  # noqa: BLE001
+            pass
+
+    if results.get("profile") and results.get("posts"):   # 全量路径
+        prof = parse_profile(results["profile"])
+        works = parse_works(results["posts"])
+        diag = diagnose(works, follower_count=prof.get("follower_count"), profile=prof)
+    else:                                                  # 降级路径
+        rd = account_chain._harness_collect(sec_uid, key)
+        prof, diag = rd.get("profile") or {}, rd.get("diagnosis") or {}
+
+    _itv = (diag.get("update") or {}).get("avg_interval_hours")
     account = {
-        "nickname": prof.get("nickname"),
-        "follower": prof.get("follower_count"),
+        "nickname": prof.get("nickname"), "follower": prof.get("follower_count"),
         "max_follower": prof.get("max_follower_count"),
         "with_commerce_entry": prof.get("with_commerce_entry"),
+        "live_commerce": prof.get("live_commerce"),
+        "mix_count": prof.get("mix_count"), "series_count": prof.get("series_count"),
+        "aweme_count": prof.get("aweme_count"),
         "avg_like": (diag.get("like") or {}).get("avg"),
         "max_like": (diag.get("like") or {}).get("max"),
+        "avg_collect": (diag.get("interaction_avg") or {}).get("collect"),
         "vertical_score": diag.get("vertical_score"),
         "burst_ratio": diag.get("burst_ratio"),
         "follower_drawdown": diag.get("follower_drawdown"),
         "engagement_structure": diag.get("engagement_structure"),
         "commerce_density": diag.get("commerce_density"),
+        "update_gap_days": round(_itv / 24, 1) if _itv else None,
     }
+    # 评论 IP 集中度(水军风险·满血·从全量 comments)
+    cmts = (results.get("comments") or {}).get("comments") or []
+    if cmts:
+        from collections import Counter
+        ips = Counter(c.get("ip_label") for c in cmts if c.get("ip_label"))
+        if ips:
+            account["ip_concentration"] = round(max(ips.values()) / sum(ips.values()), 2)
+
     xprof_adapter = None
     try:
-        from combo_deep_probe.cache import ResponseCache
         from app.services.xingtu_profile import fetch_xingtu_profile
-        xp = fetch_xingtu_profile(sec_uid, key,
-                                  cache=ResponseCache(cache_dir="data/cache", ttl_sec=86400))
+        xp = fetch_xingtu_profile(sec_uid, key, cache=cache)   # 命中全量缓存
         if xp.is_xingtu:
             _lsi = xp.link_shopping_index
+
+            def _p2c(dims):  # XingtuProfile top5 [(k,v)] → composite 期望 [{name,value}]
+                return [{"type": d.get("type"), "origin_type": d.get("type"),
+                         "display": d.get("display"),
+                         "top5": [{"name": k, "value": v} for k, v in (d.get("top5") or [])]}
+                        for d in (dims or [])]
+
             xprof_adapter = {
-                "expect_vv": xp.expect_vv,
-                "industry_tags": xp.industry_tags,
-                "industry_tag": (xp.industry_tags or [None])[0],
-                "price_info": xp.prices,
+                "expect_vv": xp.expect_vv, "industry_tags": xp.industry_tags,
+                "industry_tag": (xp.industry_tags or [None])[0], "price_info": xp.prices,
                 "link_shopping_index": {"avg_value": _lsi.avg_value} if _lsi else None,
                 "link_shopping_index_avg": _lsi.avg_value if _lsi else None,
+                "fans_portrait": _p2c(xp.fans_portrait),          # 满血:消费力/地域
+                "audience_portrait": _p2c(xp.audience_portrait),  # 满血:双画像破圈
+                "rec_videos": xp.rec_videos,                      # 满血:竞品互动
             }
     except Exception:  # noqa: BLE001
         pass
@@ -132,18 +175,15 @@ def diagnose(payload: dict[str, Any] = Body(...)) -> dict:
         return {"code": 4001, "data": None, "msg": "需 video_url 或 sec_uid"}
     key = os.getenv("TIKHUB_API_KEY") or os.getenv("PROBE_TIKHUB_KEY")
     try:
+        aid = None
         if not sec_uid:
-            from combo_deep_probe.cache import ResponseCache
-            from combo_deep_probe.harness import run_harness
             aid = account_chain.resolve_douyin(video_url)
             if not aid:
                 return {"code": 4002, "data": None, "msg": "无法解析视频链接"}
-            hres = run_harness({"aweme_id": aid}, key,
-                               cache=ResponseCache(cache_dir="data/cache", ttl_sec=86400))
-            sec_uid = (hres.get("seeds") or {}).get("sec_uid")
-            if not sec_uid:
-                return {"code": 4003, "data": None, "msg": "无法解析账号(视频可能已删/风控)"}
-        account, xprof = _build_account_for_diagnosis(sec_uid, key)
+        # 全量采集(aweme_id 走 run_full_harvest 自举+21端点·复合指标满血)
+        account, xprof = _build_account_for_diagnosis(sec_uid, key, aweme_id=aid)
+        if not account.get("nickname"):
+            return {"code": 4003, "data": None, "msg": "无法解析账号(视频可能已删/风控)"}
         return {"code": 0, "data": {
             "nickname": account.get("nickname"),
             "churn": diagnosis_cards.diagnose_churn(account),
