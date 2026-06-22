@@ -152,7 +152,7 @@ def diagnose_pricing(account: dict[str, Any], xprof=None) -> dict[str, Any]:
                 if vtype == 1:  # 1-20s 视频类型
                     raw_price = (p.get("price") if isinstance(p, dict) else getattr(p, "price", None))
                     if raw_price:
-                        star_price_yuan = raw_price / 100  # 分→元
+                        star_price_yuan = raw_price  # price_info.price 已是元(实测8200=¥8200·区别于CPM的分)
 
         ev = _xprof_attr(xprof, "expect_vv") or {}
         if isinstance(ev, dict):
@@ -168,7 +168,8 @@ def diagnose_pricing(account: dict[str, Any], xprof=None) -> dict[str, Any]:
 
     # ── 实际均播 ──
     avg_like = account.get("avg_like") or 0
-    # 均播暂用 avg_like 代理（avg_play 字段若不存在则退化）
+    # avg_play 是平台黑盒·缺失时用 avg_like 代理(play>>like·会让 CPM 虚高·须标注不据此判高)
+    play_is_proxy = not account.get("avg_play")
     actual_avg_play = account.get("avg_play") or avg_like or 0
 
     follower = account.get("follower") or 0
@@ -182,10 +183,11 @@ def diagnose_pricing(account: dict[str, Any], xprof=None) -> dict[str, Any]:
             vv_deviation_pct = abs(expected_vv - actual_avg_play) / actual_avg_play * 100
 
         # 判据 (⚠️经验值待校准: CPM 行业均值 5-15 元/千次)
+        # avg_play 黑盒代理时 CPM/偏差不可靠·不据此判 high(避免误判·仅标注)
         issues = []
-        if vv_deviation_pct is not None and vv_deviation_pct > 50:
+        if not play_is_proxy and vv_deviation_pct is not None and vv_deviation_pct > 50:
             issues.append(f"预期播放 vs 实际偏差 {vv_deviation_pct:.0f}%（>50% 阈值·疑似数据虚高）")
-        if actual_cpm is not None and actual_cpm > 15:
+        if not play_is_proxy and actual_cpm is not None and actual_cpm > 15:
             issues.append(f"实际 CPM {actual_cpm:.1f} 元/千次（>15 元行业偏贵·⚠️经验值待校准）")
 
         if issues:
@@ -196,7 +198,10 @@ def diagnose_pricing(account: dict[str, Any], xprof=None) -> dict[str, Any]:
             advice = f"CPM 约 {actual_cpm:.1f} 元/千次，低于行业均值 5 元（⚠️经验值待校准），性价比高。可参考星图定价，或上浮 10-20%"
         else:
             status, severity = "fair", "green"
-            advice = f"星图定价 {star_price_yuan:.0f} 元（1-20s 视频），CPM {'%.1f' % actual_cpm if actual_cpm else '未知'} 元/千次，处于行业正常水平（5-15 元·⚠️经验值待校准）"
+            _cpm_s = ("%.1f" % actual_cpm) if actual_cpm else "未知"
+            _proxy_s = "（⚠️播放量未投喂·CPM 按点赞估算偏高·仅参考·投喂后台数据更准）" if play_is_proxy else ""
+            advice = (f"星图定价 {star_price_yuan:.0f} 元（1-20s 视频），CPM {_cpm_s} 元/千次，"
+                      f"处于行业正常水平（5-15 元·⚠️经验值待校准）{_proxy_s}")
 
         return {
             "card": "P3",
@@ -208,6 +213,7 @@ def diagnose_pricing(account: dict[str, Any], xprof=None) -> dict[str, Any]:
             "vv_deviation_pct": round(vv_deviation_pct, 1) if vv_deviation_pct else None,
             "expected_vv": expected_vv,
             "actual_avg_play": actual_avg_play,
+            "play_is_proxy": play_is_proxy,
             "link_shopping_avg": link_shopping_avg,
             "estimated_price_yuan": None,
             "advice": advice,

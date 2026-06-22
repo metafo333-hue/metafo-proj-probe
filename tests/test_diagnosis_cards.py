@@ -98,10 +98,10 @@ LOW_TRAFFIC_ACCOUNT = {
 MOCK_XPROF_GOOD = {
     "is_xingtu": True,
     "price_info": [
-        {"video_type": 1, "price": 8200},   # 82元
+        {"video_type": 1, "price": 8200},   # ¥8200(实测元·非分·区别于CPM)
         {"video_type": 2, "price": 11200},
     ],
-    "expect_vv": {"value": 50000},
+    "expect_vv": {"value": 800000},   # ¥8200报价对应~80万预期播放(自洽·cpm≈10)
     "link_shopping_index": {"avg_value": 65.0, "rank_percent": 0.05},
     "industry_tag": ["美妆", "护肤"],
 }
@@ -163,11 +163,11 @@ class TestDiagnoseChurn(unittest.TestCase):
 class TestDiagnosePricing(unittest.TestCase):
 
     def test_with_xingtu_fair(self):
-        acct = {**HEALTHY_ACCOUNT, "avg_play": 55000}
+        acct = {**HEALTHY_ACCOUNT, "avg_play": 800000}   # ¥8200报价对应~80万播放→CPM≈10(fair·自洽)
         r = diagnose_pricing(acct, MOCK_XPROF_GOOD)
         self.assertEqual(r["card"], "P3")
         self.assertIsNotNone(r["star_price_yuan"])
-        self.assertAlmostEqual(r["star_price_yuan"], 82.0)
+        self.assertAlmostEqual(r["star_price_yuan"], 8200.0)   # price 已是元(实测修复)
         self.assertIsNotNone(r["actual_cpm"])
         self.assertIn(r["status"], ("fair", "low"))
 
