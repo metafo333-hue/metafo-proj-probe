@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app import config
-from app.routers import invoke, manifest, selftest, task, selfmedia, account
+from app.routers import invoke, manifest, selftest, task, selfmedia, account, rotation, cost
 
 app = FastAPI(title="probe · 链接情报", version=config.CONTRACT_VERSION)
 
@@ -18,6 +18,8 @@ app.include_router(selftest.router)
 app.include_router(task.router)
 app.include_router(selfmedia.router)  # 自媒体采集面(方案B 独立验证面·断层1接线)
 app.include_router(account.router)    # 账号综合分析(对内用·无 SSO/计费)
+app.include_router(rotation.router)   # 轮动看板(日/周/月快照追踪·共用数据)
+app.include_router(cost.router)       # 付费数据源用量/省费聚合(喂 ops 用量看板·只读对内)
 
 
 @app.get("/api/v1/health")

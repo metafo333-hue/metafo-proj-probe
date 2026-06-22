@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated_at": "2026-06-22T02:53:23",
+  "updated_at": "2026-06-22T12:25:49",
   "cases": [
     {
       "run_id": "douyin-dingxiangyisheng-20260621-120000",
@@ -219,6 +219,48 @@
       "video_comment": 28,
       "video_collect": 7,
       "video_share": 15
+    },
+    {
+      "run_id": "douyin-beichuanmoyujie-20260622-122548",
+      "platform": "douyin",
+      "sec_uid": "",
+      "aweme_id": "7641434470629562865",
+      "account_name": "北川魔芋姐｜赵娟",
+      "account_type": "带货·B2B",
+      "follower": 4645,
+      "avg_like": 105,
+      "max_like": 383,
+      "burst_ratio": 3.6,
+      "video_title": "扎根北川深耕魔芋 36 年，产地直供品质正宗地道\n#北川魔芋 #源头工厂 #特色农产 #素毛肚食材 #产地好物",
+      "video_like": 196,
+      "has_av": true,
+      "analyzed_at": "2026-06-22T12:25:48",
+      "analyzed_date": "2026-06-22",
+      "probe_version": "e8d44007",
+      "polish": {
+        "ok": false,
+        "mode": "unknown",
+        "model": "",
+        "segs_ok": 0,
+        "segs_total": 0
+      },
+      "validation_pass": false,
+      "validation_gaps": [
+        "涉密·不暴露数据源"
+      ],
+      "ai_summary": "「产业带货·明确定位·提升转化」",
+      "tags": [
+        "真实账号",
+        "同账号多视频",
+        "B2B",
+        "魔芋"
+      ],
+      "report_chars": 14512,
+      "prev_run_id": null,
+      "version_count": 1,
+      "prev_vid_run_id": null,
+      "vid_version_count": 1,
+      "source": "real_tikhub"
     }
   ]
 }

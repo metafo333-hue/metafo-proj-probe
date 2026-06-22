@@ -26,6 +26,7 @@ import urllib.request
 from typing import Any
 
 from app.datasources.base import DataSourceAdapter
+from app.datasources import source_cache
 
 _TIKHUB_BASE = os.environ.get("TIKHUB_API_BASE", "https://api.tikhub.io")
 _DOUYIN_STAT_EP = "/api/v1/douyin/app/v3/fetch_video_statistics"
@@ -71,11 +72,15 @@ class TikHubAdapter(DataSourceAdapter):
         if plat is None:
             return {}                              # 非五平台 → 本适配器不处理
         c = self._get_client()
-        try:
+        ep = "tikhub:note_info" if plat == "xiaohongshu" else "tikhub:video_data"
+
+        def _do() -> Any:
             if plat == "xiaohongshu":
-                raw = c.xiaohongshu_web.get_note_info_v2(share_text=url)
-            else:  # douyin / bilibili / kuaishou / weibo → 通用解析
-                raw = c.hybrid_parsing.video_data(url=url)
+                return c.xiaohongshu_web.get_note_info_v2(share_text=url)
+            return c.hybrid_parsing.video_data(url=url)   # 通用解析（douyin/bilibili/kuaishou/weibo）
+        try:
+            # source_cache 收口：按 url 端点级缓存（省重复付费）+ 计费埋点
+            raw = source_cache.cached_call(self.source_id, ep, {"url": url}, _do, cost_cny=0.001)
         except Exception as e:
             return {"_error": f"{type(e).__name__}: {str(e)[:160]}"}
 
@@ -151,10 +156,11 @@ class TikHubAdapter(DataSourceAdapter):
     def _fetch_douyin_play_count(self, aweme_id: str) -> int | None:
         """调抖音统计接口拿单条 play_count（$0.001/次）。失败返回 None。
         参数名：aweme_ids（复数）；响应：data.statistics_list[0].play_count。
+        经 source_cache 收口：同 aweme_id 1h 内命中缓存不重复扣费（只缓存有效正值）。
         """
-        url = (f"{_TIKHUB_BASE}{_DOUYIN_STAT_EP}?"
-               f"{urllib.parse.urlencode({'aweme_ids': aweme_id})}")
-        try:
+        def _do() -> int:
+            url = (f"{_TIKHUB_BASE}{_DOUYIN_STAT_EP}?"
+                   f"{urllib.parse.urlencode({'aweme_ids': aweme_id})}")
             req = urllib.request.Request(url, headers={
                 "Authorization": f"Bearer {self._key}",
                 "Accept": "application/json",
@@ -165,7 +171,13 @@ class TikHubAdapter(DataSourceAdapter):
             stat_data = (body or {}).get("data", body) or {}
             stat_list = stat_data.get("statistics_list") or []
             pc = stat_list[0].get("play_count") if stat_list else None
-            return int(pc) if isinstance(pc, (int, float)) and pc > 0 else None
+            if isinstance(pc, (int, float)) and pc > 0:
+                return int(pc)
+            raise ValueError("no valid play_count")   # 失败抛出 → 不缓存、可重试
+        try:
+            return source_cache.cached_call(
+                self.source_id, "tikhub:douyin_stat", {"aweme_id": aweme_id}, _do,
+                cost_cny=0.001)
         except Exception:  # noqa: BLE001
             return None
 
