@@ -123,7 +123,8 @@ def render_xingtu_section(data: dict[str, Any] | None) -> str | None:
     if cpm and cpm[0]:
         vv = data.get("expect_vv")
         vv_s = f"·预期播放 {vv/10000:.0f}万" if vv else ""
-        L.append(f"- **投放性价比**：CPM ¥{cpm[0]}–{cpm[1]}（每千次播放成本）{vv_s}")
+        lo, hi = _to_int(cpm[0]) / 100, _to_int(cpm[1]) / 100  # 实测分→元(2156=¥21.56)
+        L.append(f"- **投放性价比**：CPM ¥{lo:.0f}–{hi:.0f}（每千次播放成本）{vv_s}")
     if data.get("cooperate_index") is not None:
         rp = data.get("cooperate_rank_percent")
         rank_s = f"·行业前 {rp*100:.2f}%" if rp else ""
