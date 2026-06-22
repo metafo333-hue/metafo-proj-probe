@@ -20,6 +20,14 @@ from app.datasources.orchestrator.core import (
     scatter_gather,
     fan_out,
 )
+from app.datasources.orchestrator.fusion import (
+    Claim,
+    FusedClaim,
+    fuse_claims,
+    fuse_fanout,
+    to_audit_claims,
+    reliability_weight,
+)
 
 __all__ = [
     "SourceSpec",
@@ -27,4 +35,11 @@ __all__ = [
     "FanOutResult",
     "scatter_gather",
     "fan_out",
+    # OS3 多源融合
+    "Claim",
+    "FusedClaim",
+    "fuse_claims",
+    "fuse_fanout",
+    "to_audit_claims",
+    "reliability_weight",
 ]
