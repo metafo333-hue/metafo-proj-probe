@@ -114,6 +114,50 @@ def _agg_video_tags(works: list) -> list[str]:
     return [t for t, _ in sorted(counts.items(), key=lambda x: -x[1])[:3]]
 
 
+def _harness_collect(sec_uid: str, key: str) -> dict:
+    """采集账号(profile+作品)→ AccountProbe.to_dict 格式。
+
+    优先 P0 harness 并发采集(三锚点缓存·复诊近 0 成本)·复用 combo 解析函数;
+    任一失败 → 回退原 AccountProbe 串行(降级·保证不退化)。
+    只取 profile/posts 两端点(kol 由 xingtu_profile 单独管·共享缓存不重复扣)。
+    """
+    try:
+        import asyncio
+        from combo_deep_probe.account_probe import diagnose, parse_profile, parse_works
+        from combo_deep_probe.cache import ResponseCache
+        from combo_deep_probe.harness import fetch_endpoints_async
+        specs = [
+            ("profile", "/api/v1/douyin/web/handler_user_profile", {"sec_user_id": sec_uid}),
+            ("posts", "/api/v1/douyin/web/fetch_user_post_videos",
+             {"sec_user_id": sec_uid, "max_cursor": 0, "count": 20}),
+        ]
+        cache = ResponseCache(cache_dir="data/cache", ttl_sec=86400)
+        coro = fetch_endpoints_async(specs, key, cache=cache)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+            res = loop.run_until_complete(coro)
+        else:
+            res = asyncio.run(coro)
+        pd = (res.get("profile") or {}).get("data")
+        ld = (res.get("posts") or {}).get("data")
+        if pd and ld:
+            profile = parse_profile(pd)
+            works = parse_works(ld)
+            diag = diagnose(works, follower_count=profile.get("follower_count"), profile=profile)
+            return {"profile": profile, "diagnosis": diag, "works_analyzed": len(works),
+                    "works_sample": works[:10], "meta": {"via": "harness"}}
+    except Exception as _e:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("harness 采集降级 AccountProbe: %s", _e)
+    from combo_deep_probe import build_account_probe
+    return build_account_probe(tikhub_key=key).analyze(sec_user_id=sec_uid, count=20).to_dict()
+
+
 def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                        with_audiovisual: bool = True,
                        competitor_urls: list[str] | None = None,
@@ -204,8 +248,7 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         return {"ok": False, "error": "拿不到作者 sec_uid(无法多维)", "video": video}
 
     # 2. 账号 + 兄弟视频(works)
-    rep = build_account_probe(tikhub_key=key).analyze(sec_user_id=sec_uid, count=20)
-    rd = rep.to_dict()
+    rd = _harness_collect(sec_uid, key)   # P0 harness 并发+缓存·失败回退 AccountProbe
     # 字段契约校验：combo-deep-probe to_dict() 必须返回这四个顶层键（版本漂移早发现）
     _CONTRACT_FIELDS = ("profile", "diagnosis", "works_sample", "works_analyzed")
     _missing_fields = [f for f in _CONTRACT_FIELDS if f not in rd]
@@ -258,6 +301,10 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
         "risk_warned_count": sum(1 for w in (works or []) if w.get("risk_warn")),
         "pinned_work": next((w for w in (works or []) if w.get("is_top")), None),
         "platform_tags": _agg_video_tags(works) if works else [],   # 聚合平台三级标签
+        # ── 组合衍生矩阵 v2.0（works/profile 内零额外 API）──
+        "engagement_structure": diag.get("engagement_structure"),   # 互动结构+内容性质(实用/争议/传播)
+        "commerce_density": diag.get("commerce_density"),           # 带货作品占比
+        "follower_drawdown": diag.get("follower_drawdown"),         # 掉粉预警(历史峰值-当前)
     }
 
     # 3. 担保:账号 → 转换器 → 八闸
@@ -323,9 +370,25 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
     _biz_data = {"commission": category_commission(_track_name),
                  "gmv": category_gmv_tier(_track_name),
                  "xingtu": xingtu_price_estimate(account.get("follower") or 0, _track_name)}
+    # 星图整体并行(P1·章四·替 xingtu_commercial 串行版)·一次取全报价/性价比/6指数/画像
+    # + 组合洞察(ROI核验/破圈信号)·复用 P0 三锚点缓存·未开星图降级 None(上游估算兜底)
+    _xingtu_md = _fans_md = None
+    try:
+        from app.services.xingtu_profile import (
+            fetch_xingtu_profile, render_xingtu_profile_section,
+            render_fans_portrait_section)
+        from combo_deep_probe.cache import ResponseCache
+        _xprof = fetch_xingtu_profile(
+            sec_uid, key, cache=ResponseCache(cache_dir="data/cache", ttl_sec=86400))
+        if _xprof.is_xingtu:
+            _xingtu_md = render_xingtu_profile_section(_xprof)
+            _fans_md = render_fans_portrait_section(_xprof)
+    except Exception:  # noqa: BLE001
+        pass
     business_md = "\n\n".join(filter(None, [
         render_commercial_section(account, _tv),
         render_commercial_data_section(account, _track_name, _biz_data),
+        _xingtu_md,                                  # 星图官方真值卡片(有则插)
         render_conversion_section(account, video, works, av_six),
     ]))
 
@@ -336,6 +399,26 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                 "works_count": account.get("aweme_count") or 0}
     segment_md = cold_start_md = audience_md = comment_md = homepage_md = None
     trend_md = benchmark_md = risk_md = verify_md = action_md = None
+    # 画像段(项3):星图官方真画像优先(_fans_md)·无则评论区 ip_label 地域估算兜底
+    audience_md = _fans_md
+    if not audience_md:
+        try:
+            from combo_deep_probe.adapters.tikhub_adapter import tikhub_get as _tg
+            from collections import Counter as _Cnt
+            _craw = _tg("/api/v1/douyin/web/fetch_video_comments",
+                        {"aweme_id": aweme_id, "cursor": 0, "count": 50}, key)
+            _cms = ((_craw or {}).get("data") or {}).get("comments") or []
+            _ips = _Cnt(c.get("ip_label") for c in _cms if c.get("ip_label"))
+            if _ips:
+                _tot = sum(_ips.values())
+                _parts = "、".join(f"{k} {v / _tot * 100:.0f}%"
+                                   for k, v in _ips.most_common(5))
+                audience_md = ("### 👥 粉丝画像（评论区地域估算·非官方）\n\n"
+                               f"- 评论活跃地域 TOP5：{_parts}\n\n"
+                               f"> 基于 {_tot} 条评论 IP 属地聚合(非粉丝全量·仅参考)·"
+                               "开星图账号可取官方真画像。")
+        except Exception:  # noqa: BLE001
+            pass
     _seg = None
     _risk_findings: list = []
     try:  # 对象层:创作者分层 + 能力适配
@@ -404,9 +487,9 @@ def run_from_video_url(url: str, tikhub_key: str | None = None, *,
                 _ci.analyze_comments(_comments, _track_name))
         except Exception as _e:  # noqa: BLE001
             _log.warning("comment_insight 降级: %s", _e)
-    # 受众画像:A路需创作者授权数据·C路(粉丝列表聚合)PIPL 默认关·
-    #   真正的灰色/个人侧通路走 audience_source.register_source 隔离注册(不在商业链自建抓取·
-    #   中性指针)·当前自动管线无授权数据 → audience_md 留 None(安全·有授权源时在此接)
+    # 受众画像:audience_md 已在步骤 4.9 接入(星图官方真画像优先·无则评论区 ip_label 地域估算)·
+    #   A路创作者授权数据/C路粉丝列表聚合(PIPL 默认关)仍走 audience_source.register_source
+    #   隔离注册(不在商业链自建抓取·中性指针)
 
     # 4.11 轮动分析（行业板块轮动·五维·零 LLM·失败降级 None）
     rotation_result = None

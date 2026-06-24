@@ -44,7 +44,36 @@
       ],
       "properties": {
         "deliverable": {
-          "description": "成品"
+          "type": "object",
+          "description": "成品。深探类(kind=video/link)为 deep_report：report(七段·免费档 s3-s7 锁) + conclusion_label(自评置信)",
+          "properties": {
+            "type": { "type": "string", "description": "deep_report 等" },
+            "kind": { "type": "string", "description": "video / link / ..." },
+            "report": {
+              "type": "object",
+              "description": "七段深探报告。免费档(depth=public)锁 s3-s7、headline/decision_tip 空；付费档(premium)解锁全文",
+              "properties": {
+                "depth": { "type": "string", "description": "public(免费) / premium(付费)" },
+                "rating": { "type": ["string", "null"] },
+                "headline": { "type": "string" },
+                "decision_tip": { "type": "string" },
+                "locked_sections": { "type": "array", "items": { "type": "string" }, "description": "免费档锁的章节(s3-s7)" },
+                "unlock_hint": { "type": "string" }
+              }
+            },
+            "conclusion_label": {
+              "type": "object",
+              "description": "自评置信块(certainty)·免费档亦提供，供消费方做来源分级",
+              "properties": {
+                "source_reliability": { "type": "string", "description": "A-D 来源可信度" },
+                "info_credibility": { "type": "string", "description": "1-6 信息可信度" },
+                "confidence_level": { "type": "string", "description": "High / Moderate / Low" },
+                "evidence_strength": { "type": "string" },
+                "verification_methods": { "type": "array", "items": { "type": "string" } },
+                "aigc_flag": { "type": "boolean" }
+              }
+            }
+          }
         },
         "meta": {
           "type": "object",
@@ -87,7 +116,7 @@
             },
             "conclusion_block": {
               "type": "object",
-              "description": "结构化结论块，供前端直接渲染",
+              "description": "结构化结论块（legacy·向后兼容保留；新消费方优先用 deliverable.report + deliverable.conclusion_label）",
               "properties": {
                 "headline": {
                   "type": "string",
