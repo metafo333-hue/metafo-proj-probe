@@ -61,8 +61,33 @@ def render_board_html(board: dict[str, Any]) -> str:
              _screen2_drilldown(layers, acc),
              _screen3_cards(layers),
              _screen_accounting(acc),
+             _screen_coverage(board.get("data_coverage")),
              _html_foot()]
     return "\n".join(parts)
+
+
+def _screen_coverage(cov: dict | None) -> str:
+    """数据覆盖诚实账:新接入了哪些·哪些空(原因)·哪些冗余。"""
+    if not cov:
+        return ""
+    shown = cov.get("new_signals_shown") or []
+    empty = cov.get("empty_this_account") or []
+    redun = cov.get("redundant_or_niche") or []
+    shown_html = "".join(f'<span class="chip" style="background:#ECFDF5;color:#059669">{s}</span> '
+                         for s in shown) or "（无）"
+    empty_html = "".join(f"<tr><td>{e['ep']}</td><td style='color:#9CA3AF'>{e['reason']}</td></tr>"
+                         for e in empty)
+    redun_html = "".join(f"<tr><td>{e['ep']}</td><td style='color:#9CA3AF'>{e['reason']}</td></tr>"
+                         for e in redun)
+    return f"""<div class="screen"><span class="screen-tag">数据覆盖 · 诚实账(采集→展示)</span>
+<h2>本轮新接入并展示({len(shown)} 项·原采集未展示)</h2>
+<div style="line-height:2.2">{shown_html}</div>
+<h2>此账号空返回(诚实标原因·不编造)</h2>
+<table><tr><th>端点</th><th>为什么空</th></tr>{empty_html}</table>
+<h2>冗余/小众(不单列)</h2>
+<table><tr><th>端点</th><th>原因</th></tr>{redun_html}</table>
+<div class="note">{cov.get('note','')}</div>
+</div>"""
 
 
 def _html_head(nickname: str) -> str:
@@ -182,14 +207,14 @@ def _layer_body(L: dict) -> str:
                 f'<div class="kv"><span><span class="k">热点契合:</span>'
                 f'{_n(_g(L,"hot_fit","verdict"))}</span>'
                 f'<span><span class="k">黑马选题:</span>{_n(_g(L,"dark_horse","verdict"))}</span></div>')
-        return base + _deep_block(L.get("deep"))
+        return base + _deep_block(L.get("deep")) + _env_hot_block(L.get("env_hot"))
     if coord.startswith("②"):
         rk = L.get("industry_rank_percent")
         rk_txt = f"行业前 {round((1-rk)*100)}%" if isinstance(rk, (int, float)) and rk <= 1 else _n(rk)
         base = (f'<div class="kv"><span><span class="k">赛道:</span>{_n(L.get("track_keyword"))}</span>'
                 f'<span><span class="k">蓝海度:</span>{_score_bar(L.get("blue_ocean_score"),80)}</span></div>'
                 f'<div class="kv"><span><span class="k">商业身位:</span>{rk_txt}</span></div>')
-        return base + _deep_block(L.get("deep"))
+        return base + _deep_block(L.get("deep")) + _competitor_block(L.get("competitor"))
     if coord.startswith("③"):
         return _layer_account_body(L)
     if coord.startswith("④"):
@@ -241,9 +266,58 @@ def _layer_account_body(L: dict) -> str:
         f"<td style='color:#6B7280'>{_n(note,'','')}</td></tr>"
         for name, sc, note in rows)
     table = f'<table><tr><th>指标</th><th>分值</th><th>说明</th></tr>{trs}</table>'
-    # 深度五段式:健康分拆解 + 商业转化为什么这个分(纠赛道误判)
+    # 深度五段式 + 受众洞察(新接入:评论热词+粉丝分布+采购意向)
     return table + _deep_block(L.get("deep_health"), "健康分·深度拆解") + \
-        _deep_block(L.get("deep_commerce"), "商业转化·为什么这个分")
+        _deep_block(L.get("deep_commerce"), "商业转化·为什么这个分") + \
+        _audience_block(L.get("audience"))
+
+
+def _combo_card(title: str, conclusion: str, lines: list, implication: str | None,
+                impl_color: str = "#FFF7ED") -> str:
+    """通用组合洞察卡(评论热词/竞品/大盘等扩展信号·绿色虚线区分于五段式蓝)。"""
+    lis = "".join(f"<li>{x}</li>" for x in lines if x)
+    impl = (f'<div style="font-size:13px;background:{impl_color};border-radius:8px;'
+            f'padding:7px 10px;margin-top:5px">💡 {implication}</div>') if implication else ""
+    return (f'<div style="border:1px dashed #05966933;border-radius:10px;'
+            f'padding:10px 12px;margin:8px 0;background:#F6FFFB">'
+            f'<div style="font-weight:800;color:#059669;margin-bottom:4px">🔌 {title}'
+            f'<span style="font-size:11px;color:#9CA3AF;font-weight:400">(新接入·原采集未展示)</span></div>'
+            f'<div style="font-size:13.5px;margin:3px 0"><b>{conclusion}</b></div>'
+            f'<ul style="margin:.1em 0;padding-left:1.3em;font-size:12.5px">{lis}</ul>{impl}</div>')
+
+
+def _audience_block(d: dict | None) -> str:
+    if not d:
+        return ""
+    impl = d.get("implication")
+    return _combo_card("受众洞察 · 评论热词+粉丝分布+采购意向",
+                       d.get("conclusion", ""), d.get("breakdown", []), impl,
+                       impl_color="#FEF2F2" if d.get("intent_signal") else "#FFF7ED")
+
+
+def _competitor_block(d: dict | None) -> str:
+    if not d:
+        return ""
+    comp_lines = list(d.get("breakdown", []))
+    comps = d.get("competitors") or []
+    if comps:
+        comp_lines.append("竞品圈:" + "、".join(
+            f"{c['name']}({_fmt_fans(c.get('fans'))})" for c in comps[:5]))
+    return _combo_card("竞品雷达 · 算法关联+粉丝同关",
+                       d.get("conclusion", ""), comp_lines, d.get("implication"))
+
+
+def _env_hot_block(d: dict | None) -> str:
+    if not d:
+        return ""
+    return _combo_card("大盘热点深化 · 上升/热搜/挑战/平台选题",
+                       d.get("conclusion", ""), d.get("breakdown", []), d.get("implication"))
+
+
+def _fmt_fans(n):
+    if not isinstance(n, (int, float)):
+        return "—"
+    return f"{n/10000:.1f}万" if n >= 10000 else str(int(n))
 
 
 def _deep_block(d: dict | None, title: str | None = None) -> str:
