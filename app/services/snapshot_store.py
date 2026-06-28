@@ -41,7 +41,14 @@ def record(account: dict, board: dict, sec_uid: str | None = None) -> dict | Non
     try:
         nick = account.get("nickname") or "acct"
         slug = _slug(nick)
-        ts = (board.get("ladders") or {}).get("l4") or {}
+        ladders = board.get("ladders") or {}
+        l4 = ladders.get("l4") or {}
+        l3 = ladders.get("l3") or {}
+        # 记录本次给的处方(供下次采集对照"建议有没有用")
+        rx = None
+        if l3.get("conclusion"):
+            rx = {"call": l3.get("conclusion"), "color": l3.get("strategic_color"),
+                  "steps": (l3.get("this_week") or [])[:3]}
         snap = {
             "ts": datetime.now().isoformat(timespec="seconds"),  # noqa: DTZ005
             "date": datetime.now().strftime("%Y-%m-%d"),         # noqa: DTZ005
@@ -52,16 +59,18 @@ def record(account: dict, board: dict, sec_uid: str | None = None) -> dict | Non
             "max_like": account.get("max_like"),
             "health": (board.get("raw") or {}).get("scores", {}).get("c1", {}).get("score"),
             "commerce_density": account.get("commerce_density"),
-            "stage": ts.get("stage"),
+            "stage": l4.get("stage"),
+            "prescription": rx,
         }
         _SNAP_DIR.mkdir(parents=True, exist_ok=True)
         fp = _SNAP_DIR / f"{slug}.jsonl"
-        # 同日去重:已有今天的记录则不重复追加
-        existing = _read_jsonl(fp)
-        if any(r.get("date") == snap["date"] for r in existing):
-            return snap
-        with fp.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(snap, ensure_ascii=False) + "\n")
+        # 按日 upsert:同日已有则用最新一条覆盖(最新分析最完整·含处方)·非简单跳过。
+        existing = [r for r in _read_jsonl(fp) if r.get("date") != snap["date"]]
+        existing.append(snap)
+        existing.sort(key=lambda r: r.get("date") or "")
+        with fp.open("w", encoding="utf-8") as f:
+            for r in existing:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
         return snap
     except Exception:  # noqa: BLE001
         return None
@@ -178,3 +187,58 @@ def _date_span(d1: str | None, d2: str | None) -> int | None:
         return max(1, (b - a).days)
     except Exception:  # noqa: BLE001
         return None
+
+
+# ── 处方前后对照(证明系统建议有没有用)──────────────────────────────────────────
+def prescription_effect(history: list[dict]) -> dict[str, Any]:
+    """找最早带处方的快照·对照其后指标真实变化。
+
+    诚实立场:测的是**结果**(处方后指标动没动)·不是**执行**(用户做没做)——
+    公开数据看不到执行·只能看结果·明确标注。指标改善≠处方一定有效(可能其他因素),
+    但指标恶化是清晰的反向信号。
+    """
+    rx_snaps = [h for h in history if h.get("prescription")]
+    if not rx_snaps:
+        return {"enough": False,
+                "verdict": "尚无带处方的历史快照·处方对照从本次起算·下次采集见效"}
+    rx0 = rx_snaps[0]                       # 最早一次处方
+    latest = history[-1]
+    if rx0.get("date") == latest.get("date"):
+        return {"enough": False,
+                "verdict": f"本次首记处方「{(rx0.get('prescription') or {}).get('call','')}」"
+                           "·下次采集即可对照指标变化(看建议有没有用)"}
+    days = _date_span(rx0.get("date"), latest.get("date")) or 1
+
+    def _delta(key):
+        a, b = rx0.get(key), latest.get(key)
+        if a is None or b is None:
+            return None
+        return b - a
+    df, dl, dh = _delta("follower"), _delta("avg_like"), _delta("health")
+    moves = []
+    if df is not None:
+        moves.append(f"粉丝{'+' if df >= 0 else ''}{df}")
+    if dl is not None:
+        moves.append(f"均赞{'+' if dl >= 0 else ''}{dl}")
+    if dh is not None:
+        moves.append(f"健康{'+' if dh >= 0 else ''}{dh}")
+    # 结果判定(诚实:改善/持平/恶化·非"处方有效")
+    score = sum(1 for d in (df, dl, dh) if d is not None and d > 0) - \
+        sum(1 for d in (df, dl, dh) if d is not None and d < 0)
+    if score > 0:
+        outcome = "处方后指标改善(方向对·建议大概率有用)"
+    elif score < 0:
+        outcome = "处方后指标恶化(建议没起效/未执行/或有外部因素)"
+    else:
+        outcome = "处方后指标持平(待更久观察)"
+    return {
+        "enough": True,
+        "rx_date": rx0.get("date"), "rx_call": (rx0.get("prescription") or {}).get("call"),
+        "rx_steps": (rx0.get("prescription") or {}).get("steps", []),
+        "days_since": days,
+        "metric_moves": moves,
+        "outcome": outcome,
+        "verdict": f"{rx0.get('date')} 建议「{(rx0.get('prescription') or {}).get('call','')}」"
+                   f"·{days}天后:{('·'.join(moves) or '指标未取到')}·{outcome}",
+        "note": "测结果非执行(公开数据看不到用户做没做)·指标改善≠唯一归因·恶化是清晰反向信号",
+    }

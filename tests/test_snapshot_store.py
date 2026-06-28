@@ -57,6 +57,40 @@ class TestTrajectory(unittest.TestCase):
         self.assertIn("均赞", r["like_trend"])
         self.assertIn("健康", r["health_trend"])
 
+    def test_rx_effect_none_yet(self):
+        # 无带处方快照 → 从本次起算
+        r = SS.prescription_effect([_snap("2026-06-21", 4645)])
+        self.assertFalse(r["enough"])
+        self.assertIn("从本次起算", r["verdict"])
+
+    def test_rx_effect_first_record(self):
+        # 仅今天有处方(最早=最新)→ 下次见效
+        h = [_snap("2026-06-21", 4645)]
+        h.append({**_snap("2026-06-28", 4658),
+                  "prescription": {"call": "补私域承接", "steps": ["晚18-22发"]}})
+        r = SS.prescription_effect(h)
+        self.assertFalse(r["enough"])
+        self.assertIn("下次采集", r["verdict"])
+
+    def test_rx_effect_improved(self):
+        # 处方后指标改善(粉丝↑均赞↑健康↑)→ 大概率有用
+        h = [{**_snap("2026-06-01", 10000, avg_like=100, health=50),
+              "prescription": {"call": "恢复日更", "steps": ["每周发5条"]}},
+             _snap("2026-06-15", 11500, avg_like=140, health=62)]
+        r = SS.prescription_effect(h)
+        self.assertTrue(r["enough"])
+        self.assertIn("改善", r["outcome"])
+        self.assertEqual(r["rx_call"], "恢复日更")
+        self.assertEqual(r["days_since"], 14)
+
+    def test_rx_effect_worsened(self):
+        # 处方后指标恶化 → 清晰反向信号
+        h = [{**_snap("2026-06-01", 50000, avg_like=200, health=70),
+              "prescription": {"call": "加大带货"}},
+             _snap("2026-06-15", 45000, avg_like=150, health=55)]
+        r = SS.prescription_effect(h)
+        self.assertIn("恶化", r["outcome"])
+
     def test_backfill_from_real_cases(self):
         # 真实回填:data/cases 里有北川历史 → load_history 应≥2(若环境有 case)
         hist = SS.load_history("北川魔芋姐｜赵娟")

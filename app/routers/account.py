@@ -558,9 +558,9 @@ def board(payload: dict[str, Any] = Body(...)) -> dict:
         try:
             from app.services import snapshot_store
             snapshot_store.record(account, b, sec_uid=sec_uid or aid)
-            traj = snapshot_store.trajectory(
-                snapshot_store.load_history(account.get("nickname")))
-            b["ladders"]["l4"]["trajectory"] = traj
+            hist = snapshot_store.load_history(account.get("nickname"))
+            b["ladders"]["l4"]["trajectory"] = snapshot_store.trajectory(hist)
+            b["ladders"]["l4"]["rx_effect"] = snapshot_store.prescription_effect(hist)
         except Exception:  # noqa: BLE001 — 轨迹失败不拖垮接口
             pass
         # view: ladder(v2.0 价值阶梯·默认) | coordinate(v1.3 四级坐标·供对比)

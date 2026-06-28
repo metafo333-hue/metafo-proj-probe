@@ -204,8 +204,25 @@ def _pred_body(ld: dict) -> str:
         out += f'<div class="impl">⏳ 内容时序:{ld.get("conclusion")}</div>'
     # 账号轨迹(跨次采集·完整B)
     out += _trajectory_block(ld.get("trajectory"))
-    out += f'<div class="note">置信:{ld.get("conf","—")}·内容时序单次可算·账号轨迹靠累积</div>'
+    # 处方前后对照(证明建议有没有用)
+    out += _rx_effect_block(ld.get("rx_effect"))
+    out += f'<div class="note">置信:{ld.get("conf","—")}·内容时序单次可算·账号轨迹+处方对照靠累积</div>'
     return out
+
+
+def _rx_effect_block(rx: dict | None) -> str:
+    if not rx:
+        return ""
+    head = '<div style="font-weight:700;color:#7C3AED;margin:8px 0 4px">处方前后对照(建议有没有用)</div>'
+    if not rx.get("enough"):
+        return head + f'<div class="impl" style="background:#F5F3FF">⏳ {rx.get("verdict")}</div>'
+    steps = "、".join(rx.get("rx_steps") or [])
+    return (head + f'<table><tr><th>项</th><th>真实对照</th></tr>'
+            f'<tr><td>处方日</td><td>{rx.get("rx_date")}·建议「{rx.get("rx_call","")}」</td></tr>'
+            f'<tr><td>{rx.get("days_since")}天后</td><td>{("·".join(rx.get("metric_moves") or []))}</td></tr>'
+            f'<tr><td>结果</td><td><b>{rx.get("outcome","")}</b></td></tr></table>'
+            + (f'<div class="note">当时建议步骤:{steps}</div>' if steps else "")
+            + f'<div class="note">{rx.get("note","")}</div>')
 
 
 def _trajectory_block(tj: dict | None) -> str:
