@@ -158,6 +158,7 @@ def _diag_body(ld: dict) -> str:
                 f'{tc.get("title")} — {tc.get("what","")}</div>')
     out += _five(ld.get("deep_health"), "健康分·深度拆解")
     out += _five(ld.get("deep_commerce"), "商业转化·为什么这个分")
+    out += _attribution_block(ld.get("attribution"))   # 矿脉②:内容归因
     # 诊断卡简表
     cards = [x for x in (ld.get("details") or []) if x]
     if cards:
@@ -202,12 +203,49 @@ def _pred_body(ld: dict) -> str:
             out += f'<div class="impl">⚡ {ld.get("rx_eta")}</div>'
     else:
         out += f'<div class="impl">⏳ 内容时序:{ld.get("conclusion")}</div>'
+    # 口碑演化(矿脉③·先行信号)
+    out += _sentiment_block(ld.get("sentiment_evo"))
     # 账号轨迹(跨次采集·完整B)
     out += _trajectory_block(ld.get("trajectory"))
     # 处方前后对照(证明建议有没有用)
     out += _rx_effect_block(ld.get("rx_effect"))
     out += f'<div class="note">置信:{ld.get("conf","—")}·内容时序单次可算·账号轨迹+处方对照靠累积</div>'
     return out
+
+
+def _attribution_block(at: dict | None) -> str:
+    """矿脉②:内容归因(哪个数据因子驱动互动)。"""
+    if not at:
+        return ""
+    head = '<div style="font-weight:700;color:#0891B2;margin:8px 0 4px">🔬 内容归因·哪个数据因子最驱动互动(矿脉②)</div>'
+    if not at.get("enough"):
+        return head + f'<div class="note">{at.get("verdict")}</div>'
+    rows = "".join(
+        f'<tr><td>{f["factor"]}</td><td>差 {f["spread"]}x</td>'
+        f'<td style="font-size:11.5px">{f["best"]}({f["best_eng"]}) vs {f["worst"]}({f["worst_eng"]})</td></tr>'
+        for f in (at.get("factors") or [])[:4])
+    return (head + f'<div style="font-size:13px"><b>{at.get("verdict")}</b></div>'
+            f'<table><tr><th>因子</th><th>组间落差</th><th>最好 vs 最差</th></tr>{rows}</table>'
+            f'<div class="impl">💡 {at.get("implication")}</div>'
+            f'<div class="note">{at.get("note","")}</div>')
+
+
+def _sentiment_block(se: dict | None) -> str:
+    """矿脉③:口碑演化(评论时间线意图/情感趋势)。"""
+    if not se:
+        return ""
+    head = '<div style="font-weight:700;color:#DB2777;margin:8px 0 4px">💬 口碑演化·评论时间线(矿脉③·先行信号)</div>'
+    if not se.get("enough"):
+        return head + f'<div class="note">{se.get("verdict")}</div>'
+    e, l = se.get("early") or {}, se.get("late") or {}
+    return (head + f'<div style="font-size:13px"><b>{se.get("verdict")}·{se.get("span","")}</b></div>'
+            f'<table><tr><th>维度</th><th>早期评论</th><th>近期评论</th></tr>'
+            f'<tr><td>采购/咨询意向率</td><td>{e.get("intent_rate")}</td><td>{l.get("intent_rate")}</td></tr>'
+            f'<tr><td>正面率</td><td>{e.get("pos_rate")}</td><td>{l.get("pos_rate")}</td></tr>'
+            f'<tr><td>负面率</td><td>{e.get("neg_rate")}</td><td>{l.get("neg_rate")}</td></tr></table>'
+            f'<div style="font-size:12.5px">📊 {se.get("intent_trend","")}</div>'
+            f'<div class="impl">💡 {se.get("implication","")}</div>'
+            f'<div class="note">{se.get("note","")}</div>')
 
 
 def _rx_effect_block(rx: dict | None) -> str:

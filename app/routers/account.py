@@ -356,12 +356,15 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
     # 存原始 works/comments 供 content_dna 跨条组合(挖发布时段/时长/选题规律)。
     try:
         if results.get("posts"):
-            from app.services import content_dna, time_series
+            from app.services import content_dna, mining_veins, time_series
             works = parse_works(results["posts"])
             account["content_dna"] = content_dna.analyze_content_dna(
                 works, cmts, owner_uid=sec_uid or seeds.get("sec_uid"))
             # 阶梯4 预测:时序导数(单次采集可算·互动斜率/衰减/阶段/下条预估)
             account["time_series"] = time_series.analyze_time_series(works)
+            # 矿脉②③ 数据层深挖(零成本):内容归因(哪个数据因子驱动互动)+ 口碑演化
+            account["content_attribution"] = mining_veins.content_attribution(works)
+            account["sentiment_evolution"] = mining_veins.sentiment_evolution(cmts)
     except Exception:  # noqa: BLE001
         pass
 

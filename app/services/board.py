@@ -147,6 +147,7 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
                        f"{(account.get('engagement_structure') or {}).get('nature', '')}"),
         "deep_health": deep.get("health"),
         "deep_commerce": deep.get("commerce"),
+        "attribution": account.get("content_attribution"),  # 矿脉②:哪个数据因子驱动互动
         "top_concern": tc,
         "radar": _radar(s),
         "details": [_card_brief(c.get("churn")), _card_brief(c.get("pricing")),
@@ -181,6 +182,7 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
         "next_estimate": ts.get("next_estimate"),
         "rx_eta": ts.get("rx_eta"),
         "conf": ts.get("conf"),
+        "sentiment_evo": account.get("sentiment_evolution"),  # 矿脉③:口碑演化(先行信号)
         # 需多次采集才算的那半·诚实标"积累中"
         "trajectory_pending": "账号涨粉轨迹/处方前后真实对照·需多次采集存历史(积累中)",
     }
