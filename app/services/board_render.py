@@ -37,6 +37,220 @@ def _n(v, suffix="", dash="—"):
     return f"{v}{suffix}" if v is not None else dash
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# v2.0 价值阶梯渲染(描述→诊断→处方→预测)·第一屏=完整答案·正文渐进折叠
+# ══════════════════════════════════════════════════════════════════════════════
+
+_RUNG_COLOR = {1: "#6B7280", 2: "#D97706", 3: "#059669", 4: "#DC2626"}
+_RUNG_ICON = {1: "①", 2: "②", 3: "③", 4: "④"}
+
+
+def render_ladder_html(board: dict[str, Any]) -> str:
+    nick = board.get("nickname") or "该账号"
+    L = board.get("ladders") or {}
+    h = board.get("headline") or {}
+    acc = board.get("accounting") or {}
+    parts = [_ladder_head(nick),
+             _ladder_answer_screen(nick, L, h),     # 第一屏:完整答案(4阶梯结论)
+             _ladder_detail(L.get("l1"), _desc_body),
+             _ladder_detail(L.get("l2"), _diag_body),
+             _ladder_detail(L.get("l3"), _rx_body),
+             _ladder_detail(L.get("l4"), _pred_body),
+             _screen_accounting(acc),
+             _ladder_foot()]
+    return "\n".join(parts)
+
+
+def _ladder_head(nick: str) -> str:
+    return f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>元板 v2.0 · {nick} · 价值阶梯</title>
+<style>
+  *{{box-sizing:border-box}}
+  body{{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       color:{_INK};line-height:1.65;margin:0;background:#F8FAFC}}
+  .wrap{{max-width:860px;margin:0 auto;padding:16px}}
+  h1{{font-size:21px;color:{_BLUE};margin:.2em 0}}
+  .answer{{background:linear-gradient(135deg,{_BLUE},#2747a8);color:#fff;
+          border-radius:16px;padding:22px 24px;margin:14px 0}}
+  .answer .tag{{font-size:12px;opacity:.85}}
+  .rung-line{{display:flex;align-items:flex-start;gap:10px;padding:11px 0;
+             border-bottom:1px solid rgba(255,255,255,.14)}}
+  .rung-line:last-child{{border-bottom:none}}
+  .rung-badge{{flex:none;width:54px;font-size:12px;font-weight:700;opacity:.9;padding-top:2px}}
+  .rung-q{{font-size:11.5px;opacity:.7;margin-bottom:2px}}
+  .rung-c{{font-size:15px;font-weight:700}}
+  .rung-c.call{{color:{_ORANGE};font-size:16px}}
+  details{{background:#fff;border-radius:12px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.06);
+          overflow:hidden}}
+  summary{{padding:14px 18px;cursor:pointer;font-weight:700;font-size:15px;list-style:none;
+          display:flex;align-items:center;gap:8px}}
+  summary::-webkit-details-marker{{display:none}}
+  summary .moat{{margin-left:auto;font-size:11px;font-weight:400;padding:2px 9px;border-radius:9px}}
+  summary .badge{{font-size:13px;color:#fff;width:24px;height:24px;border-radius:50%;
+                 display:inline-flex;align-items:center;justify-content:center;flex:none}}
+  .body{{padding:0 18px 16px}}
+  .concl{{font-size:14px;background:{_ZEBRA};border-radius:8px;padding:9px 12px;margin:4px 0 10px}}
+  table{{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0}}
+  th{{background:{_BLUE};color:#fff;text-align:left;padding:6px 9px}}
+  td{{padding:5px 9px;border-bottom:1px solid #EEF2F7}}
+  tr:nth-child(even) td{{background:{_ZEBRA}}}
+  ul{{margin:.3em 0;padding-left:1.2em}} li{{margin:.22em 0;font-size:13px}}
+  .five{{border:1px dashed {_BLUE}33;border-radius:9px;padding:9px 12px;margin:7px 0;background:#FAFBFF}}
+  .five .k{{font-weight:700;color:{_BLUE}}}
+  .impl{{font-size:13px;background:#FFF7ED;border-radius:8px;padding:7px 10px;margin-top:5px}}
+  .acc-total{{font-size:26px;font-weight:800;color:{_ORANGE}}}
+  .screen{{background:#fff;border-radius:12px;padding:18px 22px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}}
+  .screen-tag{{display:inline-block;font-size:12px;color:#fff;background:{_BLUE};padding:3px 10px;border-radius:10px;margin-bottom:10px}}
+  h2{{font-size:16px;color:{_BLUE}}} .note{{font-size:12px;color:#6B7280}}
+  .pending{{color:#9CA3AF;font-style:italic}}
+</style></head><body><div class="wrap">
+<h1>元板 v2.0 · {nick}</h1>
+<p class="note" style="margin-top:-4px">价值阶梯 · 描述 → 诊断 → 处方 → 预测 · 第一屏即完整答案,余下按需展开</p>"""
+
+
+def _ladder_answer_screen(nick: str, L: dict, h: dict) -> str:
+    """第一屏 = 完整答案:4 阶梯结论一句话堆叠(进门即看·不用滚)。"""
+    sc = h.get("strategic_call") or {}
+    def line(rung, q, concl, is_call=False):
+        cls = "rung-c call" if is_call else "rung-c"
+        return (f'<div class="rung-line"><div class="rung-badge">{_RUNG_ICON[rung]} {("描述","诊断","处方","预测")[rung-1]}</div>'
+                f'<div><div class="rung-q">{q}</div><div class="{cls}">{concl}</div></div></div>')
+    l1, l2, l3, l4 = L.get("l1") or {}, L.get("l2") or {}, L.get("l3") or {}, L.get("l4") or {}
+    pred = (l4.get("conclusion") if l4.get("enough")
+            else f'<span class="pending">{l4.get("conclusion", "积累中")}</span>')
+    return f"""<div class="answer">
+  <div class="tag">🎯 一眼答案(四阶梯结论)</div>
+  {line(1, l1.get('question',''), l1.get('conclusion',''))}
+  {line(2, l2.get('question',''), l2.get('conclusion',''))}
+  {line(3, l3.get('question',''), l3.get('conclusion',''), is_call=True)}
+  {line(4, l4.get('question',''), pred)}
+</div>"""
+
+
+def _ladder_detail(ld: dict | None, body_fn) -> str:
+    if not ld:
+        return ""
+    rung = ld.get("rung", 1)
+    col = _RUNG_COLOR.get(rung, "#6B7280")
+    moat = ld.get("moat", "")
+    moat_bg = {"竞品也能做": "#EFF6FF", "竞品部分能做": "#FFFBEB"}.get(moat, "#FEF2F2")
+    moat_fg = {"竞品也能做": "#1E3A8A", "竞品部分能做": "#D97706"}.get(moat, "#DC2626")
+    open_attr = "open" if rung in (3, 4) else ""   # 处方/预测默认展开(最值钱)
+    return f"""<details {open_attr}><summary>
+  <span class="badge" style="background:{col}">{_RUNG_ICON[rung]}</span>
+  阶梯{rung}·{ld.get('name')}({ld.get('question')})
+  <span class="moat" style="background:{moat_bg};color:{moat_fg}">{moat}</span></summary>
+  <div class="body"><div class="concl">{ld.get('conclusion','')}</div>{body_fn(ld)}</div></details>"""
+
+
+def _desc_body(ld: dict) -> str:
+    lis = "".join(f"<li>{d}</li>" for d in (ld.get("details") or []))
+    src = f'<div class="note">出处:{ld.get("source")}</div>' if ld.get("source") else ""
+    return f"<ul>{lis}</ul>{src}"
+
+
+def _diag_body(ld: dict) -> str:
+    out = ""
+    tc = ld.get("top_concern") or {}
+    if tc.get("title"):
+        out += (f'<div class="impl">⚠️ 最该关注:{_SEV_LABEL.get(tc.get("severity"))} '
+                f'{tc.get("title")} — {tc.get("what","")}</div>')
+    out += _five(ld.get("deep_health"), "健康分·深度拆解")
+    out += _five(ld.get("deep_commerce"), "商业转化·为什么这个分")
+    # 诊断卡简表
+    cards = [x for x in (ld.get("details") or []) if x]
+    if cards:
+        rows = "".join(f'<tr><td>{_SEV_LABEL.get(x.get("severity"))} {x.get("title")}</td>'
+                       f'<td>{x.get("conclusion","")}</td></tr>' for x in cards)
+        out += f'<table><tr><th>诊断卡</th><th>结论</th></tr>{rows}</table>'
+    return out
+
+
+def _rx_body(ld: dict) -> str:
+    out = ""
+    if ld.get("strategic_why"):
+        col = _SEV_COLOR.get(ld.get("strategic_color"), "#059669")
+        out += (f'<div style="background:{col};color:#fff;border-radius:9px;padding:10px 13px;margin-bottom:8px">'
+                f'<b>🎯 {ld.get("conclusion")}</b><br><span style="font-size:12.5px;opacity:.95">{ld.get("strategic_why")}</span></div>')
+    week = ld.get("this_week") or []
+    if week:
+        out += '<div style="font-weight:700;color:#059669;margin:6px 0 3px">📌 本周做这几件</div>'
+        out += '<ol style="padding-left:1.3em;font-size:13px">' + "".join(f"<li>{w}</li>" for w in week) + "</ol>"
+    if ld.get("audience_intent"):
+        out += f'<div class="impl">💰 {ld.get("audience_implication","")}</div>'
+    return out
+
+
+def _pred_body(ld: dict) -> str:
+    out = ""
+    # 内容时序(单次可算)
+    if ld.get("enough"):
+        rows = []
+        for label, key in (("阶段", "stage"), ("互动趋势", "trend"), ("更新节奏", "rhythm"),
+                           ("爆款衰减", "decay")):
+            if ld.get(key):
+                rows.append(f"<tr><td>{label}</td><td>{ld[key]}</td></tr>")
+        ne = ld.get("next_estimate")
+        if ne:
+            rows.append(f'<tr><td>下条预估</td><td>赞约 {ne.get("like_median")}'
+                        f'(区间 {ne.get("like_range",["?","?"])[0]}-{ne.get("like_range",["?","?"])[1]})·'
+                        f'<span class="note">{ne.get("note","")}</span></td></tr>')
+        out += (f'<div style="font-weight:700;color:{_BLUE};margin:4px 0">内容时序(单次可算)</div>'
+                f'<table><tr><th>维度</th><th>判定</th></tr>{"".join(rows)}</table>')
+        if ld.get("rx_eta"):
+            out += f'<div class="impl">⚡ {ld.get("rx_eta")}</div>'
+    else:
+        out += f'<div class="impl">⏳ 内容时序:{ld.get("conclusion")}</div>'
+    # 账号轨迹(跨次采集·完整B)
+    out += _trajectory_block(ld.get("trajectory"))
+    out += f'<div class="note">置信:{ld.get("conf","—")}·内容时序单次可算·账号轨迹靠累积</div>'
+    return out
+
+
+def _trajectory_block(tj: dict | None) -> str:
+    if not tj:
+        return ""
+    head = f'<div style="font-weight:700;color:#DC2626;margin:8px 0 4px">账号轨迹(跨次采集·真实历史)</div>'
+    if not tj.get("enough"):
+        return head + f'<div class="impl">⏳ {tj.get("verdict")}</div>'
+    rows = f'<tr><td>涨粉判定</td><td><b>{tj.get("verdict")}</b></td></tr>'
+    rows += f'<tr><td>轨迹</td><td>{tj.get("detail","")}</td></tr>'
+    if tj.get("like_trend"):
+        rows += f'<tr><td>互动趋势</td><td>{tj["like_trend"]}</td></tr>'
+    if tj.get("health_trend"):
+        rows += f'<tr><td>健康趋势</td><td>{tj["health_trend"]}</td></tr>'
+    path = tj.get("follower_path") or []
+    path_str = " → ".join(f"{d}:{f}" for d, f in path)
+    return (head + f'<table><tr><th>维度</th><th>真实历史</th></tr>{rows}</table>'
+            f'<div class="note">📍 {path_str}</div>'
+            f'<div class="note">{tj.get("note","")}·快照 {tj.get("snapshots")} 个</div>')
+
+
+def _five(d: dict | None, title: str) -> str:
+    if not d:
+        return ""
+    rows = f'<div class="k">{title}</div>'
+    if d.get("conclusion"):
+        rows += f'<div style="font-size:13px"><b>结论:</b>{d["conclusion"]}</div>'
+    for lab, key in (("拆解", "breakdown"), ("依据", "evidence")):
+        items = d.get(key)
+        if items:
+            rows += (f'<div style="font-size:12px"><b>{lab}:</b>'
+                     + "、".join(str(x) for x in items[:4]) + "</div>")
+    if d.get("benchmark"):
+        rows += f'<div style="font-size:12px;color:#6B7280">📐 基准:{d["benchmark"]}</div>'
+    if d.get("implication"):
+        rows += f'<div class="impl" style="font-size:12.5px">💡 {d["implication"]}</div>'
+    return f'<div class="five">{rows}</div>'
+
+
+def _ladder_foot() -> str:
+    return ('<p class="note" style="text-align:center;margin:18px 0">'
+            '元板 MetaBoard v2.0 · 价值阶梯交付 · 数据合规授权·国内不出境 · '
+            '阶梯4 时序导数=单次采集可算·账号轨迹需多次采集(积累中)</p></div></body></html>')
+
+
 def _score_bar(score, width=120):
     """画一个分值条(0-100)。"""
     if score is None:

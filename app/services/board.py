@@ -94,14 +94,98 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
     for k, ly in layers.items():
         ly["list_price_yuan"] = COST_LAYER_YUAN[k]
         ly["cost_yuan"] = actual.get(k, COST_LAYER_YUAN[k])
+    headline = _headline(c, s, deep)
     return {
         "nickname": account.get("nickname"),
-        "headline": _headline(c, s, deep),
-        "layers": layers,
+        "headline": headline,
+        "layers": layers,                                  # v1.3 四级坐标(保留·供对比)
+        "ladders": build_ladders(account, s, c, deep, headline),  # v2.0 价值四阶梯
         "accounting": accounting,
         "data_coverage": _data_coverage(account, deep),   # 采集/展示/空 诚实账
         "raw": {"scores": s, "cards": c},
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# v2.0 价值四阶梯(描述→诊断→处方→预测)·把同一份数据按"用户要什么"重投
+# 不重算·全部读自 headline/scores/cards/deep + account.time_series。
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_ladders(account: dict, s: dict, c: dict, deep: dict,
+                  headline: dict) -> dict[str, Any]:
+    deep = deep or {}
+    di = deep.get("industry") or {}
+    track = di.get("track_tier") or {}
+    stage = di.get("fan_stage") or {}
+    sc = headline.get("strategic_call") or {}
+    tc = headline.get("top_concern") or {}
+    au = deep.get("audience") or {}
+    ts = account.get("time_series") or {}
+    rx = (account.get("content_dna") or {}).get("next_video_rx") or {}
+
+    # ── 阶梯1 描述(你是什么)──
+    ladder1 = {
+        "rung": 1, "name": "描述", "question": "你是什么",
+        "moat": "竞品也能做",
+        "conclusion": (f"{track.get('name', '赛道待定')}·{stage.get('stage', '')}·"
+                       f"{account.get('follower', '?')}粉"),
+        "details": [
+            f"赛道分型:{track.get('tier', '?')}档·{track.get('name', '')}·"
+            f"单粉价值 {track.get('value_per_fan', '—')}",
+            f"生命周期:{stage.get('stage', '')}·本期任务={stage.get('task', '')}",
+            f"该玩:{track.get('game', '—')}({'线索游戏' if track.get('is_b2b_leads') else '流量游戏'})",
+        ],
+        "source": track.get("source", ""),
+    }
+
+    # ── 阶梯2 诊断(为什么这样)──
+    ladder2 = {
+        "rung": 2, "name": "诊断", "question": "为什么这样",
+        "moat": "竞品部分能做",
+        "conclusion": (f"健康 {_g(s, 'c1', 'score')}({_g(s, 'c7', 'grade')}级)·"
+                       f"商业转化 {_g(s, 'c3', 'score')}·"
+                       f"{(account.get('engagement_structure') or {}).get('nature', '')}"),
+        "deep_health": deep.get("health"),
+        "deep_commerce": deep.get("commerce"),
+        "top_concern": tc,
+        "radar": _radar(s),
+        "details": [_card_brief(c.get("churn")), _card_brief(c.get("pricing")),
+                    _card_brief(c.get("track"))],
+    }
+
+    # ── 阶梯3 处方(该怎么做)──
+    rx_steps = rx.get("steps") or []
+    ladder3 = {
+        "rung": 3, "name": "处方", "question": "该怎么做",
+        "moat": "竞品做不到",
+        "conclusion": sc.get("call", "—"),
+        "strategic_why": sc.get("why"),
+        "strategic_color": sc.get("color"),
+        "this_week": rx_steps[:3],            # 本周≤3件
+        "next_video": rx_steps,
+        "audience_intent": au.get("intent_signal"),
+        "audience_implication": au.get("implication"),
+    }
+
+    # ── 阶梯4 预测(做了/接下来会怎样)──
+    ladder4 = {
+        "rung": 4, "name": "预测", "question": "接下来会怎样",
+        "moat": "★ 护城河·竞品做不到",
+        "enough": ts.get("enough", False),
+        "conclusion": (ts.get("verdict") if ts.get("enough")
+                       else (ts.get("verdict") or "时序数据积累中")),
+        "stage": ts.get("stage"),
+        "trend": ts.get("trend"),
+        "rhythm": ts.get("rhythm"),
+        "decay": ts.get("decay"),
+        "next_estimate": ts.get("next_estimate"),
+        "rx_eta": ts.get("rx_eta"),
+        "conf": ts.get("conf"),
+        # 需多次采集才算的那半·诚实标"积累中"
+        "trajectory_pending": "账号涨粉轨迹/处方前后真实对照·需多次采集存历史(积累中)",
+    }
+
+    return {"l1": ladder1, "l2": ladder2, "l3": ladder3, "l4": ladder4}
 
 
 def _data_coverage(account: dict, deep: dict) -> dict:

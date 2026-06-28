@@ -356,10 +356,12 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
     # 存原始 works/comments 供 content_dna 跨条组合(挖发布时段/时长/选题规律)。
     try:
         if results.get("posts"):
-            from app.services import content_dna
+            from app.services import content_dna, time_series
             works = parse_works(results["posts"])
             account["content_dna"] = content_dna.analyze_content_dna(
                 works, cmts, owner_uid=sec_uid or seeds.get("sec_uid"))
+            # 阶梯4 预测:时序导数(单次采集可算·互动斜率/衰减/阶段/下条预估)
+            account["time_series"] = time_series.analyze_time_series(works)
     except Exception:  # noqa: BLE001
         pass
 
@@ -552,7 +554,19 @@ def board(payload: dict[str, Any] = Body(...)) -> dict:
         }
         b = board_svc.build_board(account, xprof, cache_hit=False,
                                   scores=scores, cards=cards)
-        html_str = board_render.render_board_html(b)
+        # 完整B:记一条快照 + 跨次采集算涨粉轨迹 → 注入阶梯4 预测(回填既有 cases 历史)。
+        try:
+            from app.services import snapshot_store
+            snapshot_store.record(account, b, sec_uid=sec_uid or aid)
+            traj = snapshot_store.trajectory(
+                snapshot_store.load_history(account.get("nickname")))
+            b["ladders"]["l4"]["trajectory"] = traj
+        except Exception:  # noqa: BLE001 — 轨迹失败不拖垮接口
+            pass
+        # view: ladder(v2.0 价值阶梯·默认) | coordinate(v1.3 四级坐标·供对比)
+        view = (payload.get("view") or "ladder").lower()
+        html_str = (board_render.render_ladder_html(b) if view == "ladder"
+                    else board_render.render_board_html(b))
         md_str = board_render.render_board_md(b)
         # persist=true → 产出即落进归集(probe/data/cases·该存的方式)。默认关·向后兼容。
         run_id = None
