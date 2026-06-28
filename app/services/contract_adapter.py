@@ -3,16 +3,15 @@
 对方窗口(MetaForm account-diagnosis 场景·render_contract 引擎)实施渲染;本模块只产
 **契约 doc**(meta + blocks·语义角色),不动对方引擎/场景/schema(尊重边界)。
 
-契约角色(block_roles.yaml·account-diagnosis 必填 verdict/key_issue/evidence/actions/scope):
-  verdict   脊柱(一句话定性·N1唯一)        ← 战略判断
-  situation 处境(你是什么→成为什么)         ← 定位航向 + 形象一致性
-  key_issue 最该一件事(因果流+热评+收口)    ← top_concern + 诊断链口碑层 + 承接断点
-  evidence  证据(人话标签·非C代号·N6)       ← 关键指标/信号(翻成人话)
-  actions   本周做(带优先级)                ← 处方前端三级 + cut 命令摘要
-  forecast  会怎样                          ← 时序+轨迹+处方对照
-  scope     边界集中(拿不到什么·N3/N5)      ← 未开星图/黑盒/待校准
-  appendix  深度展开(html)                  ← 八维雷达/五段拆解/聚类
+五项深化(2026-06-28)全部落到契约:
+  指令1 基础数据档位标尺(判断+依据+几档+目标)        → appendix ①
+  指令2 内容→口碑→势能 因果链 + 二阶导轨迹             → evidence + appendix ②
+  指令3 全基础数据整理(身份表+判断表)                  → appendix ①
+  指令4 八维7层详解 + 增强雷达(基准环/短板红/轴值)     → appendix ④
+  指令5 运营阶段链条 + 阶段×维度矩阵 + 专业方向         → situation + actions + appendix ③
+
 不变量:N6 内部代号(C1/C9)不进客户版→指标一律人话标签;show_accounting 默认 false。
+⚠️ render_contract 仅 appendix.html 放行原始 HTML·其余角色文本一律被 html.escape→纯文本无标签。
 """
 from __future__ import annotations
 
@@ -22,6 +21,7 @@ from typing import Any
 _LABEL = {"c1": "健康", "c2": "粉丝质量", "c3": "商业转化", "c4": "内容力",
           "c5": "赛道", "c6": "破圈", "c7": "评级", "c8": "私域"}
 _COMPLIANCE = "数据源合规授权 · 国内不出境"
+_LV_COL = {"good": "#059669", "mid": "#D97706", "bad": "#DC2626", "na": "#9CA3AF"}
 
 
 def _g(d, *ks, default=None):
@@ -43,8 +43,13 @@ def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
     l1, l2, l3, l4 = (L.get("l1") or {}, L.get("l2") or {}, L.get("l3") or {}, L.get("l4") or {})
     s = _g(board, "raw", "scores", default={})
     nick = board.get("nickname") or "账号"
-    track = _g(l1, "heading") or {}
     idn = l1.get("identity") or {}
+
+    journey = board.get("journey") or {}
+    basics = board.get("basics") or {}
+    judges = board.get("basics_judge") or []
+    bsum = board.get("basics_summary") or {}
+    causal = board.get("causal") or {}
 
     meta = {
         "subject_name": nick, "platform": "抖音",
@@ -56,17 +61,15 @@ def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
         "compliance": _COMPLIANCE,
     }
 
-    journey = board.get("journey") or {}
-    basics = board.get("basics") or {}
     blocks = [
         _verdict(l3, l1),
         _situation(l1, idn, journey),
         _key_issue(l2, l4),
-        _evidence(s, l2, l4, idn),
+        _evidence(s, l2, l4, idn, bsum, causal),
         _actions(l3, journey),
         _forecast(l4, journey),
         _scope(l2, s),
-        _appendix(l2, s, journey, basics),
+        _appendix(l2, s, journey, basics, judges, bsum, causal),
     ]
     blocks = [b for b in blocks if b]
     return {"source": "metaboard", "doc": {"meta": meta, "blocks": blocks}}
@@ -91,17 +94,25 @@ def _verdict(l3, l1) -> dict:
             "tagline": (stage.split("·")[-1] + " · " + game) if game else stage}
 
 
-# ── situation 处境(你在旅程哪一站·已走/接下来)+ 形象一致性 ──
+# ── situation 处境(你在链条哪一站 + 专业方向 + 形象一致性)──
 def _situation(l1, idn, journey) -> dict:
     h = l1.get("heading") or {}
     cur = journey.get("current", "")
+    link = ""
+    for n in journey.get("nodes") or []:
+        if n.get("state") == "current":
+            link = n.get("chain_link", "")
+            break
     done = journey.get("done") or []
     fut = journey.get("future") or []
-    lead = (f"你在运营旅程的【{cur}】" +
+    lead = (f"你在运营链条「{journey.get('chain_name','')}」的【{cur}】" +
+            (f"（{link}）" if link else "") +
             (f"，已走过 {'、'.join(done)}" if done else "") +
             (f"，接下来 {'、'.join(fut[:2])}" if fut else "") + "。")
-    # 进阶规划 + 航向终态 + 形象一致性(文字精简·细节进 appendix 图)
-    txt = journey.get("verdict", "")
+    txt = ""
+    if journey.get("current_direction"):
+        txt += f"这一站的专业方向：{journey['current_direction']}。"
+    txt += journey.get("verdict", "")
     if h.get("endstate"):
         txt += f"。终极目标:{h['endstate'][:40]}"
     if idn.get("consistency") is not None:
@@ -134,9 +145,19 @@ def _key_issue(l2, l4) -> dict:
             "punch": tc.get("advice") or _g(kou, "link") or ""}
 
 
-# ── evidence 证据(人话标签·非C代号·N6)──
-def _evidence(s, l2, l4, idn) -> dict:
+# ── evidence 证据(人话标签·非C代号·N6)+ 基础数据总评 + 因果链结论 ──
+def _evidence(s, l2, l4, idn, bsum, causal) -> dict:
     items = []
+    # 基础数据总评(指令1·一句心中有数)
+    if bsum.get("line"):
+        items.append({"label": "基础数据体检", "sub": "档位标尺总览",
+                      "value": bsum["line"],
+                      "def": "每项基础数据按档位标尺判断(几档/由什么决定/目标)·详见附录基础数据表。"})
+    # 因果链结论(指令2·内容→口碑→势能)
+    if causal.get("chain_verdict"):
+        items.append({"label": "内容因果链", "sub": "内容→口碑→势能 是否咬合",
+                      "value": causal["chain_verdict"][:60],
+                      "def": "把内容/口碑/势能三块串成因果链·看哪种内容真带来口碑与势能、哪一环在漏。"})
     se = l4.get("sentiment_evo") or {}
     if se.get("enough"):
         e, l = se.get("early") or {}, se.get("late") or {}
@@ -149,7 +170,6 @@ def _evidence(s, l2, l4, idn) -> dict:
         items.append({"label": "内容驱动因子", "sub": "哪个数据因子最驱动互动",
                       "value": f"{td.get('factor')}（差 {td.get('spread')}x）",
                       "def": "控制变量看哪个因子(时段/时长/话题)对互动落差最大。"})
-    # 关键分(人话标签)
     for code, sub in (("c1", "全域加权健康"), ("c3", "带货+转化+承接"), ("c8", "私域成熟度")):
         sc = _g(s, code, "score")
         if sc is not None:
@@ -162,23 +182,27 @@ def _evidence(s, l2, l4, idn) -> dict:
     return {"role": "evidence", "items": items} if items else None
 
 
-# ── actions 进阶动作(锚定阶段进阶·带优先级)+ cut 命令 ──
+# ── actions 进阶动作(专业方向 + 当前阶段五维该做 + cut 命令)──
 def _actions(l3, journey) -> dict:
-    front = l3.get("front") or {}
-    steps = _g(front, "tactic", "steps") or l3.get("this_week") or []
     items = []
-    # 进阶动作:把本周动作锚定到"从当前站进下一站"
     nxt = journey.get("next")
     gaps = journey.get("advance_gaps") or []
-    strat = _g(front, "strategy", "text")
-    if strat:
-        why = _g(front, "strategy", "why", default="")[:50]
+    # ① 战略方向(最高优先·指令5④)
+    direction = journey.get("current_direction")
+    if direction:
+        why = ""
         if nxt and gaps:
-            why = f"这是进【{nxt}】的硬条件：{gaps[0].split('·')[0]}。" + why
-        items.append({"title": strat, "why": why, "priority": "最高优先·进阶关键"})
-    for st in steps[:3]:
-        items.append({"title": st, "why": "", "priority": "本周"})
-    # cut 命令摘要(给制作引擎·人话版)
+            why = f"进【{nxt}】的硬条件：{gaps[0].split('·')[0]}。"
+        items.append({"title": direction, "why": why, "priority": "战略方向·最高优先"})
+    # ② 当前阶段五维该做(指令5①·链条式多维)
+    for dim, act in (journey.get("current_dims") or {}).items():
+        items.append({"title": f"【{dim}】{act}", "why": "", "priority": "本周·五维并进"})
+    # ③ 兜底:若无 journey 维度,回退处方步骤
+    if len(items) <= 1:
+        front = l3.get("front") or {}
+        for st in (_g(front, "tactic", "steps") or l3.get("this_week") or [])[:3]:
+            items.append({"title": st, "why": "", "priority": "本周"})
+    # ④ cut 命令摘要(给制作引擎·人话版)
     nc = _g(l3, "cut_commands", "next_clip") or {}
     if nc.get("post_window"):
         items.append({"title": f"下条按 MetaCut 参数拍：{nc.get('post_window')}发·"
@@ -189,11 +213,14 @@ def _actions(l3, journey) -> dict:
     return {"role": "actions", "items": items} if items else None
 
 
-# ── forecast 会怎样(能不能进下一站·时序+轨迹+处方对照)──
+# ── forecast 会怎样(能不能进下一站·时序+二阶导+轨迹+处方对照)──
 def _forecast(l4, journey) -> dict:
     parts = []
     if l4.get("enough"):
         parts.append(f"内容时序：{l4.get('trend','')}·{l4.get('stage','')}")
+    accel = l4.get("acceleration") or {}
+    if accel.get("enough"):
+        parts.append(f"势能二阶导：{accel.get('verdict','')}（{accel.get('implication','')[:24]}）")
     tj = l4.get("trajectory") or {}
     if tj.get("enough"):
         parts.append(f"账号轨迹：{tj.get('verdict','')}·{tj.get('detail','')}")
@@ -211,99 +238,207 @@ def _forecast(l4, journey) -> dict:
 
 # ── scope 边界集中(N3+N5)──
 def _scope(l2, s) -> dict:
-    # ⚠️ render_contract 对 scope.text 转义→禁 html 标签·纯文本(N3 边界集中)
     cav = []
     if _g(s, "c3", "missing"):
         cav.append("未开通星图，拿不到、未纳入评分：官方报价、带货/转化指数、粉丝消费力画像")
     anom = l2.get("engagement_anomaly") or {}
     if anom.get("enough"):
         cav.append(f"互动操纵只查了结构（{anom.get('verdict','')}），真实播放量是黑盒、未核查")
-    cav.append("部分阈值为经验值，待用 50–100 个真实账号建分位基线后校准")
+    cav.append("八维行业基准与部分阈值为经验值，待用 50–100 个真实账号建分位基线后校准")
     return {"role": "scope", "text": "。".join(cav) + "。"}
 
 
-# ── appendix 图表化+详解深度(html·唯一放行图表/富文本的角色)──
-# 补:账号基础数据(指令3)·评论实录(指令3)·8维详解是什么+怎么提高(指令4)·归因解释(指令5)
-def _appendix(l2, s, journey, basics) -> dict:
+# ══════════════════════════════════════════════════════════════════════════════
+# appendix 图表化深度(html·唯一放行图表/富文本的角色)·新 IA 六段
+# ══════════════════════════════════════════════════════════════════════════════
+def _appendix(l2, s, journey, basics, judges, bsum, causal) -> dict:
     from app.services import board_render as R, dimension_guide as DG
-    _h = "<div style='font-weight:700;color:#1E3A8A;margin:12px 0 4px'>{}</div>"
     parts = []
 
-    # ① 账号基础数据(指令3·给用户信息与参考)
-    parts.append(_basics_table(basics))
+    # ① 账号基础数据:身份表 + 档位标尺判断表(指令1+3)
+    parts.append(_basics_identity(basics))
+    parts.append(_basics_judge_table(judges, bsum))
 
-    # ② 运营阶段旅程图 + 评定依据(指令1)
-    if journey.get("nodes"):
-        parts.append(_h.format("运营阶段旅程") + R._stepper(journey["nodes"])
-                     + f"<div style='font-size:12px;color:#374151'>{journey.get('verdict','')}</div>")
-        crit = journey.get("criteria") or {}
-        if crit.get("dims"):
-            rows = "".join(f"<tr><td>{d['dim']}</td><td>{d['value']}</td>"
-                           f"<td style='color:#6B7280;font-size:12px'>{d['why']}</td></tr>"
-                           for d in crit["dims"])
-            parts.append("<div style='font-size:12px;color:#6B7280;margin-top:4px'>阶段评定依据："
-                         + crit.get("note", "") + "</div>"
-                         + f"<table><tr><th>评定维度</th><th>你的值</th><th>为什么看它</th></tr>{rows}</table>"
-                         + f"<div style='font-size:11px;color:#9CA3AF'>出处：{crit.get('source','')}</div>")
+    # ② 内容→口碑→势能 因果链(指令2)
+    parts.append(_causal_html(causal))
 
-    # ③ 账号八维雷达 + 每维详解(是什么/怎么提高)(指令4)
-    radar = l2.get("radar") or {}
-    items = [(_LABEL.get(r["key"].lower(), r["label"]), r["score"])
-             for r in (radar.get("account_self") or []) if r.get("score") is not None]
-    if len(items) >= 3:
-        parts.append(_h.format("账号八维（外环强/内缩弱）") + R._radar(items))
-    dims = DG.all_dims(s)
-    dim_rows = "".join(
-        f"<tr><td><b>{d['name']}</b><br><span style='color:#6B7280;font-size:11px'>{d['what']}</span></td>"
-        f"<td style='text-align:center;font-weight:700;color:{_dim_col(d['score'])}'>{_n(d['score'])}</td>"
-        f"<td style='font-size:12px'>{d['how']}</td></tr>" for d in dims)
-    parts.append(_h.format("八维详解 · 是什么 + 怎么提高（按分升序·先补短板）")
-                 + f"<table><tr><th>维度</th><th>分</th><th>怎么提高</th></tr>{dim_rows}</table>")
+    # ③ 运营阶段:旅程图 + 阶段×维度矩阵 + 链条 + 评定依据(指令5)
+    parts.append(_stage_html(journey, R))
 
-    # ④ 关键指标 vs 行业基准(子弹图)
-    bullets = ""
-    for code, bm, lab in (("c1", 55, "健康"), ("c3", 40, "商业转化"), ("c4", 50, "内容力")):
-        sc = _g(s, code, "score")
-        if sc is not None:
-            bullets += R._bullet(sc, bm, label=lab)
-    if bullets:
-        parts.append(_h.format("关键指标 vs 行业基准") + bullets)
+    # ④ 八维:增强雷达(基准环/短板红) + 7层详解(指令4)
+    parts.append(_dims_html(s, R, DG))
 
-    # ⑤ 内容归因(柱状)+ 因子解释(指令5)
-    attr = l2.get("attribution") or {}
-    if attr.get("enough") and attr.get("factors"):
-        parts.append(_h.format("内容归因·因子驱动力")
-                     + R._bars([(f["factor"], f["spread"]) for f in attr["factors"][:5]], color="#0891B2"))
-        exp = "".join(f"<li><b>{f['factor']}</b>（落差 {f['spread']}x）：{DG.ATTR_GUIDE.get(f['factor'],'')}</li>"
-                      for f in attr["factors"][:4] if DG.ATTR_GUIDE.get(f["factor"]))
-        parts.append(f"<div style='font-size:12px;color:#374151'>{DG.ATTR_SPREAD_DEF}</div>"
-                     f"<ul style='font-size:12px;color:#374151'>{exp}</ul>")
+    # ⑤ 内容归因(柱状)+ 因子解释
+    parts.append(_attribution_html(l2, R, DG))
 
-    # ⑥ 评论实录(指令3·真实原话·观众想什么)
+    # ⑥ 评论实录(观众原话)
     parts.append(_comments_record(l2))
 
     return {"role": "appendix",
-            "title": "展开完整数据（基础资料 · 阶段依据 · 八维详解 · 指标基准 · 归因解释 · 评论实录）",
+            "title": "展开完整数据（基础标尺 · 因果链 · 阶段矩阵 · 八维详解 · 归因 · 评论实录）",
             "html": "".join(p for p in parts if p)}
 
 
-def _basics_table(b) -> str:
+_H = "<div style='font-weight:700;color:#1E3A8A;margin:14px 0 5px;font-size:14px'>{}</div>"
+_SUB = "<div style='font-size:11px;color:#9CA3AF;margin-bottom:4px'>{}</div>"
+
+
+def _basics_identity(b) -> str:
+    """身份类基础数据(非数值·指令3 全整理)。"""
     if not b:
         return ""
     rows = ""
-    for lab, key, suf in (("昵称", "nickname", ""), ("抖音号", "unique_id", ""),
-                          ("个人简介", "signature", ""), ("属地", "ip_location", ""),
-                          ("个人认证", "custom_verify", ""), ("企业认证", "enterprise_verify", ""),
-                          ("粉丝数", "follower", ""), ("历史峰值粉丝", "max_follower", ""),
-                          ("作品数", "aweme_count", ""), ("获赞总数", "total_favorited", ""),
-                          ("关注数", "following_count", ""),
-                          ("均赞", "avg_like", ""), ("最高赞", "max_like", "")):
+    for lab, key in (("昵称", "nickname"), ("抖音号", "unique_id"), ("个人简介", "signature"),
+                     ("属地", "ip_location"), ("个人认证", "custom_verify"),
+                     ("企业认证", "enterprise_verify")):
         v = b.get(key)
         if v:
-            vv = str(v).replace("\n", " ")[:70]
-            rows += f"<tr><td style='white-space:nowrap'>{lab}</td><td>{vv}{suf}</td></tr>"
-    return ("<div style='font-weight:700;color:#1E3A8A;margin:6px 0 4px'>账号基础数据</div>"
-            f"<table>{rows}</table>") if rows else ""
+            rows += f"<tr><td style='white-space:nowrap;color:#6B7280'>{lab}</td><td>{str(v).replace(chr(10),' ')[:80]}</td></tr>"
+    return (_H.format("账号基础数据 · 身份资料") + f"<table>{rows}</table>") if rows else ""
+
+
+def _ruler(tiers) -> str:
+    """档位标尺:几档·命中档高亮(让用户看清自己在哪档·还有哪些档)。"""
+    chips = ""
+    for t in tiers:
+        hit = t.get("hit")
+        col = _LV_COL.get(t.get("level"), "#9CA3AF")
+        if hit:
+            chips += (f"<span style='display:inline-block;padding:1px 7px;margin:1px;border-radius:8px;"
+                      f"background:{col};color:#fff;font-weight:700;font-size:11px'>▶{t['name']}·{t['cond']}</span>")
+        else:
+            chips += (f"<span style='display:inline-block;padding:1px 7px;margin:1px;border-radius:8px;"
+                      f"background:#F1F3F5;color:#9CA3AF;font-size:11px'>{t['name']}·{t['cond']}</span>")
+    return chips
+
+
+def _basics_judge_table(judges, bsum) -> str:
+    """基础数据档位标尺表(指令1:判断+依据+几档+目标)。"""
+    if not judges:
+        return ""
+    rows = ""
+    for j in judges:
+        col = _LV_COL.get(j["level"], "#374151")
+        rows += (
+            f"<tr><td style='white-space:nowrap'><b>{j['label']}</b><br>"
+            f"<span style='color:#9CA3AF;font-size:11px'>{j['decided_by'][:46]}</span></td>"
+            f"<td style='white-space:nowrap'>{j['value']}</td>"
+            f"<td style='color:{col};font-weight:700;white-space:nowrap'>{j['tier_now']}</td>"
+            f"<td>{_ruler(j['tiers'])}</td>"
+            f"<td style='color:#6B7280;font-size:11px;white-space:nowrap'>{j['target']}</td></tr>")
+    head = _SUB.format(bsum.get("line", "") + "·每项给『判断+由什么决定+几档+目标』")
+    return (_H.format("账号基础数据 · 判断标尺（你在哪档 · 由什么决定 · 目标进哪档）") + head
+            + "<table><tr><th>基础指标 / 由什么决定</th><th>你的值</th><th>当前档</th>"
+              "<th>档位标尺</th><th>目标</th></tr>" + rows + "</table>")
+
+
+def _causal_html(causal) -> str:
+    """内容→口碑→势能 因果链图(指令2)。"""
+    nodes = causal.get("nodes") or []
+    if not nodes:
+        return ""
+    cards = []
+    for i, nd in enumerate(nodes):
+        bad = not nd.get("ok")
+        border = "#DC2626" if bad else "#059669"
+        bg = "#FEF2F2" if bad else "#F0FDF4"
+        ms = "".join(f"<div style='font-size:11px;color:#6B7280'>{k}: {_n(v)}</div>"
+                     for k, v in (nd.get("metrics") or {}).items() if v not in (None, [], ""))
+        cards.append(
+            f"<div style='flex:1;min-width:150px;border:1.5px solid {border};background:{bg};"
+            f"border-radius:8px;padding:8px 10px'>"
+            f"<div style='font-weight:700'>{nd.get('icon','')} {nd.get('stage','')}</div>"
+            f"<div style='font-size:12px;color:#374151;margin:2px 0'>{nd.get('headline','')}</div>"
+            f"<div style='font-size:11px;color:#6B7280'>{nd.get('detail','')[:48]}</div>{ms}</div>")
+    arrow = "<div style='align-self:center;color:#9CA3AF;font-size:20px;padding:0 2px'>→</div>"
+    flow = arrow.join(cards)
+    verdict = causal.get("chain_verdict", "")
+    vcol = "#DC2626" if causal.get("broken") else "#059669"
+    return (_H.format("内容 → 口碑 → 势能 · 因果链（哪种内容带来口碑与势能 · 哪一环在漏）")
+            + f"<div style='display:flex;gap:4px;flex-wrap:wrap;align-items:stretch'>{flow}</div>"
+            + f"<div style='margin-top:6px;padding:7px 10px;border-left:3px solid {vcol};"
+              f"background:#F8FAFC;font-size:12px;color:#374151'><b style='color:{vcol}'>链条结论</b>："
+              f"{verdict}</div>"
+            + _SUB.format(causal.get("value", "")))
+
+
+def _stage_html(journey, R) -> str:
+    """运营阶段:旅程图 + 阶段×维度矩阵 + 链条全景(指令5)。"""
+    if not journey.get("nodes"):
+        return ""
+    out = _H.format("运营阶段旅程") + R._stepper(journey["nodes"]) \
+        + f"<div style='font-size:12px;color:#374151'><b>{journey.get('verdict','')}</b></div>"
+    # 当前阶段专业方向 + 产出喂给下一站(链条)
+    if journey.get("current_direction"):
+        out += (f"<div style='margin:6px 0;padding:7px 10px;background:#FFF7ED;border-left:3px solid #F59E0B;"
+                f"font-size:12px'><b>当前站方向</b>：{journey['current_direction']}"
+                f"<br><span style='color:#6B7280'>{journey.get('current_feeds','')}</span></div>")
+    # 阶段×维度矩阵(完整架构)
+    m = journey.get("matrix") or {}
+    if m.get("rows"):
+        icons = m.get("icons", {})
+        th = "".join(f"<th>{icons.get(d,'')}{d}</th>" for d in m["dims"])
+        body = ""
+        for r in m["rows"]:
+            st = r["state"]
+            mark = {"done": "✓", "current": "▶", "future": "○"}[st]
+            rbg = "background:#EFF6FF" if st == "current" else ""
+            cells = "".join(f"<td style='font-size:11px;{rbg}'>{c}</td>" for c in r["cells"])
+            nm = f"{mark} {r['stage']}<br><span style='color:#9CA3AF;font-size:10px'>{r['chain']}</span>"
+            body += f"<tr style='{rbg}'><td style='white-space:nowrap;font-weight:{'700' if st=='current' else '400'}'>{nm}</td>{cells}</tr>"
+        out += (_H.format("阶段 × 维度矩阵 · 完整运营架构（链条：" + journey.get("chain_name", "") + "）")
+                + f"<table><tr><th>阶段 / 链条环</th>{th}</tr>{body}</table>"
+                + _SUB.format(m.get("compliance", "")))
+    # 评定依据
+    crit = journey.get("criteria") or {}
+    if crit.get("dims"):
+        rows = "".join(f"<tr><td>{d['dim']}</td><td>{d['value']}</td>"
+                       f"<td style='color:#6B7280;font-size:11px'>{d['why']}</td></tr>"
+                       for d in crit["dims"])
+        out += (_SUB.format("阶段评定依据：" + crit.get("note", ""))
+                + f"<table><tr><th>评定维度</th><th>你的值</th><th>为什么看它</th></tr>{rows}</table>"
+                + _SUB.format("出处：" + crit.get("source", "")))
+    return out
+
+
+def _dims_html(s, R, DG) -> str:
+    """八维:增强雷达(基准环/短板红/轴值) + 7层详解(指令4)。"""
+    items = DG.radar_items(s)               # (label, value, benchmark)
+    out = ""
+    if len(items) >= 3:
+        out += (_H.format("账号八维雷达（实线=你 · 橙虚线=行业基准 · 红▼=最该补的短板）")
+                + f"<div style='text-align:center'>{R._radar(items)}</div>")
+    dims = DG.all_dims(s)                    # 按分升序·最弱在前
+    rows = ""
+    for d in dims:
+        col = _LV_COL.get(d["level"], "#374151")
+        vs = d.get("vs_bench") or ""
+        rows += (
+            f"<tr><td style='white-space:nowrap'><b>{d['name']}</b>"
+            f"<br><span style='color:#9CA3AF;font-size:10px'>{d['what'][:22]}</span></td>"
+            f"<td style='text-align:center;font-weight:700;color:{col}'>{_n(d['score'])}"
+            f"<br><span style='font-size:10px;color:#9CA3AF'>{d['zone']}</span></td>"
+            f"<td style='font-size:11px;color:#6B7280'>{vs}<br>基准{_n(d.get('bench'))}</td>"
+            f"<td style='font-size:11px'>{d['impact'][:40]}</td>"
+            f"<td style='font-size:11px;color:#374151'>{d['lever']}</td></tr>")
+    out += (_H.format("八维 7 层详解（按分升序 · 先补短板 · 每维:是什么/分/对标/影响/最快杠杆）")
+            + "<table><tr><th>维度</th><th>分/档</th><th>对标基准</th><th>影响什么</th>"
+              "<th>最快杠杆</th></tr>" + rows + "</table>"
+            + _SUB.format("行业基准为经验值·待 50–100 真实账号建分位基线后校准"))
+    return out
+
+
+def _attribution_html(l2, R, DG) -> str:
+    attr = l2.get("attribution") or {}
+    if not (attr.get("enough") and attr.get("factors")):
+        return ""
+    out = (_H.format("内容归因 · 因子驱动力（组间落差倍数）")
+           + R._bars([(f["factor"], f["spread"]) for f in attr["factors"][:5]], color="#0891B2"))
+    exp = "".join(f"<li><b>{f['factor']}</b>（落差 {f['spread']}x）：{DG.ATTR_GUIDE.get(f['factor'],'')}</li>"
+                  for f in attr["factors"][:4] if DG.ATTR_GUIDE.get(f["factor"]))
+    out += (f"<div style='font-size:12px;color:#374151'>{DG.ATTR_SPREAD_DEF}</div>"
+            f"<ul style='font-size:12px;color:#374151'>{exp}</ul>")
+    return out
 
 
 def _comments_record(l2) -> str:
@@ -311,14 +446,8 @@ def _comments_record(l2) -> str:
     top = hot.get("top") or []
     if not top:
         return ""
-    rows = "".join(f"<tr><td style='color:#6B7280'>{h.get('digg',0)}赞</td>"
+    rows = "".join(f"<tr><td style='color:#6B7280;white-space:nowrap'>{h.get('digg',0)}赞</td>"
                    f"<td>{(h.get('text') or '')[:48]}</td></tr>" for h in top[:8])
-    return ("<div style='font-weight:700;color:#1E3A8A;margin:12px 0 4px'>评论实录（观众原话·按热度）</div>"
-            f"<table><tr><th>热度</th><th>评论</th></tr>{rows}</table>"
-            "<div style='font-size:11px;color:#9CA3AF'>采样非全量·热评经平台算法排序</div>")
-
-
-def _dim_col(sc) -> str:
-    if sc is None:
-        return "#9CA3AF"
-    return "#DC2626" if sc < 40 else ("#D97706" if sc < 60 else "#059669")
+    return (_H.format("评论实录（观众原话 · 按热度）")
+            + f"<table><tr><th>热度</th><th>评论</th></tr>{rows}</table>"
+            + _SUB.format("采样非全量·热评经平台算法排序"))

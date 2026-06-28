@@ -111,35 +111,85 @@ def _bars(items: list, *, width: int = 280, bar_h: int = 16, gap: int = 6,
     return "".join(out)
 
 
-def _radar(items: list, *, size: int = 200, color: str = _BLUE) -> str:
-    """雷达图(标准可复用)·items=[(label, value0-100)]·N轴蛛网。"""
+def _radar(items: list, *, size: int = 248, color: str = _BLUE) -> str:
+    """八维雷达(增强版)·items=[(label, value)] 或 [(label, value, benchmark)]。
+
+    增强表达(指令4):① 行业基准环(虚线橙·对比) ② 数据面按整体强弱着色
+    ③ 每轴标注实际分值 ④ 短板轴红色高亮(最弱轴红点+红字)·让用户一眼看出补哪根。
+    """
     import math
-    pts = [(str(la), max(0, min(100, float(v)))) for la, v in (items or []) if v is not None]
-    n = len(pts)
+    raw = []
+    for it in (items or []):
+        if it is None:
+            continue
+        la, v = it[0], it[1]
+        bench = it[2] if len(it) > 2 else None
+        if v is None:
+            continue
+        raw.append((str(la), max(0, min(100, float(v))),
+                    None if bench is None else max(0, min(100, float(bench)))))
+    n = len(raw)
     if n < 3:
         return ""
     cx = cy = size / 2
-    r = size / 2 * 0.66
-    # 背景环(25/50/75/100)
+    r = size / 2 * 0.58
+    vals = [v for _, v, _ in raw]
+    avg = sum(vals) / n
+    weak_i = min(range(n), key=lambda i: vals[i])          # 最弱轴
+    # 整体强弱着色
+    fill = "#059669" if avg >= 70 else (_BLUE if avg >= 50 else _ORANGE)
+
+    def _poly(frac_fn):
+        return " ".join(
+            f"{cx + r*frac_fn(i)*math.cos(2*math.pi*i/n - math.pi/2):.1f},"
+            f"{cy + r*frac_fn(i)*math.sin(2*math.pi*i/n - math.pi/2):.1f}" for i in range(n))
+
+    # 背景环 + 轴线
     rings = ""
     for frac in (0.25, 0.5, 0.75, 1.0):
-        ring = " ".join(
-            f"{cx + r*frac*math.cos(2*math.pi*i/n - math.pi/2):.1f},"
-            f"{cy + r*frac*math.sin(2*math.pi*i/n - math.pi/2):.1f}" for i in range(n))
-        rings += f'<polygon points="{ring}" fill="none" stroke="#E5E7EB" stroke-width="0.7"/>'
-    # 数据多边形
-    dpts, labels = [], ""
-    for i, (la, v) in enumerate(pts):
+        rings += f'<polygon points="{_poly(lambda i, fr=frac: fr)}" fill="none" stroke="#E5E7EB" stroke-width="0.7"/>'
+    for i in range(n):
+        ang = 2 * math.pi * i / n - math.pi / 2
+        rings += f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{cx+r*math.cos(ang):.1f}" y2="{cy+r*math.sin(ang):.1f}" stroke="#EEF0F2" stroke-width="0.6"/>'
+
+    # 行业基准环(虚线·有基准才画)
+    bench_poly = ""
+    has_bench = any(b is not None for _, _, b in raw)
+    if has_bench:
+        bp = " ".join(
+            f"{cx + r*((raw[i][2] or avg)/100)*math.cos(2*math.pi*i/n - math.pi/2):.1f},"
+            f"{cy + r*((raw[i][2] or avg)/100)*math.sin(2*math.pi*i/n - math.pi/2):.1f}" for i in range(n))
+        bench_poly = (f'<polygon points="{bp}" fill="none" stroke="#F59E0B" '
+                      f'stroke-width="1.2" stroke-dasharray="4 3" opacity="0.85"/>')
+
+    # 数据多边形 + 顶点 + 轴标注
+    dpts, marks, labels = [], "", ""
+    for i, (la, v, _b) in enumerate(raw):
         ang = 2 * math.pi * i / n - math.pi / 2
         rr = r * v / 100
-        dpts.append(f"{cx+rr*math.cos(ang):.1f},{cy+rr*math.sin(ang):.1f}")
-        lx, ly = cx + (r+12)*math.cos(ang), cy + (r+12)*math.sin(ang)
+        px, py = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+        dpts.append(f"{px:.1f},{py:.1f}")
+        is_weak = (i == weak_i)
+        dotc = "#DC2626" if is_weak else fill
+        marks += f'<circle cx="{px:.1f}" cy="{py:.1f}" r="{3.5 if is_weak else 2.4}" fill="{dotc}"/>'
+        # 轴标签(名+分)·短板红色加粗
+        lx, ly = cx + (r + 14) * math.cos(ang), cy + (r + 14) * math.sin(ang)
         anchor = "middle" if abs(math.cos(ang)) < 0.3 else ("start" if math.cos(ang) > 0 else "end")
-        labels += f'<text x="{lx:.0f}" y="{ly:.0f}" font-size="9.5" fill="#6B7280" text-anchor="{anchor}">{la}</text>'
+        lcol = "#DC2626" if is_weak else "#6B7280"
+        lw = "700" if is_weak else "400"
+        tag = (la + "▼") if is_weak else la
+        labels += (f'<text x="{lx:.0f}" y="{ly-3:.0f}" font-size="9.5" fill="{lcol}" '
+                   f'font-weight="{lw}" text-anchor="{anchor}">{tag}</text>'
+                   f'<text x="{lx:.0f}" y="{ly+8:.0f}" font-size="9" fill="{lcol}" '
+                   f'font-weight="700" text-anchor="{anchor}">{round(v)}</text>')
     poly = " ".join(dpts)
+    legend = ""
+    if has_bench:
+        legend = (f'<text x="{cx:.0f}" y="{size-4:.0f}" font-size="8.5" fill="#9CA3AF" '
+                  f'text-anchor="middle">实线=你 · 橙虚线=行业基准 · 红▼=最该补的短板</text>')
     return (f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="max-width:100%">'
-            f'{rings}<polygon points="{poly}" fill="{color}" fill-opacity="0.18" '
-            f'stroke="{color}" stroke-width="1.6"/>{labels}</svg>')
+            f'{rings}{bench_poly}<polygon points="{poly}" fill="{fill}" fill-opacity="0.20" '
+            f'stroke="{fill}" stroke-width="1.8"/>{marks}{labels}{legend}</svg>')
 
 
 def _progress(pct: float, *, width: int = 220, color: str = _ORANGE) -> str:

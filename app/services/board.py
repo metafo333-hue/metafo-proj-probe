@@ -78,10 +78,15 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
         "track": diagnosis_cards.diagnose_track(account, xprof),
     }
 
-    from app.services import deep_analysis, stage_journey
+    from app.services import deep_analysis, stage_journey, basics_judge, content_causal
     deep = deep_analysis.build_deep(account, xprof, s)
     heading = deep_analysis.growth_heading(account, s)   # 阶段1 航向(你是什么→成为什么)
-    journey = stage_journey.build_journey(account, deep)  # 运营阶段旅程(已走/现在/接下来)
+    journey = stage_journey.build_journey(account, deep)  # 运营阶段旅程(阶段×维度矩阵+链条)
+    basics_j = basics_judge.judge_basics(account)         # 基础数据档位标尺(指令1)
+    causal = content_causal.build_causal(                 # 内容→口碑→势能因果链(指令2)
+        account.get("content_dna"), account.get("content_attribution"),
+        account.get("sentiment_evolution"), account.get("time_series"),
+        account.get("acceleration"))
 
     layers = {
         "env": _layer_env(account, s, deep),
@@ -101,8 +106,8 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
         "nickname": account.get("nickname"),
         "headline": headline,
         "layers": layers,                                  # v1.3 四级坐标(保留·供对比)
-        "journey": journey,                               # 运营阶段旅程(已走/现在/接下来)
-        "basics": {                                       # 账号基础数据(给用户信息与参考·指令3)
+        "journey": journey,                               # 运营阶段旅程(阶段×维度矩阵+链条)
+        "basics": {                                       # 账号基础数据原值(指令3)
             "nickname": account.get("nickname"), "signature": account.get("signature"),
             "unique_id": account.get("unique_id"), "ip_location": account.get("ip_location"),
             "custom_verify": account.get("custom_verify"),
@@ -112,7 +117,13 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
             "total_favorited": account.get("total_favorited"),
             "following_count": account.get("following_count"),
             "avg_like": account.get("avg_like"), "max_like": account.get("max_like"),
+            "burst_ratio": account.get("burst_ratio"),
+            "update_gap_days": account.get("update_gap_days"),
+            "vertical_score": account.get("vertical_score"),
         },
+        "basics_judge": basics_j,                         # 基础数据档位标尺(判断+依据·指令1)
+        "basics_summary": basics_judge.summary(basics_j),
+        "causal": causal,                                 # 内容→口碑→势能因果链(指令2)
         "ladders": build_ladders(account, s, c, deep, headline, heading),  # v2.0 价值四阶梯
         "accounting": accounting,
         "data_coverage": _data_coverage(account, deep),   # 采集/展示/空 诚实账
@@ -215,6 +226,7 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
         "rx_eta": ts.get("rx_eta"),
         "conf": ts.get("conf"),
         "sentiment_evo": account.get("sentiment_evolution"),  # 矿脉③:口碑演化(先行信号)
+        "acceleration": account.get("acceleration"),          # 轨迹二阶导(势能加速/放缓)
         # 需多次采集才算的那半·诚实标"积累中"
         "trajectory_pending": "账号涨粉轨迹/处方前后真实对照·需多次采集存历史(积累中)",
     }
