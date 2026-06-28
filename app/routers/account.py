@@ -610,6 +610,18 @@ def board(payload: dict[str, Any] = Body(...)) -> dict:
             _slug = _gal._slug(account)
             (_cd / f"{_slug}.json").write_text(
                 _json.dumps(doc, ensure_ascii=False, indent=1), "utf-8")
+            # ④ 自动触发标准渲染(2026-06-28):产 doc 后即调 metaform render_contract 出标准报告
+            # (reports/{slug}-{date}.html·带戳·cver=当前)。best-effort 后台·非阻塞·
+            # metaform 不在则跳过(跨服务优雅降级)·失败不拖垮接口。
+            try:
+                import subprocess as _sp
+                import sys as _sys
+                _mf = _gal._dir().parent / "metaform" / "render-metaboard-reports.py"
+                if _mf.exists():
+                    _sp.Popen([_sys.executable, str(_mf), "--slug", _slug],
+                              stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            except Exception:  # noqa: BLE001
+                pass
         except Exception:  # noqa: BLE001 — 契约对接失败不拖垮接口
             pass
         # persist=true → 产出即落进归集(probe/data/cases·该存的方式)。默认关·向后兼容。
