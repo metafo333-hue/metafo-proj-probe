@@ -26,12 +26,23 @@ def _dir() -> pathlib.Path:
     return pathlib.Path(os.getenv("METABOARD_GALLERY_DIR", str(_DEFAULT)))
 
 
-def _slug(nick: str) -> str:
+def _slug(account_or_nick) -> str:
+    """可读稳定 slug:优先抖音号(unique_id)·次昵称ASCII·末 md5 兜底。"""
+    if isinstance(account_or_nick, dict):
+        uid = (account_or_nick.get("unique_id") or "").strip()
+        if uid and re.fullmatch(r"[A-Za-z0-9._-]+", uid):
+            return uid.lower()
+        nick = account_or_nick.get("nickname") or "acct"
+    else:
+        nick = account_or_nick or "acct"
+    ascii_part = re.sub(r"[^a-z0-9]+", "", str(nick).lower())
+    if ascii_part:
+        return ascii_part
     try:
         from app.services.cases_store import _slug as cs
         return cs(nick)
     except Exception:  # noqa: BLE001
-        return re.sub(r"[^a-z0-9]+", "", (nick or "acct").lower()) or "acct"
+        return "acct"
 
 
 def register(account: dict, board: dict, html: str) -> dict | None:
@@ -40,7 +51,7 @@ def register(account: dict, board: dict, html: str) -> dict | None:
         gdir = _dir()
         (gdir / "reports").mkdir(parents=True, exist_ok=True)
         nick = account.get("nickname") or "账号"
-        slug = _slug(nick)
+        slug = _slug(account)        # 优先抖音号·可读稳定
         date = datetime.now().strftime("%Y-%m-%d")             # noqa: DTZ005
         rel = f"reports/{slug}-{date}.html"
         (gdir / rel).write_text(html, "utf-8")
