@@ -339,6 +339,8 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
         "enterprise_verify_reason": prof.get("enterprise_verify_reason"),  # 企业认证
         "personal_tag_list": prof.get("personal_tag_list"),
         "account_cert_info": prof.get("account_cert_info"),
+        "following_count": prof.get("following_count"),   # 关注数
+        "total_favorited": prof.get("total_favorited"),   # 获赞总数(累计影响力)
     }
     # ── 评论深化(水军/真实性/私域意图·3 子项·满血) ───────────────────────────
     # 真实信封路径: results["comments"]["data"]["comments"][] (实测 2026-06-22)。

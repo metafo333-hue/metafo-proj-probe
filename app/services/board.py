@@ -102,6 +102,17 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
         "headline": headline,
         "layers": layers,                                  # v1.3 四级坐标(保留·供对比)
         "journey": journey,                               # 运营阶段旅程(已走/现在/接下来)
+        "basics": {                                       # 账号基础数据(给用户信息与参考·指令3)
+            "nickname": account.get("nickname"), "signature": account.get("signature"),
+            "unique_id": account.get("unique_id"), "ip_location": account.get("ip_location"),
+            "custom_verify": account.get("custom_verify"),
+            "enterprise_verify": account.get("enterprise_verify_reason"),
+            "follower": account.get("follower"), "max_follower": account.get("max_follower"),
+            "aweme_count": account.get("aweme_count"),
+            "total_favorited": account.get("total_favorited"),
+            "following_count": account.get("following_count"),
+            "avg_like": account.get("avg_like"), "max_like": account.get("max_like"),
+        },
         "ladders": build_ladders(account, s, c, deep, headline, heading),  # v2.0 价值四阶梯
         "accounting": accounting,
         "data_coverage": _data_coverage(account, deep),   # 采集/展示/空 诚实账

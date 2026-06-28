@@ -65,6 +65,7 @@ def build_journey(account: dict, deep: dict | None = None) -> dict[str, Any]:
     return {
         "is_b2b": is_b2b,
         "nodes": nodes,
+        "criteria": _criteria(account, is_b2b),   # 评定依据(怎么判这个阶段·指令1)
         "current": stages[cur_idx][0],
         "current_idx": cur_idx,
         "current_task": stages[cur_idx][2],
@@ -76,6 +77,26 @@ def build_journey(account: dict, deep: dict | None = None) -> dict[str, Any]:
         "verdict": _verdict(stages, cur_idx, nxt_idx, gaps),
         "source": "CAT §五(B端) / PB §A2(泛娱乐)·赛道感知阶段模型",
     }
+
+
+def _criteria(account: dict, is_b2b: bool) -> dict:
+    """阶段评定依据:用哪些维度判这个阶段(给用户看依据·指令1)。"""
+    f = account.get("follower") or 0
+    cd = account.get("commerce_density")
+    vs = account.get("vertical_score")
+    dims = [
+        {"dim": "粉丝量级", "value": _fmt(f),
+         "why": "决定能用哪条变现路径·" + ("B端几千精准粉就能引流私域" if is_b2b
+                                          else "泛娱乐需更大量级才变现")},
+        {"dim": "承接基建", "value": ("有" if (cd or 0) > 0 else "无(商业密度0)"),
+         "why": "私域/橱窗承接是否接通·B端起号→初变现的硬门槛"},
+        {"dim": "垂直度", "value": (str(vs) if vs is not None else "—"),
+         "why": "算法是否给你打稳标签·冷启→起号的关键"},
+    ]
+    return {"dims": dims,
+            "note": "阶段=按粉丝量级定位 + 承接/垂直度判进阶就绪度·赛道感知"
+                    "(B端线索游戏 vs 泛娱乐流量游戏门槛不同)",
+            "source": "CAT §五(B端阶段) · PB §A2(泛娱乐阶段) · 单粉价值 CM §二层A"}
 
 
 def _advance_gaps(account: dict, cur_stage, deep: dict, is_b2b: bool) -> list[str]:

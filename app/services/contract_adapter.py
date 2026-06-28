@@ -33,6 +33,10 @@ def _g(d, *ks, default=None):
     return default if cur is None else cur
 
 
+def _n(v, dash="—"):
+    return dash if v is None else str(v)
+
+
 def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
     """build_board 输出 → MetaForm 契约 doc(source=metaboard·对方按 account-diagnosis 渲)。"""
     L = board.get("ladders") or {}
@@ -53,6 +57,7 @@ def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
     }
 
     journey = board.get("journey") or {}
+    basics = board.get("basics") or {}
     blocks = [
         _verdict(l3, l1),
         _situation(l1, idn, journey),
@@ -61,7 +66,7 @@ def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
         _actions(l3, journey),
         _forecast(l4, journey),
         _scope(l2, s),
-        _appendix(l2, s, journey),
+        _appendix(l2, s, journey, basics),
     ]
     blocks = [b for b in blocks if b]
     return {"source": "metaboard", "doc": {"meta": meta, "blocks": blocks}}
@@ -217,39 +222,103 @@ def _scope(l2, s) -> dict:
     return {"role": "scope", "text": "。".join(cav) + "。"}
 
 
-# ── appendix 图表化深度(html·唯一放行图表的角色)·图表标准:图+一句结论 ──
-def _appendix(l2, s, journey) -> dict:
-    from app.services import board_render as R
+# ── appendix 图表化+详解深度(html·唯一放行图表/富文本的角色)──
+# 补:账号基础数据(指令3)·评论实录(指令3)·8维详解是什么+怎么提高(指令4)·归因解释(指令5)
+def _appendix(l2, s, journey, basics) -> dict:
+    from app.services import board_render as R, dimension_guide as DG
+    _h = "<div style='font-weight:700;color:#1E3A8A;margin:12px 0 4px'>{}</div>"
     parts = []
-    # ① 运营阶段旅程图(stepper·已走→现在→接下来)
+
+    # ① 账号基础数据(指令3·给用户信息与参考)
+    parts.append(_basics_table(basics))
+
+    # ② 运营阶段旅程图 + 评定依据(指令1)
     if journey.get("nodes"):
-        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:6px 0 2px'>运营阶段旅程</div>"
-                     + R._stepper(journey["nodes"])
+        parts.append(_h.format("运营阶段旅程") + R._stepper(journey["nodes"])
                      + f"<div style='font-size:12px;color:#374151'>{journey.get('verdict','')}</div>")
-        gaps = journey.get("advance_gaps") or []
-        if gaps:
-            parts.append("<div style='font-size:12px;color:#6B7280'>进阶还差："
-                         + "；".join(gaps) + "</div>")
-    # ② 账号八维雷达
+        crit = journey.get("criteria") or {}
+        if crit.get("dims"):
+            rows = "".join(f"<tr><td>{d['dim']}</td><td>{d['value']}</td>"
+                           f"<td style='color:#6B7280;font-size:12px'>{d['why']}</td></tr>"
+                           for d in crit["dims"])
+            parts.append("<div style='font-size:12px;color:#6B7280;margin-top:4px'>阶段评定依据："
+                         + crit.get("note", "") + "</div>"
+                         + f"<table><tr><th>评定维度</th><th>你的值</th><th>为什么看它</th></tr>{rows}</table>"
+                         + f"<div style='font-size:11px;color:#9CA3AF'>出处：{crit.get('source','')}</div>")
+
+    # ③ 账号八维雷达 + 每维详解(是什么/怎么提高)(指令4)
     radar = l2.get("radar") or {}
     items = [(_LABEL.get(r["key"].lower(), r["label"]), r["score"])
              for r in (radar.get("account_self") or []) if r.get("score") is not None]
     if len(items) >= 3:
-        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:8px 0 2px'>账号八维（外环强/内缩弱）</div>"
-                     + R._radar(items))
-    # ③ 关键指标 vs 行业基准(子弹图·一眼看达标)
+        parts.append(_h.format("账号八维（外环强/内缩弱）") + R._radar(items))
+    dims = DG.all_dims(s)
+    dim_rows = "".join(
+        f"<tr><td><b>{d['name']}</b><br><span style='color:#6B7280;font-size:11px'>{d['what']}</span></td>"
+        f"<td style='text-align:center;font-weight:700;color:{_dim_col(d['score'])}'>{_n(d['score'])}</td>"
+        f"<td style='font-size:12px'>{d['how']}</td></tr>" for d in dims)
+    parts.append(_h.format("八维详解 · 是什么 + 怎么提高（按分升序·先补短板）")
+                 + f"<table><tr><th>维度</th><th>分</th><th>怎么提高</th></tr>{dim_rows}</table>")
+
+    # ④ 关键指标 vs 行业基准(子弹图)
     bullets = ""
     for code, bm, lab in (("c1", 55, "健康"), ("c3", 40, "商业转化"), ("c4", 50, "内容力")):
         sc = _g(s, code, "score")
         if sc is not None:
             bullets += R._bullet(sc, bm, label=lab)
     if bullets:
-        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:8px 0 2px'>关键指标 vs 行业基准</div>" + bullets)
-    # ④ 内容归因(柱状)
+        parts.append(_h.format("关键指标 vs 行业基准") + bullets)
+
+    # ⑤ 内容归因(柱状)+ 因子解释(指令5)
     attr = l2.get("attribution") or {}
     if attr.get("enough") and attr.get("factors"):
-        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:8px 0 2px'>内容归因·因子驱动力</div>"
+        parts.append(_h.format("内容归因·因子驱动力")
                      + R._bars([(f["factor"], f["spread"]) for f in attr["factors"][:5]], color="#0891B2"))
+        exp = "".join(f"<li><b>{f['factor']}</b>（落差 {f['spread']}x）：{DG.ATTR_GUIDE.get(f['factor'],'')}</li>"
+                      for f in attr["factors"][:4] if DG.ATTR_GUIDE.get(f["factor"]))
+        parts.append(f"<div style='font-size:12px;color:#374151'>{DG.ATTR_SPREAD_DEF}</div>"
+                     f"<ul style='font-size:12px;color:#374151'>{exp}</ul>")
+
+    # ⑥ 评论实录(指令3·真实原话·观众想什么)
+    parts.append(_comments_record(l2))
+
     return {"role": "appendix",
-            "title": "展开图表深度（阶段旅程 · 八维雷达 · 指标基准 · 内容归因）",
-            "html": "".join(parts)}
+            "title": "展开完整数据（基础资料 · 阶段依据 · 八维详解 · 指标基准 · 归因解释 · 评论实录）",
+            "html": "".join(p for p in parts if p)}
+
+
+def _basics_table(b) -> str:
+    if not b:
+        return ""
+    rows = ""
+    for lab, key, suf in (("昵称", "nickname", ""), ("抖音号", "unique_id", ""),
+                          ("个人简介", "signature", ""), ("属地", "ip_location", ""),
+                          ("个人认证", "custom_verify", ""), ("企业认证", "enterprise_verify", ""),
+                          ("粉丝数", "follower", ""), ("历史峰值粉丝", "max_follower", ""),
+                          ("作品数", "aweme_count", ""), ("获赞总数", "total_favorited", ""),
+                          ("关注数", "following_count", ""),
+                          ("均赞", "avg_like", ""), ("最高赞", "max_like", "")):
+        v = b.get(key)
+        if v:
+            vv = str(v).replace("\n", " ")[:70]
+            rows += f"<tr><td style='white-space:nowrap'>{lab}</td><td>{vv}{suf}</td></tr>"
+    return ("<div style='font-weight:700;color:#1E3A8A;margin:6px 0 4px'>账号基础数据</div>"
+            f"<table>{rows}</table>") if rows else ""
+
+
+def _comments_record(l2) -> str:
+    hot = l2.get("hot_comments") or {}
+    top = hot.get("top") or []
+    if not top:
+        return ""
+    rows = "".join(f"<tr><td style='color:#6B7280'>{h.get('digg',0)}赞</td>"
+                   f"<td>{(h.get('text') or '')[:48]}</td></tr>" for h in top[:8])
+    return ("<div style='font-weight:700;color:#1E3A8A;margin:12px 0 4px'>评论实录（观众原话·按热度）</div>"
+            f"<table><tr><th>热度</th><th>评论</th></tr>{rows}</table>"
+            "<div style='font-size:11px;color:#9CA3AF'>采样非全量·热评经平台算法排序</div>")
+
+
+def _dim_col(sc) -> str:
+    if sc is None:
+        return "#9CA3AF"
+    return "#DC2626" if sc < 40 else ("#D97706" if sc < 60 else "#059669")
