@@ -80,6 +80,7 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
 
     from app.services import deep_analysis
     deep = deep_analysis.build_deep(account, xprof, s)
+    heading = deep_analysis.growth_heading(account, s)   # 阶段1 航向(你是什么→成为什么)
 
     layers = {
         "env": _layer_env(account, s, deep),
@@ -99,7 +100,7 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
         "nickname": account.get("nickname"),
         "headline": headline,
         "layers": layers,                                  # v1.3 四级坐标(保留·供对比)
-        "ladders": build_ladders(account, s, c, deep, headline),  # v2.0 价值四阶梯
+        "ladders": build_ladders(account, s, c, deep, headline, heading),  # v2.0 价值四阶梯
         "accounting": accounting,
         "data_coverage": _data_coverage(account, deep),   # 采集/展示/空 诚实账
         "raw": {"scores": s, "cards": c},
@@ -112,7 +113,7 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_ladders(account: dict, s: dict, c: dict, deep: dict,
-                  headline: dict) -> dict[str, Any]:
+                  headline: dict, heading: dict | None = None) -> dict[str, Any]:
     deep = deep or {}
     di = deep.get("industry") or {}
     track = di.get("track_tier") or {}
@@ -123,12 +124,19 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
     ts = account.get("time_series") or {}
     rx = (account.get("content_dna") or {}).get("next_video_rx") or {}
 
-    # ── 阶梯1 描述(你是什么)──
+    # ── 阶梯1 定位+航向(你是什么 → 该往哪 → 成为什么)point6 ──
+    heading = heading or {}
     ladder1 = {
-        "rung": 1, "name": "描述", "question": "你是什么",
+        "rung": 1, "name": "定位航向", "question": "你是什么·该成为什么",
         "moat": "竞品也能做",
         "conclusion": (f"{track.get('name', '赛道待定')}·{stage.get('stage', '')}·"
                        f"{account.get('follower', '?')}粉"),
+        "heading": {                              # 三段论述:现状→航向→终态
+            "now": heading.get("now"),
+            "direction": heading.get("direction"),
+            "endstate": heading.get("endstate"),
+            "logic": heading.get("logic", []),
+        },
         "details": [
             f"赛道分型:{track.get('tier', '?')}档·{track.get('name', '')}·"
             f"单粉价值 {track.get('value_per_fan', '—')}",
@@ -136,7 +144,7 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
             f"该玩:{track.get('game', '—')}({'线索游戏' if track.get('is_b2b_leads') else '流量游戏'})",
         ],
         "milestone": account.get("milestone"),    # 里程碑(粉丝→权益·距下一档)
-        "source": track.get("source", ""),
+        "source": heading.get("source") or track.get("source", ""),
     }
 
     # ── 阶梯2 诊断(为什么这样)──
@@ -152,14 +160,18 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
         "hot_comments": account.get("hot_comments"),         # 热评TOP(采了没接·补)
         "comment_clusters": account.get("comment_clusters"), # 评论聚类(非LLM·补)
         "engagement_anomaly": account.get("engagement_anomaly"),  # 互动操纵异常(补强④)
+        "engagement_structure": account.get("engagement_structure"),  # 互动结构(评/藏/转比)
+        "chain": _diag_chain(account, s, deep),              # 诊断链(流量→互动→口碑→转化→真实)
         "top_concern": tc,
         "radar": _radar(s),
         "details": [_card_brief(c.get("churn")), _card_brief(c.get("pricing")),
                     _card_brief(c.get("track"))],
     }
 
-    # ── 阶梯3 处方(该怎么做)──
+    # ── 阶梯3 处方(该怎么做)·双层:前端三级人话 + 后端 cut 命令(point4)──
+    from app.services import cut_director
     rx_steps = rx.get("steps") or []
+    rx_pkg = cut_director.build_prescription(account, deep)
     ladder3 = {
         "rung": 3, "name": "处方", "question": "该怎么做",
         "moat": "竞品做不到",
@@ -170,6 +182,8 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
         "next_video": rx_steps,
         "audience_intent": au.get("intent_signal"),
         "audience_implication": au.get("implication"),
+        "front": rx_pkg["front"],             # 前端三级层级(战略/战术/执行)
+        "cut_commands": rx_pkg["cut_commands"],  # 后端 MetaCut 执行命令
     }
 
     # ── 阶梯4 预测(做了/接下来会怎样)──
@@ -335,6 +349,61 @@ def _layer_video(account: dict, s: dict, deep: dict | None = None) -> dict:
         } if dna else None,
         "deep": (deep or {}).get("video"),   # ④单条层五段式深度
     }
+
+
+def _diag_chain(account: dict, s: dict, deep: dict) -> list[dict]:
+    """诊断链(point3):流量→互动→口碑→转化→真实·5层因果·14指标+所有信号全织入·层层联想。
+
+    每层:数据(指标/信号) + 一句诊断 + 连到下一层的因果('为什么留不住→看互动')。
+    """
+    es = account.get("engagement_structure") or {}
+    attr = account.get("content_attribution") or {}
+    clusters = account.get("comment_clusters") or {}
+    se = account.get("sentiment_evolution") or {}
+    c1, c2, c3, c4 = s.get("c1") or {}, s.get("c2") or {}, s.get("c3") or {}, s.get("c4") or {}
+    c8, c12 = s.get("c8") or {}, s.get("c12") or {}
+    anom = account.get("engagement_anomaly") or {}
+
+    def L(name, color, metrics, diagnosis, link):
+        return {"layer": name, "color": color, "metrics": metrics,
+                "diagnosis": diagnosis, "link": link}
+
+    chain = [
+        L("流量层", "#0891B2",
+          [f"健康 C1={c1.get('score')}({c1.get('phase','')})",
+           f"内容力 C4={c4.get('score')}",
+           (f"互动主要由「{attr.get('top_driver',{}).get('factor','')}」驱动"
+            if attr.get("enough") else "归因待样本")],
+          (f"流量基础:{c1.get('phase','')}·内容力 {c4.get('score')}分"),
+          "→ 流量进来了为什么留不住?看互动层"),
+        L("互动层", "#7C3AED",
+          [f"评论赞比 {es.get('comment_per_like','—')}({es.get('nature','')})",
+           f"收藏赞比 {es.get('collect_per_like','—')}",
+           f"粉丝质量 C2={c2.get('score')}"],
+          (f"互动性质={es.get('nature','—')}·"
+           + ("高评论=讨论型(适合话题·难直接带货)" if (es.get('comment_per_like') or 0) >= 0.15
+              else "互动结构常规")),
+          "→ 观众到底在说什么?看口碑层"),
+        L("口碑层", "#DB2777",
+          [(f"高频诉求:{('、'.join(c['theme'] for c in (clusters.get('clusters') or [])[:2]))}"
+            if clusters.get("enough") else "评论聚类待数据"),
+           (f"口碑{se.get('verdict','')}·{se.get('intent_trend','')}" if se.get("enough")
+            else "口碑演化待数据")],
+          ("评论暴露真实诉求:" +
+           ("有采购意向但问'哪里下单'=承接断点" if clusters.get("enough") else "诉求平稳")),
+          "→ 这些意向能不能转成钱?看转化层"),
+        L("转化层", "#D97706",
+          [f"商业转化 C3={c3.get('score')}", f"变现机会 C12={c12.get('score')}",
+           f"私域潜力 C8={c8.get('score')}"],
+          (deep.get("commerce", {}).get("conclusion", f"商业转化 {c3.get('score')}分")),
+          "→ 这些数据真不真?看真实层"),
+        L("真实层", "#059669",
+          [f"粉丝质量 C2={c2.get('score')}",
+           (anom.get("verdict", "互动结构检测") if anom.get("enough") else "互动检测待样本")],
+          (anom.get("verdict", "真实性待检") if anom.get("enough") else "真实性:样本不足"),
+          ""),
+    ]
+    return chain
 
 
 def _radar(s: dict) -> dict[str, list]:

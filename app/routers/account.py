@@ -583,6 +583,12 @@ def board(payload: dict[str, Any] = Body(...)) -> dict:
         html_str = (board_render.render_ladder_html(b) if view == "ladder"
                     else board_render.render_board_html(b))
         md_str = board_render.render_board_md(b)
+        # 归集画廊(point5):每次分析自动入库到集中画廊·可横向对比·不再单独出地址
+        try:
+            from app.services import gallery
+            b["gallery"] = gallery.register(account, b, html_str)
+        except Exception:  # noqa: BLE001 — 归集失败不拖垮接口
+            pass
         # persist=true → 产出即落进归集(probe/data/cases·该存的方式)。默认关·向后兼容。
         run_id = None
         if payload.get("persist"):

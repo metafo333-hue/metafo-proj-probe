@@ -38,6 +38,120 @@ def _n(v, suffix="", dash="—"):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SVG 迷你折线图(零依赖·内嵌·破晓色)· 图表规范:图 + 一句结论 = 一眼即达
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _sparkline(points: list, *, width: int = 260, height: int = 56,
+              color: str = _BLUE, fill: bool = True, suffix: str = "") -> str:
+    """画一条迷你折线·points=[(label, value)]·首尾标值·零依赖内嵌 SVG。"""
+    pts = [(str(la), float(v)) for la, v in (points or []) if v is not None]
+    if len(pts) < 2:
+        return '<span style="color:#9CA3AF;font-size:12px">数据点不足·图待积累</span>'
+    ys = [v for _, v in pts]
+    ymin, ymax = min(ys), max(ys)
+    rng = (ymax - ymin) or 1
+    n = len(pts)
+    pad_x, pad_y = 8, 10
+    iw, ih = width - pad_x * 2, height - pad_y * 2
+    coords = []
+    for i, (_, v) in enumerate(pts):
+        px = pad_x + (i / (n - 1)) * iw
+        py = pad_y + (1 - (v - ymin) / rng) * ih
+        coords.append((px, py))
+    poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    area = ""
+    if fill:
+        area = (f'<polygon points="{pad_x},{height-pad_y} {poly} {width-pad_x},{height-pad_y}" '
+                f'fill="{color}" opacity="0.08"/>')
+    dots = "".join(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.6" fill="{color}"/>'
+                   for x, y in coords)
+    # 首尾值标注
+    first_lab = f'<text x="{coords[0][0]:.0f}" y="{height-1}" font-size="9" fill="#6B7280">{pts[0][0]}</text>'
+    last_lab = f'<text x="{width-pad_x}" y="{height-1}" font-size="9" fill="#6B7280" text-anchor="end">{pts[-1][0]}</text>'
+    v0 = f'<text x="{coords[0][0]:.0f}" y="{coords[0][1]-5:.0f}" font-size="10" fill="{color}" font-weight="700">{_fmtnum(ys[0])}{suffix}</text>'
+    v1 = f'<text x="{coords[-1][0]:.0f}" y="{coords[-1][1]-5:.0f}" font-size="10" fill="{color}" font-weight="700" text-anchor="end">{_fmtnum(ys[-1])}{suffix}</text>'
+    return (f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+            f'style="max-width:100%">{area}'
+            f'<polyline points="{poly}" fill="none" stroke="{color}" stroke-width="2"/>'
+            f'{dots}{first_lab}{last_lab}{v0}{v1}</svg>')
+
+
+def _fmtnum(v: float) -> str:
+    if v >= 10000:
+        return f"{v/10000:.1f}万"
+    return str(int(v)) if v == int(v) else f"{v:.2f}"
+
+
+def _chart_row(title: str, svg: str, verdict: str = "") -> str:
+    """图表规范:标题 + 图 + 一句结论(一眼即达)。"""
+    v = f'<div style="font-size:12.5px;color:#374151">{verdict}</div>' if verdict else ""
+    return (f'<div style="margin:8px 0"><div style="font-size:12.5px;color:{_BLUE};font-weight:700">{title}</div>'
+            f'{svg}{v}</div>')
+
+
+def _bars(items: list, *, width: int = 280, bar_h: int = 16, gap: int = 6,
+          color: str = _BLUE) -> str:
+    """水平柱状图(标准可复用)·items=[(label, value[, color])]·按值归一。"""
+    rows = [(str(t[0]), float(t[1]), t[2] if len(t) > 2 else None)
+            for t in (items or []) if t[1] is not None]
+    if not rows:
+        return ""
+    vmax = max(r[1] for r in rows) or 1
+    label_w = 86
+    svg_h = len(rows) * (bar_h + gap)
+    out = [f'<svg width="{width}" height="{svg_h}" viewBox="0 0 {width} {svg_h}" style="max-width:100%">']
+    for i, (la, v, c) in enumerate(rows):
+        y = i * (bar_h + gap)
+        bw = (v / vmax) * (width - label_w - 44)
+        col = c or color
+        out.append(f'<text x="0" y="{y+bar_h-3}" font-size="11" fill="#374151">{la[:7]}</text>')
+        out.append(f'<rect x="{label_w}" y="{y}" width="{max(2,bw):.0f}" height="{bar_h}" rx="3" fill="{col}"/>')
+        out.append(f'<text x="{label_w+bw+4:.0f}" y="{y+bar_h-3}" font-size="10" fill="#6B7280">{_fmtnum(v)}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _radar(items: list, *, size: int = 200, color: str = _BLUE) -> str:
+    """雷达图(标准可复用)·items=[(label, value0-100)]·N轴蛛网。"""
+    import math
+    pts = [(str(la), max(0, min(100, float(v)))) for la, v in (items or []) if v is not None]
+    n = len(pts)
+    if n < 3:
+        return ""
+    cx = cy = size / 2
+    r = size / 2 * 0.66
+    # 背景环(25/50/75/100)
+    rings = ""
+    for frac in (0.25, 0.5, 0.75, 1.0):
+        ring = " ".join(
+            f"{cx + r*frac*math.cos(2*math.pi*i/n - math.pi/2):.1f},"
+            f"{cy + r*frac*math.sin(2*math.pi*i/n - math.pi/2):.1f}" for i in range(n))
+        rings += f'<polygon points="{ring}" fill="none" stroke="#E5E7EB" stroke-width="0.7"/>'
+    # 数据多边形
+    dpts, labels = [], ""
+    for i, (la, v) in enumerate(pts):
+        ang = 2 * math.pi * i / n - math.pi / 2
+        rr = r * v / 100
+        dpts.append(f"{cx+rr*math.cos(ang):.1f},{cy+rr*math.sin(ang):.1f}")
+        lx, ly = cx + (r+12)*math.cos(ang), cy + (r+12)*math.sin(ang)
+        anchor = "middle" if abs(math.cos(ang)) < 0.3 else ("start" if math.cos(ang) > 0 else "end")
+        labels += f'<text x="{lx:.0f}" y="{ly:.0f}" font-size="9.5" fill="#6B7280" text-anchor="{anchor}">{la}</text>'
+    poly = " ".join(dpts)
+    return (f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="max-width:100%">'
+            f'{rings}<polygon points="{poly}" fill="{color}" fill-opacity="0.18" '
+            f'stroke="{color}" stroke-width="1.6"/>{labels}</svg>')
+
+
+def _progress(pct: float, *, width: int = 220, color: str = _ORANGE) -> str:
+    """进度条(标准可复用·里程碑用)。"""
+    p = max(0, min(100, pct))
+    return (f'<div style="height:8px;width:{width}px;max-width:100%;background:#E5E7EB;'
+            f'border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle">'
+            f'<div style="width:{p}%;height:100%;background:{color}"></div></div>'
+            f'<b style="margin-left:8px;color:{color}">{round(p)}%</b>')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # v2.0 价值阶梯渲染(描述→诊断→处方→预测)·第一屏=完整答案·正文渐进折叠
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -50,13 +164,13 @@ def render_ladder_html(board: dict[str, Any]) -> str:
     L = board.get("ladders") or {}
     h = board.get("headline") or {}
     acc = board.get("accounting") or {}
+    # 算账(point2)移出对外报告·只留纯专业分析·成本走内部 ops(JSON 里仍有·不渲染)
     parts = [_ladder_head(nick),
              _ladder_answer_screen(nick, L, h),     # 第一屏:完整答案(4阶梯结论)
              _ladder_detail(L.get("l1"), _desc_body),
              _ladder_detail(L.get("l2"), _diag_body),
              _ladder_detail(L.get("l3"), _rx_body),
              _ladder_detail(L.get("l4"), _pred_body),
-             _screen_accounting(acc),
              _ladder_foot()]
     return "\n".join(parts)
 
@@ -146,9 +260,35 @@ def _ladder_detail(ld: dict | None, body_fn) -> str:
 
 
 def _desc_body(ld: dict) -> str:
+    out = _heading_block(ld.get("heading"))          # 现状→航向→终态(三段论述)
     lis = "".join(f"<li>{d}</li>" for d in (ld.get("details") or []))
-    src = f'<div class="note">出处:{ld.get("source")}</div>' if ld.get("source") else ""
-    return f"<ul>{lis}</ul>{_milestone_block(ld.get('milestone'))}{src}"
+    out += f"<ul>{lis}</ul>{_milestone_block(ld.get('milestone'))}"
+    if ld.get("source"):
+        out += f'<div class="note">出处:{ld.get("source")}</div>'
+    return out
+
+
+def _heading_block(h: dict | None) -> str:
+    """阶段1 航向:你现在是→该往哪走→终极成为(三段递进·箭头流)。"""
+    if not h or not h.get("now"):
+        return ""
+    steps = [("你现在是", h.get("now"), "#6B7280"),
+             ("该往哪走", h.get("direction"), _ORANGE),
+             ("终极成为", h.get("endstate"), _BLUE)]
+    rows = ""
+    for i, (k, v, col) in enumerate(steps):
+        arrow = '<div style="color:#9CA3AF;font-size:14px;margin:1px 0">↓</div>' if i else ""
+        rows += (f'{arrow}<div style="display:flex;gap:8px;align-items:baseline">'
+                 f'<span style="flex:none;font-size:11px;color:#fff;background:{col};'
+                 f'padding:2px 8px;border-radius:9px">{k}</span>'
+                 f'<span style="font-size:13.5px;font-weight:600">{_n(v)}</span></div>')
+    logic = ""
+    if h.get("logic"):
+        logic = ('<details style="margin-top:6px;box-shadow:none"><summary style="padding:4px 0;font-size:12px;color:#6B7280">逻辑依据 ▾</summary>'
+                 + "".join(f'<div style="font-size:12px;color:#6B7280">· {x}</div>' for x in h["logic"])
+                 + "</details>")
+    return (f'<div style="background:{_ZEBRA};border-radius:10px;padding:12px 14px;margin:4px 0 10px">'
+            f'{rows}{logic}</div>')
 
 
 def _milestone_block(ms: dict | None) -> str:
@@ -157,25 +297,43 @@ def _milestone_block(ms: dict | None) -> str:
     nxt = ms.get("next")
     body = f'<div style="font-size:13px"><b>里程碑:</b>{ms.get("current","")}</div>'
     if nxt:
-        pct = nxt.get("pct", 0)
-        body += (f'<div style="font-size:12.5px;margin-top:3px">🎯 {nxt.get("verdict","")}</div>'
-                 f'<div style="height:7px;background:#E5E7EB;border-radius:4px;margin:5px 0;overflow:hidden">'
-                 f'<div style="width:{min(100,pct)}%;height:100%;background:{_ORANGE}"></div></div>')
-    return f'<div style="background:{_ZEBRA};border-radius:8px;padding:9px 12px;margin:6px 0">{body}</div>'
+        body += (f'<div style="font-size:12.5px;margin:4px 0 2px">🎯 {nxt.get("verdict","")}</div>'
+                 + _progress(nxt.get("pct", 0)))
+    return f'<div style="background:#fff;border:1px solid {_ZEBRA};border-radius:8px;padding:9px 12px;margin:6px 0">{body}</div>'
+
+
+_RADAR_LABELS = {"c1": "健康", "c2": "粉丝", "c3": "转化", "c4": "内容",
+                 "c5": "赛道", "c6": "破圈", "c7": "评级", "c8": "私域"}
 
 
 def _diag_body(ld: dict) -> str:
+    """阶段2 全整合诊断(point3):雷达一眼看强弱 → 5层数据链(流量→互动→口碑→转化→真实)·
+    14指标+所有信号全织入·层层因果联想 → 矿脉/热评/聚类/归因/异常作各层证据 → 诊断卡收口。"""
     out = ""
     tc = ld.get("top_concern") or {}
     if tc.get("title"):
         out += (f'<div class="impl">⚠️ 最该关注:{_SEV_LABEL.get(tc.get("severity"))} '
                 f'{tc.get("title")} — {tc.get("what","")}</div>')
-    out += _five(ld.get("deep_health"), "健康分·深度拆解")
-    out += _five(ld.get("deep_commerce"), "商业转化·为什么这个分")
-    out += _attribution_block(ld.get("attribution"))   # 矿脉②:内容归因
-    out += _comment_voice_block(ld.get("hot_comments"), ld.get("comment_clusters"))  # 热评+聚类
-    out += _anomaly_block(ld.get("engagement_anomaly"))  # 互动操纵异常(④补强)
-    # 诊断卡简表
+    # ① 14指标雷达(账号自身8维·一眼看强弱·图示 point1)
+    radar = ld.get("radar") or {}
+    items = [(_RADAR_LABELS.get(r["key"].lower(), r["label"]), r["score"])
+             for r in (radar.get("account_self") or []) if r.get("score") is not None]
+    if len(items) >= 3:
+        out += _chart_row("账号八维雷达(自身实力)", _radar(items),
+                          "外环=强·内缩=弱·一眼看短板长板")
+    # ② 诊断链:5 层因果(流量→互动→口碑→转化→真实)
+    for seg in (ld.get("chain") or []):
+        out += _chain_layer(seg)
+    # ②' 口碑层证据:热评原话 + 诉求聚类(真实引用·gold)
+    out += _comment_voice_block(ld.get("hot_comments"), ld.get("comment_clusters"))
+    out += _anomaly_block(ld.get("engagement_anomaly"))
+    # ③ 五段式深拆(健康/商业转化·点此细看)
+    out += ('<details style="box-shadow:none;border:1px dashed #E5E7EB"><summary style="font-size:13px">📐 关键指标五段式深拆(健康/商业转化·点开)</summary><div class="body">'
+            + _five(ld.get("deep_health"), "健康分·深度拆解")
+            + _five(ld.get("deep_commerce"), "商业转化·为什么这个分") + '</div></details>')
+    # ④ 内容归因(柱状图 point1)
+    out += _attribution_chart(ld.get("attribution"))
+    # ⑤ 诊断卡简表
     cards = [x for x in (ld.get("details") or []) if x]
     if cards:
         rows = "".join(f'<tr><td>{_SEV_LABEL.get(x.get("severity"))} {x.get("title")}</td>'
@@ -184,19 +342,81 @@ def _diag_body(ld: dict) -> str:
     return out
 
 
+def _chain_layer(seg: dict) -> str:
+    """诊断链一层:层名 + 指标 + 诊断 + 连到下一层(箭头因果·专业联想)。"""
+    col = seg.get("color", _BLUE)
+    metrics = "".join(f'<span class="chip" style="background:#fff;border:1px solid {col}33;color:{col}">{m}</span> '
+                      for m in (seg.get("metrics") or []) if m)
+    link = (f'<div style="font-size:12px;color:#9CA3AF;margin-top:3px">{seg["link"]}</div>'
+            if seg.get("link") else "")
+    return (f'<div style="border-left:3px solid {col};padding:8px 0 8px 12px;margin:6px 0">'
+            f'<div style="font-weight:700;color:{col};font-size:13.5px">{seg.get("layer")}</div>'
+            f'<div style="margin:3px 0">{metrics}</div>'
+            f'<div style="font-size:13px"><b>诊断:</b>{seg.get("diagnosis","")}</div>{link}</div>')
+
+
+def _attribution_chart(at: dict | None) -> str:
+    """内容归因·柱状图(组间落差·哪个数据因子最驱动)。"""
+    if not at or not at.get("enough"):
+        return _attribution_block(at)
+    bars = _bars([(f["factor"], f["spread"]) for f in (at.get("factors") or [])[:5]],
+                 color="#0891B2")
+    return _chart_row("内容归因·因子驱动力(组间落差倍数)", bars,
+                      f'💡 {at.get("implication","")}')
+
+
 def _rx_body(ld: dict) -> str:
+    """阶段3 处方双层(point4):前端三级层级(战略→战术→执行·人话)+ 后端 cut 命令(MetaCut)。"""
     out = ""
-    if ld.get("strategic_why"):
+    front = ld.get("front") or {}
+    # 三级层级·递进(战略→战术→执行)
+    strat = front.get("strategy") or {}
+    if strat.get("text"):
         col = _SEV_COLOR.get(ld.get("strategic_color"), "#059669")
-        out += (f'<div style="background:{col};color:#fff;border-radius:9px;padding:10px 13px;margin-bottom:8px">'
-                f'<b>🎯 {ld.get("conclusion")}</b><br><span style="font-size:12.5px;opacity:.95">{ld.get("strategic_why")}</span></div>')
-    week = ld.get("this_week") or []
-    if week:
-        out += '<div style="font-weight:700;color:#059669;margin:6px 0 3px">📌 本周做这几件</div>'
-        out += '<ol style="padding-left:1.3em;font-size:13px">' + "".join(f"<li>{w}</li>" for w in week) + "</ol>"
+        out += (f'<div style="background:{col};color:#fff;border-radius:9px;padding:11px 14px;margin-bottom:8px">'
+                f'<div style="font-size:11px;opacity:.85">① 战略层·方向</div>'
+                f'<b style="font-size:15px">🎯 {strat.get("text")}</b>'
+                f'<div style="font-size:12.5px;opacity:.95;margin-top:2px">{strat.get("why","")}</div></div>')
+    tactic = front.get("tactic") or {}
+    if tactic.get("steps"):
+        out += ('<div style="font-weight:700;color:#059669;margin:6px 0 3px">② 战术层·本周做这几件</div>'
+                '<ol style="padding-left:1.3em;font-size:13px">'
+                + "".join(f"<li>{w}</li>" for w in tactic["steps"]) + "</ol>")
+    ex = front.get("execute") or {}
+    if ex.get("text"):
+        out += (f'<div style="background:{_ZEBRA};border-radius:8px;padding:9px 12px;margin:6px 0">'
+                f'<div style="font-size:11px;color:{_BLUE};font-weight:700">③ 执行层·下条怎么拍</div>'
+                f'<div style="font-size:13.5px">{ex.get("text")}</div></div>')
     if ld.get("audience_intent"):
         out += f'<div class="impl">💰 {ld.get("audience_implication","")}</div>'
+    # 后端 cut 命令(MetaCut 可执行·折叠·给工程/制作引擎)
+    out += _cut_commands_block(ld.get("cut_commands"))
     return out
+
+
+def _cut_commands_block(cc: dict | None) -> str:
+    """后端 MetaCut 执行命令(结构化·折叠·人不必看·引擎直接消费)。"""
+    if not cc:
+        return ""
+    import json
+    nc = cc.get("next_clip") or {}
+    # 人类可读摘要(命令的白话版)
+    summ = []
+    if nc.get("post_window"):
+        summ.append(f"发布窗 {nc['post_window']}")
+    if nc.get("duration_s"):
+        summ.append(f"时长 {nc['duration_s'][0]}-{nc['duration_s'][1]}s")
+    if nc.get("hook"):
+        summ.append(f"钩子 {nc['hook']}")
+    if nc.get("topic_tags"):
+        summ.append("选题 " + "/".join(nc["topic_tags"]))
+    raw = json.dumps(cc, ensure_ascii=False, indent=1)
+    return ('<details style="box-shadow:none;border:1px dashed #7C3AED55;margin-top:8px">'
+            '<summary style="font-size:13px;color:#7C3AED">⚙️ 后端·MetaCut 执行命令(引擎直接执行·点开看)</summary>'
+            f'<div class="body"><div style="font-size:12.5px;color:#374151">{"·".join(summ)}</div>'
+            f'<pre style="background:#0F172A;color:#E2E8F0;border-radius:8px;padding:10px;'
+            f'font-size:11px;overflow-x:auto;white-space:pre-wrap">{raw}</pre>'
+            f'<div class="note">承 v3.2 飞轮③ DeliveryPackage → MetaCut 制作引擎·每条命令可溯源</div></div></details>')
 
 
 def _pred_body(ld: dict) -> str:
@@ -286,14 +506,15 @@ def _sentiment_block(se: dict | None) -> str:
     if not se.get("enough"):
         return head + f'<div class="note">{se.get("verdict")}</div>'
     e, l = se.get("early") or {}, se.get("late") or {}
-    return (head + f'<div style="font-size:13px"><b>{se.get("verdict")}·{se.get("span","")}</b></div>'
-            f'<table><tr><th>维度</th><th>早期评论</th><th>近期评论</th></tr>'
-            f'<tr><td>采购/咨询意向率</td><td>{e.get("intent_rate")}</td><td>{l.get("intent_rate")}</td></tr>'
-            f'<tr><td>正面率</td><td>{e.get("pos_rate")}</td><td>{l.get("pos_rate")}</td></tr>'
-            f'<tr><td>负面率</td><td>{e.get("neg_rate")}</td><td>{l.get("neg_rate")}</td></tr></table>'
-            f'<div style="font-size:12.5px">📊 {se.get("intent_trend","")}</div>'
-            f'<div class="impl">💡 {se.get("implication","")}</div>'
-            f'<div class="note">{se.get("note","")}</div>')
+    # 图示:采购意向率 早→近 折线(point1)
+    intent_chart = _sparkline([("早期", (e.get("intent_rate") or 0) * 100),
+                               ("近期", (l.get("intent_rate") or 0) * 100)],
+                              color="#DB2777", suffix="%")
+    return (head
+            + _chart_row("采购/咨询意向率(早→近)", intent_chart,
+                         f"<b>{se.get('verdict')}</b>·{se.get('intent_trend','')}")
+            + f'<div class="impl">💡 {se.get("implication","")}</div>'
+            f'<div class="note">{se.get("note","")}·{se.get("span","")}</div>')
 
 
 def _rx_effect_block(rx: dict | None) -> str:
@@ -314,20 +535,19 @@ def _rx_effect_block(rx: dict | None) -> str:
 def _trajectory_block(tj: dict | None) -> str:
     if not tj:
         return ""
-    head = f'<div style="font-weight:700;color:#DC2626;margin:8px 0 4px">账号轨迹(跨次采集·真实历史)</div>'
+    head = '<div style="font-weight:700;color:#DC2626;margin:8px 0 4px">📈 账号轨迹(跨次采集·真实历史)</div>'
     if not tj.get("enough"):
         return head + f'<div class="impl">⏳ {tj.get("verdict")}</div>'
-    rows = f'<tr><td>涨粉判定</td><td><b>{tj.get("verdict")}</b></td></tr>'
-    rows += f'<tr><td>轨迹</td><td>{tj.get("detail","")}</td></tr>'
+    # 图示:涨粉折线(point1·一眼即达)
+    path = [(d[5:] if d and len(d) > 5 else d, f) for d, f in (tj.get("follower_path") or [])]
+    chart = _sparkline(path, color="#DC2626")
+    extra = ""
     if tj.get("like_trend"):
-        rows += f'<tr><td>互动趋势</td><td>{tj["like_trend"]}</td></tr>'
+        extra += f'<div style="font-size:12.5px">互动:{tj["like_trend"]}</div>'
     if tj.get("health_trend"):
-        rows += f'<tr><td>健康趋势</td><td>{tj["health_trend"]}</td></tr>'
-    path = tj.get("follower_path") or []
-    path_str = " → ".join(f"{d}:{f}" for d, f in path)
-    return (head + f'<table><tr><th>维度</th><th>真实历史</th></tr>{rows}</table>'
-            f'<div class="note">📍 {path_str}</div>'
-            f'<div class="note">{tj.get("note","")}·快照 {tj.get("snapshots")} 个</div>')
+        extra += f'<div style="font-size:12.5px">健康:{tj["health_trend"]}</div>'
+    return (head + _chart_row("粉丝轨迹", chart, f"<b>{tj.get('verdict')}</b>·{tj.get('detail','')}")
+            + extra + f'<div class="note">{tj.get("note","")}·快照 {tj.get("snapshots")} 个</div>')
 
 
 def _five(d: dict | None, title: str) -> str:

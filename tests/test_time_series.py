@@ -89,7 +89,7 @@ class TestLadders(unittest.TestCase):
 
     def test_ladder_order_and_moat(self):
         L = self._board()["ladders"]
-        self.assertEqual(L["l1"]["name"], "描述")
+        self.assertEqual(L["l1"]["name"], "定位航向")   # point6:升级为定位+航向
         self.assertEqual(L["l4"]["name"], "预测")
         self.assertIn("竞品", L["l3"]["moat"])      # 处方=竞品做不到
 
@@ -104,7 +104,7 @@ class TestLadders(unittest.TestCase):
         self.assertTrue(html.startswith("<!DOCTYPE html>"))
         self.assertIn("一眼答案", html)
         self.assertIn("阶梯4", html)
-        self.assertIn("描述", html)
+        self.assertIn("定位航向", html)
         self.assertIn("预测", html)
 
 

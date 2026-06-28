@@ -237,6 +237,44 @@ def deep_video(account: dict, scores: dict) -> dict[str, Any]:
     }
 
 
+def growth_heading(account: dict, scores: dict) -> dict[str, Any]:
+    """阶段1 航向(point6):你现在是什么 → 该往哪走 → 终极成为什么(带逻辑论述)。
+
+    把静态标签升级成成长路径论证:现状(赛道×阶段)→ 航向(天花板×下一阶段×变现路径)→
+    终态(IP定位)。逻辑链可溯。
+    """
+    track = BM.classify_track(_track_signal(account), account.get("industry_tags"))
+    stage = BM.fan_stage(account.get("follower"), is_b2b=track.get("is_b2b_leads"))
+    ms = account.get("milestone") or {}
+    f = account.get("follower") or 0
+    is_b2b = track.get("is_b2b_leads")
+    # 你现在是
+    now = (f"{track.get('name','赛道待定')}·{stage.get('stage','')}·{f}粉")
+    # 该往哪走(下一里程碑 + 本阶段任务 + 变现路径)
+    nxt_ms = (ms.get("next") or {}).get("verdict", "")
+    path = ("补私域承接·把咨询/采购意向变成交(B端线索游戏)" if is_b2b
+            else f"按 {track.get('monetize_fans','门槛')} 节奏推进变现")
+    direction = f"{stage.get('task','')}·{nxt_ms}·{path}"
+    # 终极成为(赛道价值天花板 → IP 定位)
+    if is_b2b:
+        endstate = (f"{track.get('matched') or track.get('name','')}赛道的「源头供应/专业IP」·"
+                    f"几千精准粉做透私域·单粉价值 {track.get('value_per_fan','高')}(非泛娱乐流量)")
+    else:
+        endstate = (f"{track.get('name','')}的稳定变现账号·"
+                    f"按 {track.get('value_per_fan','')} 单粉价值规模化")
+    return {
+        "now": now, "direction": direction, "endstate": endstate,
+        "logic": [
+            f"现状定位:{track.get('tier','?')}档赛道 × {stage.get('stage','')}(粉丝量级决定阶段任务)",
+            f"航向依据:下一里程碑 + 本阶段任务「{stage.get('task','')}」+ "
+            f"{'B端' if is_b2b else '泛娱乐'}变现路径",
+            f"终态依据:赛道单粉价值天花板 {track.get('value_per_fan','')}·"
+            f"{'垂直B端越做越值钱' if is_b2b else '需规模'}",
+        ],
+        "source": f"{track.get('source','')} · {stage.get('source','')}",
+    }
+
+
 def build_deep(account: dict, xprof: Any, scores: dict) -> dict[str, Any]:
     """一次产出各层深度块 + 赛道感知战略判断(四层一样厚)+ 扩展信号组合。"""
     from app.services import extra_signals as ES
