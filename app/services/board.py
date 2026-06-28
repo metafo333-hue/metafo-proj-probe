@@ -78,9 +78,10 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
         "track": diagnosis_cards.diagnose_track(account, xprof),
     }
 
-    from app.services import deep_analysis
+    from app.services import deep_analysis, stage_journey
     deep = deep_analysis.build_deep(account, xprof, s)
     heading = deep_analysis.growth_heading(account, s)   # 阶段1 航向(你是什么→成为什么)
+    journey = stage_journey.build_journey(account, deep)  # 运营阶段旅程(已走/现在/接下来)
 
     layers = {
         "env": _layer_env(account, s, deep),
@@ -100,6 +101,7 @@ def build_board(account: dict[str, Any], xprof: Any = None, *,
         "nickname": account.get("nickname"),
         "headline": headline,
         "layers": layers,                                  # v1.3 四级坐标(保留·供对比)
+        "journey": journey,                               # 运营阶段旅程(已走/现在/接下来)
         "ladders": build_ladders(account, s, c, deep, headline, heading),  # v2.0 价值四阶梯
         "accounting": accounting,
         "data_coverage": _data_coverage(account, deep),   # 采集/展示/空 诚实账

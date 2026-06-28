@@ -52,15 +52,16 @@ def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
         "compliance": _COMPLIANCE,
     }
 
+    journey = board.get("journey") or {}
     blocks = [
         _verdict(l3, l1),
-        _situation(l1, idn),
+        _situation(l1, idn, journey),
         _key_issue(l2, l4),
         _evidence(s, l2, l4, idn),
-        _actions(l3),
-        _forecast(l4),
+        _actions(l3, journey),
+        _forecast(l4, journey),
         _scope(l2, s),
-        _appendix(l2, s),
+        _appendix(l2, s, journey),
     ]
     blocks = [b for b in blocks if b]
     return {"source": "metaboard", "doc": {"meta": meta, "blocks": blocks}}
@@ -85,16 +86,22 @@ def _verdict(l3, l1) -> dict:
             "tagline": (stage.split("·")[-1] + " · " + game) if game else stage}
 
 
-# ── situation 处境(你是什么→成为什么)+ 形象一致性 ──
-def _situation(l1, idn) -> dict:
+# ── situation 处境(你在旅程哪一站·已走/接下来)+ 形象一致性 ──
+def _situation(l1, idn, journey) -> dict:
     h = l1.get("heading") or {}
-    lead = f"你在 {h.get('now','')}，目标是{(h.get('endstate') or '')[:40]}。"
-    ms = (l1.get("milestone") or {}).get("next") or {}
-    txt = h.get("direction") or ""
+    cur = journey.get("current", "")
+    done = journey.get("done") or []
+    fut = journey.get("future") or []
+    lead = (f"你在运营旅程的【{cur}】" +
+            (f"，已走过 {'、'.join(done)}" if done else "") +
+            (f"，接下来 {'、'.join(fut[:2])}" if fut else "") + "。")
+    # 进阶规划 + 航向终态 + 形象一致性(文字精简·细节进 appendix 图)
+    txt = journey.get("verdict", "")
+    if h.get("endstate"):
+        txt += f"。终极目标:{h['endstate'][:40]}"
     if idn.get("consistency") is not None:
-        txt += (f" 形象一致性 {idn.get('consistency')}（{idn.get('self_match','')}）："
-                f"{idn.get('verdict','')}。")
-    return {"role": "situation", "lead": lead, "text": txt}
+        txt += f"。形象一致性 {idn.get('consistency')}（{idn.get('self_match','')}）"
+    return {"role": "situation", "lead": lead, "text": txt + "。"}
 
 
 # ── key_issue 最该一件事(因果流 + 热评原话 + 收口)──
@@ -150,15 +157,20 @@ def _evidence(s, l2, l4, idn) -> dict:
     return {"role": "evidence", "items": items} if items else None
 
 
-# ── actions 本周做(带优先级)+ cut 命令摘要 ──
-def _actions(l3) -> dict:
+# ── actions 进阶动作(锚定阶段进阶·带优先级)+ cut 命令 ──
+def _actions(l3, journey) -> dict:
     front = l3.get("front") or {}
     steps = _g(front, "tactic", "steps") or l3.get("this_week") or []
     items = []
+    # 进阶动作:把本周动作锚定到"从当前站进下一站"
+    nxt = journey.get("next")
+    gaps = journey.get("advance_gaps") or []
     strat = _g(front, "strategy", "text")
     if strat:
-        items.append({"title": strat, "why": _g(front, "strategy", "why", default="")[:50],
-                      "priority": "最高优先"})
+        why = _g(front, "strategy", "why", default="")[:50]
+        if nxt and gaps:
+            why = f"这是进【{nxt}】的硬条件：{gaps[0].split('·')[0]}。" + why
+        items.append({"title": strat, "why": why, "priority": "最高优先·进阶关键"})
     for st in steps[:3]:
         items.append({"title": st, "why": "", "priority": "本周"})
     # cut 命令摘要(给制作引擎·人话版)
@@ -172,8 +184,8 @@ def _actions(l3) -> dict:
     return {"role": "actions", "items": items} if items else None
 
 
-# ── forecast 会怎样(时序+轨迹+处方对照)──
-def _forecast(l4) -> dict:
+# ── forecast 会怎样(能不能进下一站·时序+轨迹+处方对照)──
+def _forecast(l4, journey) -> dict:
     parts = []
     if l4.get("enough"):
         parts.append(f"内容时序：{l4.get('trend','')}·{l4.get('stage','')}")
@@ -183,39 +195,61 @@ def _forecast(l4) -> dict:
     rx = l4.get("rx_effect") or {}
     if rx.get("enough"):
         parts.append(f"处方对照：{rx.get('outcome','')}")
+    nxt = journey.get("next")
+    lead = (f"接通进阶条件能进【{nxt}】；不补则卡在【{journey.get('current','')}】。"
+            if nxt else "按数据趋势推进。")
     if not parts:
-        return {"role": "forecast", "lead": "趋势数据积累中。",
+        return {"role": "forecast", "lead": lead,
                 "text": "时序导数与账号轨迹需更多作品/多次采集后给出（每次分析自动存档）。"}
-    return {"role": "forecast",
-            "lead": "把承接接通、节奏稳住，下滑可止。" if l4.get("stage", "").startswith("衰退") else "按数据趋势推进。",
-            "text": "；".join(parts) + "。"}
+    return {"role": "forecast", "lead": lead, "text": "；".join(parts) + "。"}
 
 
 # ── scope 边界集中(N3+N5)──
 def _scope(l2, s) -> dict:
+    # ⚠️ render_contract 对 scope.text 转义→禁 html 标签·纯文本(N3 边界集中)
     cav = []
-    # 无星图缺口
     if _g(s, "c3", "missing"):
-        cav.append("未开通星图，<b>拿不到、未纳入评分</b>：官方报价、带货/转化指数、粉丝消费力画像")
+        cav.append("未开通星图，拿不到、未纳入评分：官方报价、带货/转化指数、粉丝消费力画像")
     anom = l2.get("engagement_anomaly") or {}
     if anom.get("enough"):
-        cav.append(f"互动操纵只查了<b>结构</b>（{anom.get('verdict','')}），真实播放量是黑盒、未核查")
+        cav.append(f"互动操纵只查了结构（{anom.get('verdict','')}），真实播放量是黑盒、未核查")
     cav.append("部分阈值为经验值，待用 50–100 个真实账号建分位基线后校准")
     return {"role": "scope", "text": "。".join(cav) + "。"}
 
 
-# ── appendix 深度展开(html·八维雷达人话+五段拆解+聚类)──
-def _appendix(l2, s) -> dict:
+# ── appendix 图表化深度(html·唯一放行图表的角色)·图表标准:图+一句结论 ──
+def _appendix(l2, s, journey) -> dict:
+    from app.services import board_render as R
+    parts = []
+    # ① 运营阶段旅程图(stepper·已走→现在→接下来)
+    if journey.get("nodes"):
+        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:6px 0 2px'>运营阶段旅程</div>"
+                     + R._stepper(journey["nodes"])
+                     + f"<div style='font-size:12px;color:#374151'>{journey.get('verdict','')}</div>")
+        gaps = journey.get("advance_gaps") or []
+        if gaps:
+            parts.append("<div style='font-size:12px;color:#6B7280'>进阶还差："
+                         + "；".join(gaps) + "</div>")
+    # ② 账号八维雷达
     radar = l2.get("radar") or {}
-    eight = "、".join(f"{_LABEL.get(r['key'].lower(), r['label'])} {r['score']}"
-                     for r in (radar.get("account_self") or []) if r.get("score") is not None)
-    dh = (l2.get("deep_health") or {}).get("breakdown") or []
-    dc = (l2.get("deep_commerce") or {}).get("breakdown") or []
-    clusters = l2.get("comment_clusters") or {}
-    clu = "、".join(f"「{c['theme']}」" for c in (clusters.get("clusters") or [])[:3])
-    html = (f"<p style='font-size:13px'><b>账号八维（外环强/内缩弱）</b>：{eight}。</p>"
-            f"<table><tr><th>健康拆解</th><th>商业转化拆解</th></tr>"
-            f"<tr><td>{' · '.join(dh)}</td><td>{' · '.join(dc)}</td></tr></table>"
-            + (f"<p style='font-size:12.5px'>评论高频诉求聚类：{clu}。</p>" if clu else ""))
-    return {"role": "appendix", "title": "展开深度数据（八维 · 健康/转化五段拆解 · 评论聚类）",
-            "html": html}
+    items = [(_LABEL.get(r["key"].lower(), r["label"]), r["score"])
+             for r in (radar.get("account_self") or []) if r.get("score") is not None]
+    if len(items) >= 3:
+        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:8px 0 2px'>账号八维（外环强/内缩弱）</div>"
+                     + R._radar(items))
+    # ③ 关键指标 vs 行业基准(子弹图·一眼看达标)
+    bullets = ""
+    for code, bm, lab in (("c1", 55, "健康"), ("c3", 40, "商业转化"), ("c4", 50, "内容力")):
+        sc = _g(s, code, "score")
+        if sc is not None:
+            bullets += R._bullet(sc, bm, label=lab)
+    if bullets:
+        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:8px 0 2px'>关键指标 vs 行业基准</div>" + bullets)
+    # ④ 内容归因(柱状)
+    attr = l2.get("attribution") or {}
+    if attr.get("enough") and attr.get("factors"):
+        parts.append("<div style='font-weight:700;color:#1E3A8A;margin:8px 0 2px'>内容归因·因子驱动力</div>"
+                     + R._bars([(f["factor"], f["spread"]) for f in attr["factors"][:5]], color="#0891B2"))
+    return {"role": "appendix",
+            "title": "展开图表深度（阶段旅程 · 八维雷达 · 指标基准 · 内容归因）",
+            "html": "".join(parts)}

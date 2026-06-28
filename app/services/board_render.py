@@ -151,6 +151,61 @@ def _progress(pct: float, *, width: int = 220, color: str = _ORANGE) -> str:
             f'<b style="margin-left:8px;color:{color}">{round(p)}%</b>')
 
 
+def _stepper(nodes: list, *, width: int = 560) -> str:
+    """运营阶段旅程图(标准可复用)·已走●→当前◉→未来○·横向 stepper。"""
+    ns = [n for n in (nodes or []) if n.get("name")]
+    if not ns:
+        return ""
+    n = len(ns)
+    seg = (width - 40) / max(1, n - 1)
+    h = 78
+    parts = [f'<svg width="{width}" height="{h}" viewBox="0 0 {width} {h}" style="max-width:100%">']
+    # 连线
+    for i in range(n - 1):
+        x1, x2 = 20 + i * seg, 20 + (i + 1) * seg
+        done = ns[i]["state"] == "done"
+        col = "#059669" if done else "#E5E7EB"
+        parts.append(f'<line x1="{x1:.0f}" y1="26" x2="{x2:.0f}" y2="26" stroke="{col}" stroke-width="3"/>')
+    for i, nd in enumerate(ns):
+        x = 20 + i * seg
+        st = nd["state"]
+        col = {"done": "#059669", "current": _ORANGE, "future": "#9CA3AF"}[st]
+        r = 11 if st == "current" else 8
+        glyph = {"done": "✓", "current": "◉", "future": ""}[st]
+        parts.append(f'<circle cx="{x:.0f}" cy="26" r="{r}" fill="{col}"/>')
+        if glyph:
+            parts.append(f'<text x="{x:.0f}" y="30" font-size="11" fill="#fff" text-anchor="middle">{glyph}</text>')
+        weight = "700" if st == "current" else "400"
+        ncol = _INK if st == "current" else "#6B7280"
+        # 阶段名(换行避免挤)
+        parts.append(f'<text x="{x:.0f}" y="50" font-size="10.5" fill="{ncol}" '
+                     f'font-weight="{weight}" text-anchor="middle">{nd["name"][:6]}</text>')
+        parts.append(f'<text x="{x:.0f}" y="64" font-size="8.5" fill="#9CA3AF" text-anchor="middle">{nd.get("fans_range","")}</text>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _bullet(value, benchmark, *, lo=0, hi=100, width=240, label="", color=_BLUE) -> str:
+    """子弹图(标准可复用)·单值 vs 基准线(一眼看达不达标)。"""
+    if value is None:
+        return ""
+    rng = (hi - lo) or 1
+    vx = max(0, min(1, (value - lo) / rng)) * (width - 50)
+    bm = "" if benchmark is None else max(0, min(1, (benchmark - lo) / rng)) * (width - 50)
+    ok = benchmark is None or value >= benchmark
+    bar_col = "#059669" if ok else _ORANGE
+    bmline = (f'<line x1="{bm:.0f}" y1="2" x2="{bm:.0f}" y2="16" stroke="#DC2626" stroke-width="2"/>'
+              if benchmark is not None else "")
+    return (f'<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px">'
+            f'<span style="width:64px;color:#6B7280">{label}</span>'
+            f'<svg width="{width-50}" height="18" style="max-width:60%">'
+            f'<rect x="0" y="6" width="{width-50}" height="6" rx="3" fill="#E5E7EB"/>'
+            f'<rect x="0" y="6" width="{vx:.0f}" height="6" rx="3" fill="{bar_col}"/>{bmline}</svg>'
+            f'<b style="color:{bar_col}">{value}</b>'
+            + (f'<span style="color:#9CA3AF;font-size:11px">/基准{benchmark}</span>' if benchmark is not None else "")
+            + '</div>')
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # v2.0 价值阶梯渲染(描述→诊断→处方→预测)·第一屏=完整答案·正文渐进折叠
 # ══════════════════════════════════════════════════════════════════════════════
