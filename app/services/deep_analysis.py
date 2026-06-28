@@ -228,7 +228,8 @@ def deep_video(account: dict, scores: dict) -> dict[str, Any]:
             f"均赞 {account.get('avg_like')}·最高赞 {account.get('max_like')}",
         ],
         "evidence": [f"{p['metric']} {p['value']}({p['verdict']})" for p in eng["parts"]]
-                    + ([f"作品规律:{dna['best_time']['verdict']}"] if dna.get("best_time") else []),
+                    + ([f"作品规律:{(dna.get('best_time') or {}).get('verdict')}"]
+                       if (dna.get("best_time") or {}).get("verdict") else []),
         "benchmark": (BM.ENGAGEMENT["interaction_rate_healthy"]["label"]
                       + "·商业信号价值升序:" + "<".join(BM.ENGAGEMENT["signal_priority"])
                       + f"(出处 {BM.ENGAGEMENT['signal_source']})·完播率🔴黑盒需投喂后台"),

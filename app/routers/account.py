@@ -597,6 +597,21 @@ def board(payload: dict[str, Any] = Body(...)) -> dict:
             b["gallery"] = gallery.register(account, b, html_str)
         except Exception:  # noqa: BLE001 — 归集失败不拖垮接口
             pass
+        # 契约对接(2026-06-28):自动产出 MetaForm 自适应输出契约 doc(meta+blocks·语义角色)。
+        # 我产 doc(交付位 metaboard/contract-docs/)·对方窗口走官方 render_contract 渲染统一出口。
+        try:
+            from app.services import contract_adapter, gallery as _gal
+            import json as _json
+            import pathlib as _pl
+            doc = contract_adapter.build_contract_doc(b)
+            b["contract_doc"] = doc
+            _cd = _gal._dir() / "contract-docs"
+            _cd.mkdir(parents=True, exist_ok=True)
+            _slug = _gal._slug(account)
+            (_cd / f"{_slug}.json").write_text(
+                _json.dumps(doc, ensure_ascii=False, indent=1), "utf-8")
+        except Exception:  # noqa: BLE001 — 契约对接失败不拖垮接口
+            pass
         # persist=true → 产出即落进归集(probe/data/cases·该存的方式)。默认关·向后兼容。
         run_id = None
         if payload.get("persist"):
