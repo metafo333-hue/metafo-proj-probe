@@ -148,15 +148,17 @@ def _key_issue(l2, l4) -> dict:
 # ── evidence 证据(人话标签·非C代号·N6)+ 基础数据总评 + 因果链结论 ──
 def _evidence(s, l2, l4, idn, bsum, causal) -> dict:
     items = []
-    # 基础数据总评(指令1·一句心中有数)
+    # 基础数据总评(指令1·一句心中有数)·value 须短(官方 .val 是 nowrap)
     if bsum.get("line"):
-        items.append({"label": "基础数据体检", "sub": "档位标尺总览",
-                      "value": bsum["line"],
+        items.append({"label": "基础数据体检", "sub": "档位标尺总览·详见附录",
+                      "value": f"{bsum.get('good',0)}达标·{bsum.get('mid',0)}中·{bsum.get('bad',0)}需补",
                       "def": "每项基础数据按档位标尺判断(几档/由什么决定/目标)·详见附录基础数据表。"})
-    # 因果链结论(指令2·内容→口碑→势能)
+    # 因果链结论(指令2·内容→口碑→势能)·value 用短标签·全句进附录
     if causal.get("chain_verdict"):
-        items.append({"label": "内容因果链", "sub": "内容→口碑→势能 是否咬合",
-                      "value": causal["chain_verdict"][:60],
+        br = causal.get("broken")
+        val = (br["link"] + " 断点") if br else "三环咬合·放大窗口"
+        items.append({"label": "内容因果链", "sub": "内容→口碑→势能·详见附录",
+                      "value": val,
                       "def": "把内容/口碑/势能三块串成因果链·看哪种内容真带来口碑与势能、哪一环在漏。"})
     se = l4.get("sentiment_evo") or {}
     if se.get("enough"):
@@ -298,38 +300,44 @@ def _basics_identity(b) -> str:
 
 
 def _ruler(tiers) -> str:
-    """档位标尺:几档·命中档高亮(让用户看清自己在哪档·还有哪些档)。"""
+    """档位标尺:几档·命中档高亮·flex-wrap+chip nowrap(防窄列逐字竖排)。"""
     chips = ""
     for t in tiers:
         hit = t.get("hit")
         col = _LV_COL.get(t.get("level"), "#9CA3AF")
-        if hit:
-            chips += (f"<span style='display:inline-block;padding:1px 7px;margin:1px;border-radius:8px;"
-                      f"background:{col};color:#fff;font-weight:700;font-size:11px'>▶{t['name']}·{t['cond']}</span>")
-        else:
-            chips += (f"<span style='display:inline-block;padding:1px 7px;margin:1px;border-radius:8px;"
-                      f"background:#F1F3F5;color:#9CA3AF;font-size:11px'>{t['name']}·{t['cond']}</span>")
-    return chips
+        bg, fg, fw = (col, "#fff", "700") if hit else ("#F1F3F5", "#9CA3AF", "400")
+        mark = "▶" if hit else ""
+        chips += (f"<span style='white-space:nowrap;padding:2px 9px;border-radius:9px;"
+                  f"background:{bg};color:{fg};font-weight:{fw};font-size:11px'>"
+                  f"{mark}{t['name']}·{t['cond']}</span>")
+    return f"<div style='display:flex;flex-wrap:wrap;gap:4px'>{chips}</div>"
 
 
 def _basics_judge_table(judges, bsum) -> str:
-    """基础数据档位标尺表(指令1:判断+依据+几档+目标)。"""
+    """基础数据档位标尺·卡片版(指令1:判断+依据+几档+目标)。
+
+    用 div 卡片+flex-wrap 而非表格:表格 auto-layout 会把标尺列挤到逐字竖排。
+    每卡:① 指标+值+当前档badge+目标(一行 flex-wrap) ② 档位标尺(flex-wrap) ③ 由什么决定。
+    """
     if not judges:
         return ""
-    rows = ""
+    cards = ""
     for j in judges:
         col = _LV_COL.get(j["level"], "#374151")
-        rows += (
-            f"<tr><td style='white-space:nowrap'><b>{j['label']}</b><br>"
-            f"<span style='color:#9CA3AF;font-size:11px'>{j['decided_by'][:46]}</span></td>"
-            f"<td style='white-space:nowrap'>{j['value']}</td>"
-            f"<td style='color:{col};font-weight:700;white-space:nowrap'>{j['tier_now']}</td>"
-            f"<td>{_ruler(j['tiers'])}</td>"
-            f"<td style='color:#6B7280;font-size:11px;white-space:nowrap'>{j['target']}</td></tr>")
-    head = _SUB.format(bsum.get("line", "") + "·每项给『判断+由什么决定+几档+目标』")
-    return (_H.format("账号基础数据 · 判断标尺（你在哪档 · 由什么决定 · 目标进哪档）") + head
-            + "<table><tr><th>基础指标 / 由什么决定</th><th>你的值</th><th>当前档</th>"
-              "<th>档位标尺</th><th>目标</th></tr>" + rows + "</table>")
+        cards += (
+            "<div style='border:1px solid #E5E7EB;border-radius:8px;padding:9px 12px;margin:7px 0'>"
+            "<div style='display:flex;flex-wrap:wrap;align-items:baseline;gap:8px'>"
+            f"<b style='font-size:13px'>{j['label']}</b>"
+            f"<span style='color:#374151'>{j['value']}</span>"
+            f"<span style='background:{col};color:#fff;padding:1px 9px;border-radius:9px;"
+            f"font-size:11px;font-weight:700'>{j['tier_now']}</span>"
+            f"<span style='margin-left:auto;color:#6B7280;font-size:11px'>🎯 {j['target']}</span>"
+            "</div>"
+            f"<div style='margin:6px 0'>{_ruler(j['tiers'])}</div>"
+            f"<div style='color:#9CA3AF;font-size:11px'>由什么决定:{j['decided_by']}</div>"
+            "</div>")
+    head = _SUB.format(bsum.get("line", "") + "·每项给『判断 + 由什么决定 + 几档 + 目标』")
+    return (_H.format("账号基础数据 · 判断标尺（你在哪档 · 由什么决定 · 目标进哪档）") + head + cards)
 
 
 def _causal_html(causal) -> str:
@@ -368,12 +376,15 @@ def _stage_html(journey, R) -> str:
         return ""
     out = _H.format("运营阶段旅程") + R._stepper(journey["nodes"]) \
         + f"<div style='font-size:12px;color:#374151'><b>{journey.get('verdict','')}</b></div>"
-    # 当前阶段专业方向 + 产出喂给下一站(链条)
+    # 当前阶段专业方向 + 五维该做(全文)+ 产出喂给下一站(链条)
     if journey.get("current_direction"):
-        out += (f"<div style='margin:6px 0;padding:7px 10px;background:#FFF7ED;border-left:3px solid #F59E0B;"
+        dims_li = "".join(f"<li><b>{d}</b>：{a}</li>"
+                          for d, a in (journey.get("current_dims") or {}).items())
+        out += (f"<div style='margin:6px 0;padding:8px 11px;background:#FFF7ED;border-left:3px solid #F59E0B;"
                 f"font-size:12px'><b>当前站方向</b>：{journey['current_direction']}"
-                f"<br><span style='color:#6B7280'>{journey.get('current_feeds','')}</span></div>")
-    # 阶段×维度矩阵(完整架构)
+                f"<ul style='margin:5px 0 4px;padding-left:18px'>{dims_li}</ul>"
+                f"<span style='color:#6B7280'>{journey.get('current_feeds','')}</span></div>")
+    # 阶段×维度矩阵(完整架构·格内取首句作概览·全文见上方当前站)
     m = journey.get("matrix") or {}
     if m.get("rows"):
         icons = m.get("icons", {})
@@ -383,10 +394,12 @@ def _stage_html(journey, R) -> str:
             st = r["state"]
             mark = {"done": "✓", "current": "▶", "future": "○"}[st]
             rbg = "background:#EFF6FF" if st == "current" else ""
-            cells = "".join(f"<td style='font-size:11px;{rbg}'>{c}</td>" for c in r["cells"])
+            cells = "".join(f"<td style='font-size:11px;{rbg}'>{(c or '—').split('·')[0]}</td>"
+                            for c in r["cells"])
             nm = f"{mark} {r['stage']}<br><span style='color:#9CA3AF;font-size:10px'>{r['chain']}</span>"
             body += f"<tr style='{rbg}'><td style='white-space:nowrap;font-weight:{'700' if st=='current' else '400'}'>{nm}</td>{cells}</tr>"
         out += (_H.format("阶段 × 维度矩阵 · 完整运营架构（链条：" + journey.get("chain_name", "") + "）")
+                + _SUB.format("格内取核心动作概览·当前站全文见上方")
                 + f"<table><tr><th>阶段 / 链条环</th>{th}</tr>{body}</table>"
                 + _SUB.format(m.get("compliance", "")))
     # 评定依据
@@ -419,8 +432,8 @@ def _dims_html(s, R, DG) -> str:
             f"<td style='text-align:center;font-weight:700;color:{col}'>{_n(d['score'])}"
             f"<br><span style='font-size:10px;color:#9CA3AF'>{d['zone']}</span></td>"
             f"<td style='font-size:11px;color:#6B7280'>{vs}<br>基准{_n(d.get('bench'))}</td>"
-            f"<td style='font-size:11px'>{d['impact'][:40]}</td>"
-            f"<td style='font-size:11px;color:#374151'>{d['lever']}</td></tr>")
+            f"<td style='font-size:11px'>{d['impact'][:28]}</td>"
+            f"<td style='font-size:11px;color:#374151'>{d['lever'][:24]}</td></tr>")
     out += (_H.format("八维 7 层详解（按分升序 · 先补短板 · 每维:是什么/分/对标/影响/最快杠杆）")
             + "<table><tr><th>维度</th><th>分/档</th><th>对标基准</th><th>影响什么</th>"
               "<th>最快杠杆</th></tr>" + rows + "</table>"
