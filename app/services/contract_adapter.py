@@ -415,29 +415,42 @@ def _stage_html(journey, R) -> str:
 
 
 def _dims_html(s, R, DG) -> str:
-    """八维:增强雷达(基准环/短板红/轴值) + 7层详解(指令4)。"""
+    """八维:增强雷达 + 每维深度卡片(逻辑链/多方法/专业知识方向·指令4加深)。
+
+    每维一张可折叠卡片(弱/中项默认展开·强项收起):summary=分/档/对标/最快杠杆;
+    body=是什么+算法 / 因果逻辑 / 多方法清单(快赢→深做) / 专业知识方向。
+    """
     items = DG.radar_items(s)               # (label, value, benchmark)
     out = ""
     if len(items) >= 3:
         out += (_H.format("账号八维雷达（实线=你 · 橙虚线=行业基准 · 红▼=最该补的短板）")
                 + f"<div style='text-align:center'>{R._radar(items)}</div>")
     dims = DG.all_dims(s)                    # 按分升序·最弱在前
-    rows = ""
+    out += _H.format("八维深度详解（按分升序 · 先补短板 · 每维:逻辑链 + 多方法 + 专业知识方向）")
+    out += _SUB.format("弱/中项默认展开·点标题可折叠·强项已收起")
     for d in dims:
         col = _LV_COL.get(d["level"], "#374151")
         vs = d.get("vs_bench") or ""
-        rows += (
-            f"<tr><td style='white-space:nowrap'><b>{d['name']}</b>"
-            f"<br><span style='color:#9CA3AF;font-size:10px'>{d['what'][:22]}</span></td>"
-            f"<td style='text-align:center;font-weight:700;color:{col}'>{_n(d['score'])}"
-            f"<br><span style='font-size:10px;color:#9CA3AF'>{d['zone']}</span></td>"
-            f"<td style='font-size:11px;color:#6B7280'>{vs}<br>基准{_n(d.get('bench'))}</td>"
-            f"<td style='font-size:11px'>{d['impact'][:28]}</td>"
-            f"<td style='font-size:11px;color:#374151'>{d['lever'][:24]}</td></tr>")
-    out += (_H.format("八维 7 层详解（按分升序 · 先补短板 · 每维:是什么/分/对标/影响/最快杠杆）")
-            + "<table><tr><th>维度</th><th>分/档</th><th>对标基准</th><th>影响什么</th>"
-              "<th>最快杠杆</th></tr>" + rows + "</table>"
-            + _SUB.format("行业基准为经验值·待 50–100 真实账号建分位基线后校准"))
+        is_open = "open" if d["level"] in ("bad", "mid", "na") else ""
+        methods = "".join(f"<li>{m}</li>" for m in (d.get("methods") or []))
+        out += (
+            f"<details {is_open} style='border:1px solid #E5E7EB;border-radius:8px;margin:7px 0'>"
+            f"<summary style='cursor:pointer;padding:8px 12px;font-size:13px'>"
+            f"<b>{d['name']}</b>"
+            f"<span style='color:{col};font-weight:700;margin-left:8px'>{_n(d['score'])}分·{d['zone']}</span>"
+            f"<span style='color:#9CA3AF;font-size:11px;margin-left:8px'>{vs}·基准{_n(d.get('bench'))}</span>"
+            f"<span style='color:#D97706;font-size:11px;margin-left:8px'>⚡{d['lever']}</span>"
+            f"</summary>"
+            f"<div style='padding:2px 14px 11px'>"
+            f"<div style='color:#9CA3AF;font-size:11px;margin-bottom:5px'>{d['what']}｜算法:{d['by']}</div>"
+            f"<div style='font-size:12px;color:#374151;margin-bottom:6px'>"
+            f"<b style='color:#1E3A8A'>逻辑</b>:{d.get('logic') or d['impact']}</div>"
+            f"<div style='font-size:12px;color:#1E3A8A;font-weight:700'>方法（快赢→深做）</div>"
+            f"<ol style='font-size:12px;color:#374151;margin:3px 0 6px;padding-left:20px'>{methods}</ol>"
+            f"<div style='font-size:11px;color:#6B7280'>"
+            f"<b style='color:#1E3A8A'>专业知识方向</b>:{d.get('knowledge','')}</div>"
+            f"</div></details>")
+    out += _SUB.format("行业基准为经验值·待 50–100 真实账号建分位基线后校准 · 方法/知识方向出自短视频运营方法论(CAT/PB/CM/OPS)")
     return out
 
 
