@@ -144,6 +144,7 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
             f"该玩:{track.get('game', '—')}({'线索游戏' if track.get('is_b2b_leads') else '流量游戏'})",
         ],
         "milestone": account.get("milestone"),    # 里程碑(粉丝→权益·距下一档)
+        "identity": _identity(account),            # 形象一致性审计(资料全采+自我匹配)
         "source": heading.get("source") or track.get("source", ""),
     }
 
@@ -349,6 +350,14 @@ def _layer_video(account: dict, s: dict, deep: dict | None = None) -> dict:
         } if dna else None,
         "deep": (deep or {}).get("video"),   # ④单条层五段式深度
     }
+
+
+def _identity(account: dict) -> dict | None:
+    try:
+        from app.services import identity_audit
+        return identity_audit.audit_identity(account)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _diag_chain(account: dict, s: dict, deep: dict) -> list[dict]:

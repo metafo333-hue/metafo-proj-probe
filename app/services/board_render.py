@@ -261,11 +261,51 @@ def _ladder_detail(ld: dict | None, body_fn) -> str:
 
 def _desc_body(ld: dict) -> str:
     out = _heading_block(ld.get("heading"))          # 现状→航向→终态(三段论述)
+    out += _identity_block(ld.get("identity"))       # 形象一致性审计
     lis = "".join(f"<li>{d}</li>" for d in (ld.get("details") or []))
     out += f"<ul>{lis}</ul>{_milestone_block(ld.get('milestone'))}"
     if ld.get("source"):
         out += f'<div class="note">出处:{ld.get("source")}</div>'
     return out
+
+
+def _identity_block(idn: dict | None) -> str:
+    """形象一致性审计:全部资料 + 六信号一致性 + 自我匹配 + 简介三要素。"""
+    if not idn:
+        return ""
+    p = idn.get("profile") or {}
+    match = idn.get("self_match", "")
+    mcol = {"高度匹配": "#059669", "部分匹配": "#D97706"}.get(match, "#DC2626")
+    # 六信号一致性·柱状(图示)
+    sig = idn.get("signals") or {}
+    bars = _bars([(k, 100 if v else 8, (None if v else "#DC2626"))
+                  for k, v in sig.items() if v is not None], color="#059669", bar_h=13)
+    # 简介三要素·徽章
+    el = idn.get("elements") or {}
+    badges = "".join(
+        f'<span class="chip" style="background:{"#ECFDF5" if v else "#FEF2F2"};'
+        f'color:{"#059669" if v else "#DC2626"}">{"✓" if v else "✗"} {k}</span> '
+        for k, v in el.items())
+    profile_rows = ""
+    for label, key in (("昵称", "nickname"), ("简介", "signature"), ("抖音号", "unique_id"),
+                       ("属地", "ip_location"), ("个人认证", "custom_verify"),
+                       ("企业认证", "enterprise_verify")):
+        v = p.get(key)
+        if v:
+            vv = str(v).replace("\n", " ")[:60]
+            profile_rows += f'<tr><td style="white-space:nowrap">{label}</td><td>{vv}</td></tr>'
+    tc = (f'<div class="note">📌 {idn["trust_confirmed"]}</div>' if idn.get("trust_confirmed") else "")
+    adv = "".join(f"<li>{a}</li>" for a in (idn.get("advice") or []))
+    return (f'<div style="border:1px solid {mcol}33;border-radius:10px;padding:12px 14px;margin:8px 0;background:#FAFBFF">'
+            f'<div style="font-weight:800;color:{mcol}">🪪 形象一致性 · '
+            f'<b>{match}</b>(统一度 {idn.get("consistency")})</div>'
+            f'<div style="font-size:13px;margin:3px 0">{idn.get("verdict","")}</div>'
+            f'<details style="box-shadow:none;margin:4px 0"><summary style="font-size:12px;color:#6B7280">全部基础资料 ▾</summary>'
+            f'<table>{profile_rows}</table></details>'
+            + _chart_row("六信号是否指向同一身份", bars, f"对齐:{('、'.join(idn.get('aligned') or []))}")
+            + f'<div style="font-size:12.5px;margin:4px 0">简介专业三要素:{badges}</div>'
+            f'{tc}<ul style="font-size:12.5px">{adv}</ul>'
+            f'<div class="note">{idn.get("note","")}</div></div>')
 
 
 def _heading_block(h: dict | None) -> str:

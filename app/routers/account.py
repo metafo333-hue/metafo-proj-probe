@@ -331,6 +331,14 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
         "engagement_structure": diag.get("engagement_structure"),
         "commerce_density": diag.get("commerce_density"),
         "update_gap_days": round(_itv / 24, 1) if _itv else None,
+        # ── 基础资料/身份字段(全面采·供形象一致性审计)──
+        "signature": prof.get("signature"),               # 个人简介(身份金矿)
+        "ip_location": prof.get("ip_location"),
+        "unique_id": prof.get("unique_id"),               # 抖音号
+        "custom_verify": prof.get("custom_verify"),       # 个人认证文案
+        "enterprise_verify_reason": prof.get("enterprise_verify_reason"),  # 企业认证
+        "personal_tag_list": prof.get("personal_tag_list"),
+        "account_cert_info": prof.get("account_cert_info"),
     }
     # ── 评论深化(水军/真实性/私域意图·3 子项·满血) ───────────────────────────
     # 真实信封路径: results["comments"]["data"]["comments"][] (实测 2026-06-22)。
