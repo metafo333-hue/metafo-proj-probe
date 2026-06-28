@@ -365,6 +365,18 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
             # 矿脉②③ 数据层深挖(零成本):内容归因(哪个数据因子驱动互动)+ 口碑演化
             account["content_attribution"] = mining_veins.content_attribution(works)
             account["sentiment_evolution"] = mining_veins.sentiment_evolution(cmts)
+            # 补全"采了没接 board"的数据(零成本):热评/聚类/互动异常(里程碑只需follower)
+            from app.services import board_extras
+            _ow = sec_uid or seeds.get("sec_uid")
+            account["hot_comments"] = board_extras.hot_comments(cmts, owner_uid=_ow)
+            account["comment_clusters"] = board_extras.comment_clusters(cmts, owner_uid=_ow)
+            account["engagement_anomaly"] = board_extras.engagement_anomaly(works)
+    except Exception:  # noqa: BLE001
+        pass
+    # 里程碑只依赖 follower(降级路径也能给)
+    try:
+        from app.services import board_extras as _be
+        account["milestone"] = _be.milestone(account.get("follower"))
     except Exception:  # noqa: BLE001
         pass
 

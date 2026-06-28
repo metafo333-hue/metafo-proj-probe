@@ -135,6 +135,7 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
             f"生命周期:{stage.get('stage', '')}·本期任务={stage.get('task', '')}",
             f"该玩:{track.get('game', '—')}({'线索游戏' if track.get('is_b2b_leads') else '流量游戏'})",
         ],
+        "milestone": account.get("milestone"),    # 里程碑(粉丝→权益·距下一档)
         "source": track.get("source", ""),
     }
 
@@ -148,6 +149,9 @@ def build_ladders(account: dict, s: dict, c: dict, deep: dict,
         "deep_health": deep.get("health"),
         "deep_commerce": deep.get("commerce"),
         "attribution": account.get("content_attribution"),  # 矿脉②:哪个数据因子驱动互动
+        "hot_comments": account.get("hot_comments"),         # 热评TOP(采了没接·补)
+        "comment_clusters": account.get("comment_clusters"), # 评论聚类(非LLM·补)
+        "engagement_anomaly": account.get("engagement_anomaly"),  # 互动操纵异常(补强④)
         "top_concern": tc,
         "radar": _radar(s),
         "details": [_card_brief(c.get("churn")), _card_brief(c.get("pricing")),

@@ -147,7 +147,20 @@ def _ladder_detail(ld: dict | None, body_fn) -> str:
 def _desc_body(ld: dict) -> str:
     lis = "".join(f"<li>{d}</li>" for d in (ld.get("details") or []))
     src = f'<div class="note">出处:{ld.get("source")}</div>' if ld.get("source") else ""
-    return f"<ul>{lis}</ul>{src}"
+    return f"<ul>{lis}</ul>{_milestone_block(ld.get('milestone'))}{src}"
+
+
+def _milestone_block(ms: dict | None) -> str:
+    if not ms:
+        return ""
+    nxt = ms.get("next")
+    body = f'<div style="font-size:13px"><b>里程碑:</b>{ms.get("current","")}</div>'
+    if nxt:
+        pct = nxt.get("pct", 0)
+        body += (f'<div style="font-size:12.5px;margin-top:3px">🎯 {nxt.get("verdict","")}</div>'
+                 f'<div style="height:7px;background:#E5E7EB;border-radius:4px;margin:5px 0;overflow:hidden">'
+                 f'<div style="width:{min(100,pct)}%;height:100%;background:{_ORANGE}"></div></div>')
+    return f'<div style="background:{_ZEBRA};border-radius:8px;padding:9px 12px;margin:6px 0">{body}</div>'
 
 
 def _diag_body(ld: dict) -> str:
@@ -159,6 +172,8 @@ def _diag_body(ld: dict) -> str:
     out += _five(ld.get("deep_health"), "健康分·深度拆解")
     out += _five(ld.get("deep_commerce"), "商业转化·为什么这个分")
     out += _attribution_block(ld.get("attribution"))   # 矿脉②:内容归因
+    out += _comment_voice_block(ld.get("hot_comments"), ld.get("comment_clusters"))  # 热评+聚类
+    out += _anomaly_block(ld.get("engagement_anomaly"))  # 互动操纵异常(④补强)
     # 诊断卡简表
     cards = [x for x in (ld.get("details") or []) if x]
     if cards:
@@ -211,6 +226,38 @@ def _pred_body(ld: dict) -> str:
     out += _rx_effect_block(ld.get("rx_effect"))
     out += f'<div class="note">置信:{ld.get("conf","—")}·内容时序单次可算·账号轨迹+处方对照靠累积</div>'
     return out
+
+
+def _comment_voice_block(hot: dict | None, clu: dict | None) -> str:
+    """热评TOP + 评论聚类(采了没接·补)。"""
+    if not (hot and hot.get("enough")) and not (clu and clu.get("enough")):
+        return ""
+    head = '<div style="font-weight:700;color:#0D9488;margin:8px 0 4px">🗣️ 评论之声·热评+诉求聚类(采了没接·已补)</div>'
+    out = ""
+    if hot and hot.get("enough"):
+        rows = "".join(
+            f'<tr><td>{"🔥" if h.get("is_hot") or h.get("stick") else ""}{h["digg"]}赞</td>'
+            f'<td>{h["text"][:30]}</td></tr>' for h in (hot.get("top") or [])[:5])
+        out += f'<table><tr><th>热度</th><th>热评(观众最认同的声音)</th></tr>{rows}</table>'
+    if clu and clu.get("enough"):
+        chips = "".join(f'<span class="chip">{c["theme"]}({c["count"]})</span> '
+                        for c in (clu.get("clusters") or []))
+        out += f'<div style="font-size:12.5px;margin-top:4px">高频诉求聚类:{chips}</div>'
+    return head + out
+
+
+def _anomaly_block(an: dict | None) -> str:
+    """互动操纵异常(④虚假检测补强·作品矩阵零成本)。"""
+    if not an or not an.get("enough"):
+        return ""
+    col = _SEV_COLOR.get(an.get("level"), "#6B7280")
+    flagged = ""
+    if an.get("flagged"):
+        flagged = "<div class='note'>反常作品:" + "、".join(
+            f"{f['desc']}(赞{f['like']}/评{f['comment']})" for f in an["flagged"]) + "</div>"
+    return (f'<div style="font-weight:700;color:{col};margin:8px 0 4px">🕵️ 互动操纵检测(④补强)</div>'
+            f'<div style="font-size:13px"><b>{_SEV_LABEL.get(an.get("level"))} {an.get("verdict")}</b></div>'
+            f'{flagged}<div class="note">{an.get("note","")}</div>')
 
 
 def _attribution_block(at: dict | None) -> str:
