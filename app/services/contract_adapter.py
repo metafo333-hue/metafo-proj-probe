@@ -59,6 +59,8 @@ def build_contract_doc(board: dict[str, Any]) -> dict[str, Any]:
         "health_score": _g(s, "c1", "score"),
         "show_accounting": False,            # N6:对外纯诊断·算账走内部
         "compliance": _COMPLIANCE,
+        "kicker": "元数据诊断 · 账号诊断报告",          # 页眉品牌(元数据诊断 MetaDiag)
+        "footer_brand": "元数据诊断 MetaDiag v1.0",   # 页脚品牌
     }
 
     blocks = [
@@ -256,6 +258,19 @@ def _scope(l2, s) -> dict:
 def _appendix(l2, s, journey, basics, judges, bsum, causal) -> dict:
     from app.services import board_render as R, dimension_guide as DG
     parts = []
+
+    # ⓪ 元数据诊断方法论引语(四件套框架)
+    parts.append(
+        "<div style='background:#F0F5FF;border:1px solid #DBE4FF;border-radius:10px;"
+        "padding:11px 14px;margin:4px 0 10px'>"
+        "<div style='font-weight:700;color:#1E3A8A;font-size:14px'>关于「元数据诊断 · MetaDiag」</div>"
+        "<div style='font-size:12px;color:#374151;margin-top:4px'>"
+        "把账号公开元数据(资料/作品/评论)炼成『判断 + 依据 + 方法』的诊断体系·四件套:</div>"
+        "<div style='font-size:12px;color:#374151;margin-top:3px'>"
+        "① <b>判断标尺</b>——每项基础数据给『几档/由什么决定/目标』 · "
+        "② <b>内容因果链</b>——内容→口碑→势能 串成一条·定位漏在哪环<br>"
+        "③ <b>八维深度</b>——每维给逻辑+多方法+专业知识方向 · "
+        "④ <b>阶段链条</b>——阶段×维度矩阵+进阶路径</div></div>")
 
     # ① 账号基础数据:身份表 + 档位标尺判断表(指令1+3)
     parts.append(_basics_identity(basics))

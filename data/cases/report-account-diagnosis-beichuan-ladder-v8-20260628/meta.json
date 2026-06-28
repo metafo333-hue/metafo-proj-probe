@@ -1,0 +1,52 @@
+{
+  "run_id": "report-account-diagnosis-beichuan-ladder-v8-20260628",
+  "platform": "douyin",
+  "source": "backfill-运营报告",
+  "sec_uid": "7641434470629562865",
+  "aweme_id": "",
+  "account_name": "北川魔芋姐｜赵娟",
+  "account_type": "账号诊断 · 元数据诊断",
+  "follower": 4654,
+  "avg_like": 105,
+  "max_like": 383,
+  "burst_ratio": 3.6,
+  "vertical_score": 0.7,
+  "hashtags": [],
+  "signature": "北川魔芋姐｜赵娟 · 专注魔芋36年 · 源头工厂 · 非遗第五代传承人",
+  "video_title": "元数据诊断 · 北川魔芋姐｜赵娟 · 账号诊断报告",
+  "video_like": 0,
+  "video_comment": 0,
+  "video_collect": 0,
+  "has_av": false,
+  "analyzed_at": "2026-06-28T20:00:00",
+  "analyzed_date": "2026-06-28",
+  "probe_version": "元数据诊断 MetaDiag v1.0",
+  "polish": {
+    "ok": true,
+    "mode": "backfill",
+    "model": "",
+    "segs_ok": 1,
+    "segs_total": 1
+  },
+  "validation_pass": true,
+  "validation_gaps": [],
+  "ai_summary": "元数据诊断 MetaDiag · 判断标尺+因果链+八维深度+阶段链条四件套 · B端魔芋源头工厂 · 当前『起号·建信任』期 · 势能加速下滑(断更触发) · 断点在『口碑→势能』·口碑升温但没承接住",
+  "tags": [
+    "元数据诊断",
+    "账号诊断",
+    "真实账号",
+    "B端带货"
+  ],
+  "audit": {
+    "source_reliability": null,
+    "confidence_level": null,
+    "evidence_strength": null
+  },
+  "docx_path": null,
+  "report_chars": 42617,
+  "prev_run_id": null,
+  "version_count": 1,
+  "prev_vid_run_id": null,
+  "vid_version_count": 1,
+  "video_share": 0
+}
