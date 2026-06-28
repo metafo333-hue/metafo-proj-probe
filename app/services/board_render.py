@@ -27,9 +27,9 @@ _SEV_LABEL = {"red": "🔴", "yellow": "🟡", "green": "🟢", None: "⚪"}
 _BOARD_VER = "3.2"
 
 
-def _metaform_stamp(fmt: str) -> str:
+def _metaform_stamp(fmt: str, template: str = "four-layer-drilldown") -> str:
     """生成 MetaForm 溯源戳字符串(与 metaform/lib/stamp.py 同构)。"""
-    return (f"scenario=metaboard;format={fmt};template=four-layer-drilldown;"
+    return (f"scenario=metaboard;format={fmt};template={template};"
             f"renderer=board_render;engine=metaboard;board_ver={_BOARD_VER};v=1")
 
 
@@ -64,6 +64,7 @@ def render_ladder_html(board: dict[str, Any]) -> str:
 def _ladder_head(nick: str) -> str:
     return f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-metaform" content="{_metaform_stamp('html', 'value-ladder')}">
 <title>元板 v2.0 · {nick} · 价值阶梯</title>
 <style>
   *{{box-sizing:border-box}}
