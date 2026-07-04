@@ -84,6 +84,22 @@ def _render_contract_html(board: dict) -> str | None:
         return None
 
 
+def _persist_works(cdir: pathlib.Path, works: list | None) -> None:
+    """原始作品列表(parse_works 产物)与 board.json 同目录落一份 works.json。
+
+    元会诊 MetaConsult v2 接缝一(design: metaconsult-fusion-redesign-v2.0.md §5)——
+    供上层分诊台(triage)离线抽检消费,不参与本仓任何诊断/打分逻辑。
+    works 为空/None 不落盘(不写空壳);写盘异常吞掉,不拖垮 board.json 归档主流程。
+    """
+    if not works:
+        return
+    try:
+        (cdir / "works.json").write_text(
+            json.dumps(works, ensure_ascii=False, indent=2), "utf-8")
+    except Exception:  # noqa: BLE001 — 落盘失败不拖垮归档主流程
+        pass
+
+
 def persist_board(account: dict, board: dict, html: str, md: str = "",
                   tags: list[str] | None = None) -> str:
     """元板结果落进归集。返回 run_id。
@@ -106,6 +122,9 @@ def persist_board(account: dict, board: dict, html: str, md: str = "",
     (cdir / "report.md").write_text(md, "utf-8")
     # 结构化板块原文一并存档(便于复算/精修)
     (cdir / "board.json").write_text(json.dumps(board, ensure_ascii=False, indent=2), "utf-8")
+    # 原始作品列表顺带落盘(元会诊 MetaConsult v2 接缝一·§5)——account["works"] 在
+    # account.py _build_account_for_diagnosis 全量采集路径已备好,这里只多存一份。
+    _persist_works(cdir, account.get("works"))
 
     meta = {
         "run_id": run_id, "platform": "douyin", "source": "metaboard",

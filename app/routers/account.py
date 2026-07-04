@@ -368,6 +368,9 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
         if results.get("posts"):
             from app.services import content_dna, mining_veins, time_series
             works = parse_works(results["posts"])
+            # 原始作品列表原样留痕(供 cases_store.persist_board 顺带落 works.json·
+            # 元会诊 MetaConsult v2 接缝一·分诊抽检消费)。不参与任何诊断计算。
+            account["works"] = works
             account["content_dna"] = content_dna.analyze_content_dna(
                 works, cmts, owner_uid=sec_uid or seeds.get("sec_uid"))
             # 阶梯4 预测:时序导数(单次采集可算·互动斜率/衰减/阶段/下条预估)
