@@ -331,6 +331,16 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
         "engagement_structure": diag.get("engagement_structure"),
         "commerce_density": diag.get("commerce_density"),
         "update_gap_days": round(_itv / 24, 1) if _itv else None,
+        # ── 基础资料/身份字段(全面采·供形象一致性审计)──
+        "signature": prof.get("signature"),               # 个人简介(身份金矿)
+        "ip_location": prof.get("ip_location"),
+        "unique_id": prof.get("unique_id"),               # 抖音号
+        "custom_verify": prof.get("custom_verify"),       # 个人认证文案
+        "enterprise_verify_reason": prof.get("enterprise_verify_reason"),  # 企业认证
+        "personal_tag_list": prof.get("personal_tag_list"),
+        "account_cert_info": prof.get("account_cert_info"),
+        "following_count": prof.get("following_count"),   # 关注数
+        "total_favorited": prof.get("total_favorited"),   # 获赞总数(累计影响力)
     }
     # ── 评论深化(水军/真实性/私域意图·3 子项·满血) ───────────────────────────
     # 真实信封路径: results["comments"]["data"]["comments"][] (实测 2026-06-22)。
@@ -351,6 +361,40 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
         # composite c2 直接读 account["ip_concentration"](0-1·水军风险)·向后兼容。
         if cd.get("ip_concentration") is not None:
             account["ip_concentration"] = cd["ip_concentration"]
+
+    # ── 内容 DNA(作品矩阵组合·无星图也满血·喂 board ④单条层"下条怎么拍") ──────
+    # 存原始 works/comments 供 content_dna 跨条组合(挖发布时段/时长/选题规律)。
+    try:
+        if results.get("posts"):
+            from app.services import content_dna, mining_veins, time_series
+            works = parse_works(results["posts"])
+            # 原始作品列表原样留痕(供 cases_store.persist_board 顺带落 works.json·
+            # 元会诊 MetaConsult v2 接缝一·分诊抽检消费)。不参与任何诊断计算。
+            account["works"] = works
+            account["content_dna"] = content_dna.analyze_content_dna(
+                works, cmts, owner_uid=sec_uid or seeds.get("sec_uid"))
+            # 阶梯4 预测:时序导数(单次采集可算·互动斜率/衰减/阶段/下条预估)
+            account["time_series"] = time_series.analyze_time_series(works)
+            # 矿脉②③ 数据层深挖(零成本):内容归因(哪个数据因子驱动互动)+ 口碑演化
+            account["content_attribution"] = mining_veins.content_attribution(works)
+            account["sentiment_evolution"] = mining_veins.sentiment_evolution(cmts)
+            # 轨迹二阶导(势能加速/放缓·互动代理·单次采集)·喂内容因果链
+            from app.services import content_causal
+            account["acceleration"] = content_causal.acceleration(works)
+            # 补全"采了没接 board"的数据(零成本):热评/聚类/互动异常(里程碑只需follower)
+            from app.services import board_extras
+            _ow = sec_uid or seeds.get("sec_uid")
+            account["hot_comments"] = board_extras.hot_comments(cmts, owner_uid=_ow)
+            account["comment_clusters"] = board_extras.comment_clusters(cmts, owner_uid=_ow)
+            account["engagement_anomaly"] = board_extras.engagement_anomaly(works)
+    except Exception:  # noqa: BLE001
+        pass
+    # 里程碑只依赖 follower(降级路径也能给)
+    try:
+        from app.services import board_extras as _be
+        account["milestone"] = _be.milestone(account.get("follower"))
+    except Exception:  # noqa: BLE001
+        pass
 
     xprof_adapter = None
     try:
@@ -394,6 +438,14 @@ def _build_account_for_diagnosis(sec_uid: str, key: str | None,
     # ── MetaIntake L0 环境层 + 批A 粉丝洞察 → C9-C13 复合指标用 ──
     try:
         account.update(_parse_intake_extras(results))
+    except Exception:  # noqa: BLE001
+        pass
+
+    # ── 扩展信号:把「采集了但没展示」的 15 端点全部接进来(评论热词/算法竞品/
+    #    大盘热点/选题洞察/配乐/粉丝分布)·空返回诚实标·供组合分析 ──
+    try:
+        from app.services import extra_signals
+        account["extra_signals"] = extra_signals.parse_extra_signals(results)
     except Exception:  # noqa: BLE001
         pass
     return account, xprof_adapter
@@ -491,5 +543,107 @@ def diagnose(payload: dict[str, Any] = Body(...)) -> dict:
             "track": diagnosis_cards.diagnose_track(account, xprof),
             "render_md": diagnosis_cards.render_diagnosis_section(account, xprof),
         }, "msg": "ok"}
+    except Exception as e:  # noqa: BLE001
+        return {"code": 5002, "data": None, "msg": f"{type(e).__name__}: {e}"}
+
+
+@router.post("/board")
+def board(payload: dict[str, Any] = Body(...)) -> dict:
+    """元板 · 四级坐标下钻数据板块（一个 URL → 环境/行业/账号/单条四层 + 算账）。
+
+    承 v3.2 短视频商业转化方案「骨·四级坐标」+ 算账视角:把已落地的 14 复合指标 +
+    4 诊断卡 + 星图 + L0 环境层,重组为「从大盘到单条」的分层下钻视图,每层带成本归因。
+    复用 /diagnose 同一套采集(P0 harness 缓存)·零额外 API。
+
+    请求体: video_url 或 sec_uid 二选一; format=json(默认)|html|md。
+    返回: format=json → 结构化四层板块 + 算账; html/md → 分层渲染串。
+    """
+    from app.services import board as board_svc, board_render, composite_scores
+
+    video_url = payload.get("video_url") or ""
+    sec_uid = payload.get("sec_uid") or ""
+    fmt = (payload.get("format") or "json").lower()
+    if not (video_url or sec_uid):
+        return {"code": 4001, "data": None, "msg": "需 video_url 或 sec_uid"}
+    key = os.getenv("TIKHUB_API_KEY") or os.getenv("PROBE_TIKHUB_KEY")
+    try:
+        aid = None
+        if not sec_uid:
+            aid = account_chain.resolve_douyin(video_url)
+            if not aid:
+                return {"code": 4002, "data": None, "msg": "无法解析视频链接"}
+        account, xprof = _build_account_for_diagnosis(sec_uid, key, aweme_id=aid)
+        if not account.get("nickname"):
+            return {"code": 4003, "data": None, "msg": "无法解析账号(视频可能已删/风控)"}
+        # 一次算 14 指标 + 4 卡,板块与渲染共用(不重算)。
+        scores = composite_scores.compute_all(account, xprof)
+        cards = {
+            "churn": diagnosis_cards.diagnose_churn(account),
+            "pricing": diagnosis_cards.diagnose_pricing(account, xprof),
+            "funnel": diagnosis_cards.diagnose_funnel(account),
+            "track": diagnosis_cards.diagnose_track(account, xprof),
+        }
+        b = board_svc.build_board(account, xprof, cache_hit=False,
+                                  scores=scores, cards=cards)
+        # 完整B:记一条快照 + 跨次采集算涨粉轨迹 → 注入阶梯4 预测(回填既有 cases 历史)。
+        try:
+            from app.services import snapshot_store
+            snapshot_store.record(account, b, sec_uid=sec_uid or aid)
+            hist = snapshot_store.load_history(account.get("nickname"))
+            b["ladders"]["l4"]["trajectory"] = snapshot_store.trajectory(hist)
+            b["ladders"]["l4"]["rx_effect"] = snapshot_store.prescription_effect(hist)
+        except Exception:  # noqa: BLE001 — 轨迹失败不拖垮接口
+            pass
+        # view: ladder(v2.0 价值阶梯·默认) | coordinate(v1.3 四级坐标·供对比)
+        view = (payload.get("view") or "ladder").lower()
+        html_str = (board_render.render_ladder_html(b) if view == "ladder"
+                    else board_render.render_board_html(b))
+        md_str = board_render.render_board_md(b)
+        # 归集画廊(point5):每次分析自动入库到集中画廊·可横向对比·不再单独出地址
+        try:
+            from app.services import gallery
+            b["gallery"] = gallery.register(account, b, html_str)
+        except Exception:  # noqa: BLE001 — 归集失败不拖垮接口
+            pass
+        # 契约对接(2026-06-28):自动产出 MetaForm 自适应输出契约 doc(meta+blocks·语义角色)。
+        # 我产 doc(交付位 metaboard/contract-docs/)·对方窗口走官方 render_contract 渲染统一出口。
+        try:
+            from app.services import contract_adapter, gallery as _gal
+            import json as _json
+            import pathlib as _pl
+            doc = contract_adapter.build_contract_doc(b)
+            b["contract_doc"] = doc
+            _cd = _gal._dir() / "contract-docs"
+            _cd.mkdir(parents=True, exist_ok=True)
+            _slug = _gal._slug(account)
+            (_cd / f"{_slug}.json").write_text(
+                _json.dumps(doc, ensure_ascii=False, indent=1), "utf-8")
+            # ④ 自动触发标准渲染(2026-06-28):产 doc 后即调 metaform render_contract 出标准报告
+            # (reports/{slug}-{date}.html·带戳·cver=当前)。best-effort 后台·非阻塞·
+            # metaform 不在则跳过(跨服务优雅降级)·失败不拖垮接口。
+            try:
+                import subprocess as _sp
+                import sys as _sys
+                _mf = _gal._dir().parent / "metaform" / "render-metaboard-reports.py"
+                if _mf.exists():
+                    _sp.Popen([_sys.executable, str(_mf), "--slug", _slug],
+                              stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            except Exception:  # noqa: BLE001
+                pass
+        except Exception:  # noqa: BLE001 — 契约对接失败不拖垮接口
+            pass
+        # persist=true → 产出即落进归集(probe/data/cases·该存的方式)。默认关·向后兼容。
+        run_id = None
+        if payload.get("persist"):
+            try:
+                from app.services import cases_store
+                run_id = cases_store.persist_board(account, b, html_str, md_str)
+            except Exception as e:  # noqa: BLE001 — 落盘失败不拖垮接口
+                run_id = f"ERR:{type(e).__name__}:{e}"
+        if fmt == "html":
+            return {"code": 0, "data": {"html": html_str, "run_id": run_id}, "msg": "ok"}
+        if fmt == "md":
+            return {"code": 0, "data": {"md": md_str, "run_id": run_id}, "msg": "ok"}
+        return {"code": 0, "data": {**b, "run_id": run_id}, "msg": "ok"}
     except Exception as e:  # noqa: BLE001
         return {"code": 5002, "data": None, "msg": f"{type(e).__name__}: {e}"}
